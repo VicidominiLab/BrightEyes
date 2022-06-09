@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 # import h5py
 import tqdm
-import libttp.ttpCython
+import libttp.ttpCython as ttpCython
 from scipy.optimize import curve_fit
 
 
@@ -737,7 +737,7 @@ def convertFromPandasDataFrame(dfINPUT,filenameOutputHDF5 = "/dev/shm/preview-ra
 
     dfOUTPUT = pd.DataFrame()
     dfOUTPUT["total_photon"] = totalphotons.astype(np.uint8)
-    
+    dfOUTPUT["valid_tdc_L"]=dfINPUT["valid_tdc_L"].astype(np.uint8)
     dfOUTPUT["cumulative_step"] = cumulativeStep
     # dfOUTPUT["sysclk_period_ps"]=sysclk_ps
     
