@@ -669,6 +669,7 @@ def convertFromPandasDataFrame(dfINPUT,filenameOutputHDF5 = "/dev/shm/preview-ra
                list_of_channels=np.arange(0, 21),
                autoCalibration=True, kC4=45., textInPlot="", ignorePixelLineFrame=False,
                makePlots=False, compressionLevel=0, fitEnable=False, metadata={},
+               coincidence_analysis=False,
                destinationFolder="", chunk_start=None, chunk_stop=None, step_max=65536):
     """
 
@@ -737,10 +738,22 @@ def convertFromPandasDataFrame(dfINPUT,filenameOutputHDF5 = "/dev/shm/preview-ra
 
     dfOUTPUT = pd.DataFrame()
     dfOUTPUT["total_photon"] = totalphotons.astype(np.uint8)
-    dfOUTPUT["valid_tdc_L"]=dfINPUT["valid_tdc_L"].astype(np.uint8)
     dfOUTPUT["cumulative_step"] = cumulativeStep
     # dfOUTPUT["sysclk_period_ps"]=sysclk_ps
-    
+
+    if coincidence_analysis==True:
+        dfOUTPUT["valid_tdc_L"]=dfINPUT["valid_tdc_L"]
+        dfOUTPUT["cumsum_totalph"]=np.cumsum(dfOUTPUT["total_photon"])
+        only_valid_L=dfOUTPUT[dfOUTPUT["valid_tdc_L"]==1]
+        total_photon_laser=np.diff(only_valid_L["cumsum_totalph"])
+        dfOUTPUT["total_photon_laser"]=0
+        dfOUTPUT["total_photon_laser"]=pd.DataFrame(
+                                                    total_photon_laser.astype(np.uint8)  ,
+                                                    index=only_valid_L["cumsum_totalph"].index[1:]
+                                                  )
+        del dfOUTPUT["cumsum_totalph"]
+        dfOUTPUT["total_photon_laser"]=dfOUTPUT["total_photon_laser"].fillna(method="bfill").fillna(0).astype(np.uint8)
+
     if ignorePixelLineFrame:
         print("analysisForImg do not run due to ignorePixelLineFrame=True")
     else:
@@ -951,20 +964,22 @@ def convertDataRAW(filenameToRead, fileInputRAW=False, sysclk_MHz=240., laser_MH
 
     dfOUTPUT["cumulative_step"] = cumulativeStep
     dfOUTPUT["t_L"] = dfINPUT["t_L"].astype(np.uint8)
-    dfOUTPUT["valid_tdc_L"]=dfINPUT["valid_tdc_L"]
     dfOUTPUT["total_photon"]=totalphotons
-    
-    dfOUTPUT["cumsum_totalph"]=np.cumsum(dfOUTPUT["total_photon"])
-    only_valid_L=dfOUTPUT[dfOUTPUT["valid_tdc_L"]==1]
-    total_photon_laser=np.diff(only_valid_L["cumsum_totalph"])
 
-    dfOUTPUT["total_photon_laser"]=0
-    dfOUTPUT["total_photon_laser"]=pd.DataFrame(
-                                                total_photon_laser.astype(np.uint8)  ,
-                                                index=only_valid_L["cumsum_totalph"].index[1:]
-                                              )
-    del dfOUTPUT["cumsum_totalph"]
-    dfOUTPUT["total_photon_laser"]=dfOUTPUT["total_photon_laser"].fillna(method="bfill").fillna(0).astype(np.uint8)
+
+    if coincidence_analysis==True:
+        dfOUTPUT["valid_tdc_L"]=dfINPUT["valid_tdc_L"]
+        dfOUTPUT["cumsum_totalph"]=np.cumsum(dfOUTPUT["total_photon"])
+        only_valid_L=dfOUTPUT[dfOUTPUT["valid_tdc_L"]==1]
+        total_photon_laser=np.diff(only_valid_L["cumsum_totalph"])
+
+        dfOUTPUT["total_photon_laser"]=0
+        dfOUTPUT["total_photon_laser"]=pd.DataFrame(
+                                                    total_photon_laser.astype(np.uint8)  ,
+                                                    index=only_valid_L["cumsum_totalph"].index[1:]
+                                                  )
+        del dfOUTPUT["cumsum_totalph"]
+        dfOUTPUT["total_photon_laser"]=dfOUTPUT["total_photon_laser"].fillna(method="bfill").fillna(0).astype(np.uint8)
         
     
     
