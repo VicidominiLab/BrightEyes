@@ -6,6 +6,6 @@ Fluorescence single-molecule (SM) detection techniques have the potential to pro
 BrightEyes Open source software/hardware
 ========================================
 
-- [BrightEyes-TTM](https://brighteyes-ttm.readthedocs.io), open-source and open-hardware time-tagging device
-- [BrightEyes-MCS](https://github.com/VicidominiLab/BrightEyes-MCS), open-source control system and live-preview for image-scanning microscope.
-- [BrightEyes-ISM](https://brighteyes-ism.readthedocs.io), open-source set of data analysis tools for SPAD based microscopy.
+- _`BrightEyes-TTM <https://brighteyes-ttm.readthedocs.io>`_ , open-source and open-hardware time-tagging device
+- _`BrightEyes-MCS <https://github.com/VicidominiLab/BrightEyes-MCS>`_ , open-source control system and live-preview for image-scanning microscope.
+- _`BrightEyes-ISM <https://brighteyes-ism.readthedocs.io>`_ , open-source set of data analysis tools for SPAD based microscopy.
