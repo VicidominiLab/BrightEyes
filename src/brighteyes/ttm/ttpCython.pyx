@@ -111,7 +111,7 @@ def timeProcessRAW(datapre, channel_number, verbose=False):
         SL_64_v=np.zeros(length, dtype=np.int64)
 
         CumulativeSTEP_v=np.zeros(length, dtype=np.int64)
-        theIndex_v=np.zeros(length, dtype=np.long)
+        theIndex_v=np.zeros(length, dtype=long)
         duplicate_v=np.zeros(length, dtype=int)
 
 
@@ -240,7 +240,7 @@ def analysisForImg(dataframeInput, StepPerPixel_in, cumulativeStep):
     arr_px_corr_v=np.zeros(length, dtype=np.uint16)
     arr_py_v=np.zeros(length, dtype=np.uint16)
     arr_frame_v=np.zeros(length, dtype=np.uint16)
-    arr_index_v=np.zeros(length, dtype=np.long)
+    arr_index_v=np.zeros(length, dtype=long)
 
     frame=0
     pixel=0
