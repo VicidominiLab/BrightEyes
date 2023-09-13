@@ -101,7 +101,7 @@ def timeProcessRAW(datapre, channel_number, verbose=False):
                         length, countGood, datapre_trim_len
         cdef bint last_ok
         cdef np.int64_t cumulative_step, last_timestamp_64_1, last_timestamp_64_2
-        cdef np.long_t theIndex
+        cdef np.int_t theIndex
         length = len(datapre["t_L"])
 
         tL_v=np.zeros(length, dtype=int)
@@ -144,7 +144,7 @@ def timeProcessRAW(datapre, channel_number, verbose=False):
         cdef np.uint8_t[:]   valid_1_view=np.asarray(datapre[write_en_tdc_name])
         cdef np.uint8_t[:]   valid_L_view=np.asarray(datapre["valid_tdc_L"])
         cdef np.int64_t[:] cumulative_step_view=np.asarray(datapre["cumulativeStep"])
-        cdef np.long_t[:] theIndex_view = np.asarray(datapre.index.to_numpy())
+        cdef np.int_t[:] theIndex_view = np.asarray(datapre.index.to_numpy())
 
 
 
@@ -228,7 +228,7 @@ def analysisForImg(dataframeInput, StepPerPixel_in, cumulativeStep):
     cdef np.uint8_t [:] line_enable_view = np.asarray(dataframeInput["line_enable"])
     cdef np.uint8_t [:] pixel_enable_view = np.asarray(dataframeInput["pixel_enable"])
     cdef np.int64_t [:] cumulative_step_view = np.asarray(cumulativeStep.astype(np.int64))
-    cdef np.long_t [:] theIndex_view = np.asarray(dataframeInput.index.to_numpy())
+    cdef np.int_t [:] theIndex_view = np.asarray(dataframeInput.index.to_numpy())
     stepNewLine=cumulativeStep[0]
 
     print("Arrays copied into analysisForImg")
