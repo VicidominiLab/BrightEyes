@@ -823,7 +823,7 @@ def convertDataRAW(filenameToRead, fileInputRAW=False, sysclk_MHz=240., laser_MH
                    list_of_channels=np.arange(0, 21),
                    autoCalibration=True, kC4=45., textInPlot="", ignorePixelLineFrame=False,
                    makePlots=False, compressionLevel=0, fitEnable=False, metadata={},
-                   destinationFolder="", chunk_start=None, chunk_stop=None):
+                   destinationFolder="", chunk_start=None, chunk_stop=None, coincidence_analysis=False):
     """
 
     Return:           myReturn["mean_list"] = mean_list
