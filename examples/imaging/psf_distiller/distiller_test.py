@@ -6,7 +6,7 @@ import brighteyes_ism.analysis.Graph_lib as gr
 
 from s2ism.psf_estimator import GridFinder
 
-from torch import optim
+import torch
 
 import time
 
@@ -15,26 +15,36 @@ import time
 import sys
 sys.path.insert(0, '../src/')
 
-from distiller import *
+import distiller as dis
 
 #%%
 
-plt.close('all')
+# plt.close('all')
 
 #%%
 
 exPar = sim.simSettings()
-exPar.na = 1.4   # numerical aperture
-exPar.wl = 640   # wavelength [nm]
+exPar.na = 1.4    # numerical aperture
+exPar.wl = 640    # wavelength [nm]
 exPar.gamma = 45  # parameter describing the light polarization
-exPar.beta = 90  # parameter describing the light polarization
+exPar.beta = 90   # parameter describing the light polarization
 exPar.n = 1.5
-exPar.mask_sampl = 101 #128
+exPar.mask_sampl = 101 # 128
 
-# exPar.mask = 'VP'
+# exPar.mask = 'vortex'
 
 exPar.abe_index = [5, 7, 9, 11]
 exPar.abe_ampli = [1, 1.2, 0.8, 2]
+
+zer_max = 12
+zernike_idx = np.arange(zer_max)
+zernike_input = np.zeros(zer_max)
+zernike_input[exPar.abe_index] = exPar.abe_ampli
+
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = zernike_input
+
+names = exPar.aberration
 
 emPar = exPar.copy()
 emPar.wl = 660
@@ -55,47 +65,43 @@ grid.M = 450
 grid.rotation = np.pi/8
 # grid.mirroring = -1
 
-#%%
-
 wavefront_gt = exPar.wavefront
 
 #%%
 
-zer_max = 12
-zernike_input = np.zeros(zer_max)
-zernike_input[emPar.abe_index] = emPar.abe_ampli
+radius = 80 / grid.pxsizex
 
-data, *_ = sim.SPAD_PSF_2D(grid, exPar, emPar, process='cpu')
+obj = dis.disk(grid.Nx, radius, fourier = True)
+
+#%%
+
+spad = sim.custom_detector(grid, 'cpu')
+
+#%%
+
+x0 = zernike_input[4:]
+
+data = dis.forward(x0, exPar, emPar, grid, spad = spad, process='cpu', obj=None)
 
 fig = gr.ShowDataset(data)
 
 #%%
 
-signal = 1e5
+signal = 1e6
 
 data *= signal
 
-data = np.random.poisson(data)
+data = torch.poisson(data)
 
 fig = gr.ShowDataset(data)
 
-data = data/np.sum(data)
-
-#%%
-
-grid_fit = GridFinder(grid)
-
-grid_fit.estimate(data, exPar.wl, emPar.wl, exPar.na)
-
-grid_fit.Print()
-
-spad = sim.custom_detector(grid_fit, 'cpu')
+data = data/torch.sum(data)
 
 #%%
 
 curr = time.time()
 
-result = fit_psf(data, exPar, emPar, grid, spad, loss = 'kl')
+result = dis.fit_psf(data, exPar, emPar, grid, spad, zer_max=zer_max, loss = 'mse')
 
 elapsed = time.time() - curr
 
@@ -103,10 +109,7 @@ print(f'Time = {elapsed:.2f} s')
 
 #%%
 
-from poppy.zernike import zern_name
-
 zernike_idx = np.arange(zer_max)
-names = [zern_name(x) for x in zernike_idx]
 
 zernike_output = np.concatenate([np.zeros(4), result.x])
 
@@ -114,7 +117,6 @@ plt.figure()
 plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
 plt.bar(zernike_idx, zernike_output, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
 
-# plt.xlabel('Zernike coefficient')
 plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
 
 plt.gca().set_xticks(zernike_idx)
@@ -126,17 +128,17 @@ plt.tight_layout()
 
 #%%
 
-exPar.abe_index = zernike_idx[1:]
-exPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = np.concatenate([np.zeros(4), result.x])
 
-emPar.abe_index = zernike_idx[1:]
-emPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+emPar.abe_index = zernike_idx
+emPar.abe_ampli = np.concatenate([np.zeros(4), result.x])
 
 wavefront_fit = exPar.wavefront
 
 #%%
 
-fit, *_ = sim.SPAD_PSF_2D(grid_fit, exPar, emPar, spad=spad, process='cpu')
+fit, *_ = sim.SPAD_PSF_2D(grid, exPar, emPar, spad=spad, process='cpu')
 
 fig = gr.ShowDataset(fit)
 
