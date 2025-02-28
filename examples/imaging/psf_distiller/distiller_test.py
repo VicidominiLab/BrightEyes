@@ -15,6 +15,7 @@ import time
 import sys
 sys.path.insert(0, '../src/')
 
+from distiller import FIXED_ZERNIKE
 import distiller as dis
 
 #%%
@@ -79,7 +80,7 @@ spad = sim.custom_detector(grid, 'cpu')
 
 #%%
 
-x0 = zernike_input[3:]
+x0 = zernike_input[FIXED_ZERNIKE:]
 
 data = dis.forward(x0, exPar, emPar, grid, spad = spad, process='cpu', obj=None)
 
@@ -111,7 +112,7 @@ print(f'Time = {elapsed:.2f} s')
 
 zernike_idx = np.arange(zer_max)
 
-zernike_output = np.concatenate([np.zeros(3), result.x])
+zernike_output = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
 
 plt.figure()
 plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
@@ -129,10 +130,10 @@ plt.tight_layout()
 #%%
 
 exPar.abe_index = zernike_idx
-exPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
 
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
 
 wavefront_fit = exPar.wavefront
 
