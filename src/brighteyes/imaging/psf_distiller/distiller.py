@@ -16,6 +16,7 @@ from scipy.special import rel_entr
 
 FIXED_ZERNIKE = 3
 
+iter_annealing = 1
 
 def disk(nx: int, radius: float, fourier: bool = True, process: str = 'cpu'):
     """
@@ -111,8 +112,6 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
 def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
             minimizer: str = 'differential_evolution', loss: str = 'mse', process: str = 'cpu', **minimizer_params):
 
-    print(minimizer_params)
-
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
     
     x0 = np.zeros(zer_to_fit)
@@ -132,17 +131,35 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
     else:
         obj = None
 
-    if 'mutation' not in minimizer_params:
-        minimizer_params.update({'mutation': (0.5, 1.9)})
-
-    if 'disp' not in minimizer_params:
-        minimizer_params.update({'disp': True})
-
     if minimizer == 'differential_evolution':
-        result = differential_evolution(loss_function, x0=x0, bounds=bounds,
+
+        if 'mutation' not in minimizer_params:
+            minimizer_params.update({'mutation': (0.5, 1.9)})
+
+        if 'disp' not in minimizer_params:
+            minimizer_params.update({'disp': True})
+
+        result = differential_evolution(loss_function, x0=x0, bounds=bounds, callback=callback_evolution,
                                         args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
                                         **minimizer_params)
+    elif minimizer == 'dual_annealing':
+
+        global iter_annealing
+        iter_annealing = 1
+
+        result = dual_annealing(loss_function, x0=x0, bounds=bounds, callback=callback_annealing,
+                                args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
+                                **minimizer_params)
     else:
         raise Exception('Minimizer unknown.')
 
     return result
+
+def callback_evolution(*, intermediate_result):
+    print(intermediate_result.x)
+
+
+def callback_annealing(x, f, context):
+    global iter_annealing
+    print(f'Iteration: {iter_annealing} \t f(x) = {f:.4E}')
+    iter_annealing += 1

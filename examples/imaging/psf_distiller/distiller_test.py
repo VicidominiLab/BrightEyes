@@ -105,12 +105,15 @@ data = data/torch.sum(data)
 #%%
 
 minimizer = 'differential_evolution'
+# minimizer = 'dual_annealing'
 loss = 'mse'
 
 kwargs = {'maxiter' : 1000,
-          'mutation' : (0.5, 1.9),
-#          'recombination': 0.9,
-          'disp' : True}
+          'mutation' : (0.5, 1.99),
+          # 'recombination': 0.9,
+          'disp' : True,
+          # 'workers':  -1,
+          }
 
 curr = time.time()
 
