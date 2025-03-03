@@ -15,8 +15,8 @@ import time
 # import sys
 # sys.path.insert(0, '../src/')
 
-from distiller import FIXED_ZERNIKE
-import distiller as dis
+from psf_ism_distiller.distiller import FIXED_ZERNIKE
+import psf_ism_distiller.distiller as dis
 
 process = 'gpu'
 
@@ -109,6 +109,7 @@ loss = 'mse'
 
 kwargs = {'maxiter' : 1000,
           'mutation' : (0.5, 1.9),
+#          'recombination': 0.9,
           'disp' : True}
 
 curr = time.time()
