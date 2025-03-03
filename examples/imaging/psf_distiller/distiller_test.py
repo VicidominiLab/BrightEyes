@@ -12,11 +12,13 @@ import time
 
 #%%
 
-import sys
-sys.path.insert(0, '../src/')
+# import sys
+# sys.path.insert(0, '../src/')
 
 from distiller import FIXED_ZERNIKE
 import distiller as dis
+
+process = 'gpu'
 
 #%%
 
@@ -37,7 +39,7 @@ exPar.mask_sampl = 101 # 128
 exPar.abe_index = [5, 7, 9]
 exPar.abe_ampli = [1, 1.2, 0.8]
 
-zer_max = 11
+zer_max = 15
 zernike_idx = np.arange(zer_max)
 zernike_input = np.zeros(zer_max)
 zernike_input[exPar.abe_index] = exPar.abe_ampli
@@ -70,21 +72,23 @@ wavefront_gt = exPar.wavefront
 
 #%%
 
-radius = 80 / grid.pxsizex
+radius = 40 / grid.pxsizex
 
-obj = dis.disk(grid.Nx, radius, fourier = True)
+obj = dis.disk(grid.Nx, radius, fourier = True, process = process)
 
 #%%
 
-spad = sim.custom_detector(grid, 'cpu')
+device = 'cuda' if process == 'gpu' else 'cpu'
+
+spad = sim.custom_detector(grid, device)
 
 #%%
 
 x0 = zernike_input[FIXED_ZERNIKE:]
 
-data = dis.forward(x0, exPar, emPar, grid, spad = spad, process='cpu', obj=None)
+data = dis.forward(x0, exPar, emPar, grid, spad = spad, process = process, obj=obj)
 
-fig = gr.ShowDataset(data)
+fig = gr.ShowDataset(data.cpu())
 
 #%%
 
@@ -94,15 +98,24 @@ data *= signal
 
 data = torch.poisson(data)
 
-fig = gr.ShowDataset(data)
+fig = gr.ShowDataset(data.cpu())
 
 data = data/torch.sum(data)
 
 #%%
 
+minimizer = 'differential_evolution'
+loss = 'mse'
+
+kwargs = {'maxiter' : 1000,
+          'mutation' : (0.5, 1.9),
+          'disp' : True}
+
 curr = time.time()
 
-result = dis.fit_psf(data, exPar, emPar, grid, spad, zer_max=zer_max, loss = 'mse')
+result = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=radius,
+                     zer_max=zer_max, loss = loss, minimizer = minimizer,
+                     process = process, **kwargs)
 
 elapsed = time.time() - curr
 
@@ -139,7 +152,7 @@ wavefront_fit = exPar.wavefront
 
 #%%
 
-fit, *_ = sim.SPAD_PSF_2D(grid, exPar, emPar, spad=spad, process='cpu')
+fit, *_ = sim.SPAD_PSF_2D(grid, exPar, emPar, spad=spad, process = process)
 
 fig = gr.ShowDataset(fit)
 
