@@ -45,7 +45,7 @@ def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
     x = torch.arange(-(grid.Nx // 2), grid.Nx // 2 + np.mod(grid.Nx, 2)) * grid.pxsizex
     z = torch.arange(-(grid.Nz // 2), grid.Nz // 2 + np.mod(grid.Nz, 2)) * grid.pxsizez
 
-    xx, yy, zz = torch.meshgrid(x, x, z, indexing='ij')
+    zz, xx, yy = torch.meshgrid(z, x, x, indexing='ij')
     r = torch.sqrt(xx ** 2 + yy ** 2 + zz**2)
 
     sphere = torch.where(r < radius, 1, 0)
