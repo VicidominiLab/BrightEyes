@@ -27,7 +27,7 @@ def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
 
     Parameters
     ----------
-    nx : int
+    grid : int
         Number of pixels of the simulation space, assumed squared.
     radius : float
         Radius of the disk in pixel units.
@@ -140,7 +140,7 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
     emission.abe_index = zernike_idx
 
     if bead_radius > 0:
-        obj = disk(grid.Nx, bead_radius, process=process)
+        obj = disk(grid, bead_radius, process=process)
     else:
         obj = None
 
