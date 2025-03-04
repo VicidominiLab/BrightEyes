@@ -20,7 +20,8 @@ FIXED_ZERNIKE = 3
 
 iter_annealing = 1
 
-def disk(nx: int, radius: float, fourier: bool = True, process: str = 'cpu'):
+
+def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
     """
     It calculates a binary mask with the shape of a disk.
 
@@ -41,17 +42,18 @@ def disk(nx: int, radius: float, fourier: bool = True, process: str = 'cpu'):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
-    x = torch.arange(-(nx // 2), nx // 2 + np.mod(nx,2))
+    x = torch.arange(-(grid.Nx // 2), grid.Nx // 2 + np.mod(grid.Nx, 2)) * grid.pxsizex
+    z = torch.arange(-(grid.Nz // 2), grid.Nz // 2 + np.mod(grid.Nz, 2)) * grid.pxsizez
 
-    xx, yy = torch.meshgrid(x, x, indexing='ij')
-    r = torch.sqrt(xx ** 2 + yy ** 2)
+    xx, yy, zz = torch.meshgrid(x, x, z, indexing='ij')
+    r = torch.sqrt(xx ** 2 + yy ** 2 + zz**2)
 
-    circle = torch.where(r < radius, 1, 0)
+    sphere = torch.where(r < radius, 1, 0)
 
     if fourier is True:
-        circle = torch.fft.fftn(circle)
+        sphere = torch.fft.fftn(sphere)
 
-    return circle.to(device)
+    return torch.squeeze(sphere).to(device)
 
 
 def fit_detector(data, grid, exPar, emPar):
