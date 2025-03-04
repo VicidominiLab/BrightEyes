@@ -12,6 +12,8 @@ from scipy.optimize import differential_evolution, dual_annealing
 
 from scipy.special import rel_entr
 
+import string
+
 #%%
 
 FIXED_ZERNIKE = 3
@@ -72,11 +74,18 @@ def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None,
     expar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_coeff])
     
     empar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_coeff])
-    
-    psf, *_ = sim.SPAD_PSF_2D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
-    
+
+    if grid.Nz > 1:
+        psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
+    else:
+        psf, *_ = sim.SPAD_PSF_2D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
+
+    alphabet = list(string.ascii_lowercase)
+    obj_axes = ''.join(alphabet[:obj.ndim])
+    psf_axes = ''.join(alphabet[:psf.ndim])
+
     if obj is not None:
-        dset = partial_convolution(obj, psf, 'ij', 'ijk', 'ij', fourier=(1, 0))
+        dset = partial_convolution(obj, psf, obj_axes, psf_axes, obj_axes, fourier=(1, 0))
     else:
         dset = psf
     
@@ -105,8 +114,10 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
         loss = torch.sum(rel_entr(data, estimate))
     else:
         raise Exception("Loss function unknown.")
-    
-    return loss.cpu().detach().numpy()
+
+    loss_value = loss.cpu().detach().numpy()
+
+    return loss_value
 
 
 def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
@@ -139,7 +150,7 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
         if 'disp' not in minimizer_params:
             minimizer_params.update({'disp': True})
 
-        result = differential_evolution(loss_function, x0=x0, bounds=bounds, callback=callback_evolution,
+        result = differential_evolution(loss_function, x0=x0, bounds=bounds, # callback=callback_evolution,
                                         args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
                                         **minimizer_params)
     elif minimizer == 'dual_annealing':

@@ -36,8 +36,8 @@ exPar.mask_sampl = 101 # 128
 
 # exPar.mask = 'vortex'
 
-exPar.abe_index = [5, 7, 9]
-exPar.abe_ampli = [1, 1.2, 0.8]
+exPar.abe_index = [5, 7, 9, 12]
+exPar.abe_ampli = [1, 1.2, 0.8, 1.5]
 
 zer_max = 15
 zernike_idx = np.arange(zer_max)
@@ -56,8 +56,8 @@ grid = sim.GridParameters()
 grid.pxsizex = 10
 grid.Nx = 200
 
-grid.pxsizez = 50
-grid.Nz = 5
+grid.pxsizez = 100
+grid.Nz = 21
 
 grid.pxpitch = 75e3
 grid.pxdim = 75e3
@@ -88,7 +88,10 @@ x0 = zernike_input[FIXED_ZERNIKE:]
 
 data = dis.forward(x0, exPar, emPar, grid, spad = spad, process = process, obj=obj)
 
-fig = gr.ShowDataset(data.cpu())
+if grid.Nz > 1:
+    fig = gr.StackSlider(data.cpu().sum(-1), grid.pxsizex, grid.pxsizez)
+else:
+    fig = gr.ShowDataset(data.cpu())
 
 #%%
 
@@ -112,7 +115,8 @@ kwargs = {'maxiter' : 1000,
           'mutation' : (0.5, 1.99),
           # 'recombination': 0.9,
           'disp' : True,
-          # 'workers':  -1,
+          # 'updating' : 'deferred',
+          # 'workers' :  -1,
           }
 
 curr = time.time()
@@ -138,7 +142,7 @@ plt.bar(zernike_idx, zernike_output, alpha = 0.5, linewidth = 1, edgecolor = 'bl
 plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
 
 plt.gca().set_xticks(zernike_idx)
-plt.gca().set_xticklabels(names, rotation=45)
+plt.gca().set_xticklabels(names, rotation=45, ha = 'right')
 
 plt.legend()
 
