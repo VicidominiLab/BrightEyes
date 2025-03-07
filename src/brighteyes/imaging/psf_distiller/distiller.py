@@ -1,5 +1,7 @@
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 import torch
 
 import brighteyes_ism.simulation.PSF_sim as sim
@@ -123,7 +125,8 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
 
 
 def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
-            minimizer: str = 'differential_evolution', loss: str = 'mse', process: str = 'cpu', **minimizer_params):
+            show_hist: bool = False, minimizer: str = 'differential_evolution', loss: str = 'mse', process: str = 'cpu',
+            **minimizer_params):
 
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
     
@@ -152,7 +155,21 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
         if 'disp' not in minimizer_params:
             minimizer_params.update({'disp': True})
 
-        result = differential_evolution(loss_function, x0=x0, bounds=bounds, # callback=callback_evolution,
+        if show_hist == True:
+
+            fig, ax = plt.subplots(1, 1)
+            names = excitation.aberration
+
+            ax.set_xticks(zernike_idx)
+            ax.set_xticklabels(names, rotation=45, ha='right')
+
+            rects = ax.bar(zernike_idx, np.zeros(zer_max), alpha=0.5, linewidth=1, edgecolor='black')
+            plt.ion()
+            callback = lambda intermediate_result: callback_evolution(intermediate_result, fig=fig, ax=ax, rects=rects)
+        else:
+            callback = None
+
+        result = differential_evolution(loss_function, x0=x0, bounds=bounds, callback=callback,
                                         args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
                                         **minimizer_params)
     elif minimizer == 'dual_annealing':
@@ -168,8 +185,19 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
 
     return result
 
-def callback_evolution(*, intermediate_result):
-    print(intermediate_result.x)
+
+def callback_evolution(intermediate_result, fig, ax, rects):
+
+    y = intermediate_result.x
+
+    for n, rect in enumerate(rects[FIXED_ZERNIKE:]):
+        rect.set_height(intermediate_result.x[n])
+
+    ax.set_ylim([y.min()-0.2, y.max()+0.2])
+
+    fig.tight_layout()
+
+    plt.pause(0.01)
 
 
 def callback_annealing(x, f, context):

@@ -54,10 +54,10 @@ emPar.wl = 660
 
 grid = sim.GridParameters()
 grid.pxsizex = 10
-grid.Nx = 200
+grid.Nx = 201
 
 grid.pxsizez = 100
-grid.Nz = 21
+grid.Nz = 1
 
 grid.pxpitch = 75e3
 grid.pxdim = 75e3
@@ -72,9 +72,9 @@ wavefront_gt = exPar.wavefront
 
 #%%
 
-radius = 40 / grid.pxsizex
+radius = 40 # nm
 
-obj = dis.disk(grid.Nx, radius, fourier = True, process = process)
+obj = dis.disk(grid, radius, fourier = True, process = process)
 
 #%%
 
@@ -89,7 +89,7 @@ x0 = zernike_input[FIXED_ZERNIKE:]
 data = dis.forward(x0, exPar, emPar, grid, spad = spad, process = process, obj=obj)
 
 if grid.Nz > 1:
-    fig = gr.StackSlider(data.cpu().sum(-1), grid.pxsizex, grid.pxsizez)
+    fig = gr.StackSlider(data.cpu().detach().numpy().sum(-1), grid.pxsizex, grid.pxsizez)
 else:
     fig = gr.ShowDataset(data.cpu())
 
@@ -101,7 +101,10 @@ data *= signal
 
 data = torch.poisson(data)
 
-fig = gr.ShowDataset(data.cpu())
+if grid.Nz > 1:
+    fig = gr.StackSlider(data.cpu().detach().numpy().sum(-1), grid.pxsizex, grid.pxsizez)
+else:
+    fig = gr.ShowDataset(data.cpu())
 
 data = data/torch.sum(data)
 
@@ -123,7 +126,7 @@ curr = time.time()
 
 result = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=radius,
                      zer_max=zer_max, loss = loss, minimizer = minimizer,
-                     process = process, **kwargs)
+                     process = process, show_hist = True, **kwargs)
 
 elapsed = time.time() - curr
 
