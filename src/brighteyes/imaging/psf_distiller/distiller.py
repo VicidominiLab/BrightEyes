@@ -130,10 +130,12 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
     else:
         estimate = forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
 
+    axis = tuple(-np.arange(1, data.ndim+1))
+
     if loss == 'mse':
-        loss = torch.sum(torch.abs(data - estimate)**2)
+        loss = torch.sum(torch.abs(data - estimate)**2, axis=axis)
     elif loss == 'kl':
-        loss = torch.sum(rel_entr(data, estimate))
+        loss = torch.sum(rel_entr(data, estimate), axis=axis)
     else:
         raise Exception("Loss function unknown.")
 

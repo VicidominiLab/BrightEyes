@@ -36,8 +36,8 @@ exPar.mask_sampl = 101 # 128
 
 # exPar.mask = 'vortex'
 
-exPar.abe_index = [5, 7]
-exPar.abe_ampli = [1, 1.2]
+exPar.abe_index = [5, 7, 9]
+exPar.abe_ampli = [1, 1.2, 0.8]
 
 zer_max = 15
 zernike_idx = np.arange(zer_max)
@@ -126,14 +126,21 @@ emission.abe_index = zernike_idx
 
 import pyswarms as ps
 
-options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9}
+# options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9}
+
+options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9, 'k': 2, 'p': 2}
 
 x_max = 5 * np.ones(zer_to_fit)
 x_min = -1 * x_max
 bounds = (x_min, x_max)
 
-optimizer = ps.single.GlobalBestPSO(n_particles=10, dimensions=zer_to_fit,
+# optimizer = ps.single.GlobalBestPSO(n_particles=10, dimensions=zer_to_fit,
+#                                     bounds=bounds, options=options)
+
+
+optimizer = ps.single.LocalBestPSO(n_particles=30, dimensions=zer_to_fit,
                                     bounds=bounds, options=options)
+
 
 kwargs = {'data' : data,
           'expar': excitation,
@@ -147,7 +154,7 @@ kwargs = {'data' : data,
           'process': process
           }
 
-cost, pos = optimizer.optimize(dis.loss_function, 500, **kwargs)
+cost, pos = optimizer.optimize(dis.loss_function, iters = 300, **kwargs)
 
 #%%
 
