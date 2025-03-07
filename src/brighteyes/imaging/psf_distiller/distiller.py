@@ -72,7 +72,7 @@ def fit_detector(data, grid, exPar, emPar):
 
 
 def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None, pxdwelltime=None, process='cpu'):
-    
+
     nch = grid.Nch
     
     expar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_coeff])
@@ -102,7 +102,22 @@ def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None,
     return dset
 
 
-def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = False, loss: str = 'mse', process: str = 'cpu'):
+def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None, pxdwelltime=None,
+                       process='cpu'):
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
+
+    n_agents = zer_coeff.shape[0]
+    losses = []
+
+    for n in range(n_agents):
+        losses.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, process=process))
+
+    return torch.stack(losses, dim=0).to(device)
+
+
+def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = False, loss: str = 'mse',
+                  vectorized: bool = False, process: str = 'cpu'):
 
     if fit_mag is True:
         grid.M = x0[0]
@@ -110,8 +125,11 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
     else:
         zer_coeff = x0
 
-    estimate = forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
-    
+    if vectorized is True:
+        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
+    else:
+        estimate = forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
+
     if loss == 'mse':
         loss = torch.sum(torch.abs(data - estimate)**2)
     elif loss == 'kl':
