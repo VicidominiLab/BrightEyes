@@ -189,8 +189,16 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
         else:
             callback = None
 
+        if 'vectorized' in minimizer_params:
+            if minimizer_params['vectorized'] is True:
+                vectorized = True
+            else:
+                vectorized = True
+        else:
+            vectorized = False
+
         result = differential_evolution(loss_function, x0=x0, bounds=bounds, callback=callback,
-                                        args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
+                                        args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, vectorized, process),
                                         **minimizer_params)
     elif minimizer == 'dual_annealing':
 
