@@ -108,12 +108,12 @@ def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
     n_agents = zer_coeff.shape[0]
-    losses = []
+    datasets = []
 
     for n in range(n_agents):
-        losses.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, process=process))
+        datasets.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, process=process))
 
-    return torch.stack(losses, dim=0).to(device)
+    return torch.stack(datasets, dim=0).to(device)
 
 
 def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = False, loss: str = 'mse',

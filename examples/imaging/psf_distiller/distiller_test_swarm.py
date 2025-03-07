@@ -36,8 +36,8 @@ exPar.mask_sampl = 101 # 128
 
 # exPar.mask = 'vortex'
 
-exPar.abe_index = [5, 7, 9]
-exPar.abe_ampli = [1, 1.2, 0.8]
+exPar.abe_index = [5, 7]
+exPar.abe_ampli = [1, 1.2]
 
 zer_max = 15
 zernike_idx = np.arange(zer_max)
@@ -132,7 +132,7 @@ x_max = 5 * np.ones(zer_to_fit)
 x_min = -1 * x_max
 bounds = (x_min, x_max)
 
-optimizer = ps.single.GlobalBestPSO(n_particles=30, dimensions=zer_to_fit,
+optimizer = ps.single.GlobalBestPSO(n_particles=10, dimensions=zer_to_fit,
                                     bounds=bounds, options=options)
 
 kwargs = {'data' : data,
