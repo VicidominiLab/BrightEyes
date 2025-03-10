@@ -134,6 +134,8 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
 
     if loss == 'mse':
         loss = torch.sum(torch.abs(data - estimate)**2, axis=axis)
+    if loss == 'mae':
+        loss = torch.sum(torch.abs(data - estimate), axis=axis)
     elif loss == 'kl':
         loss = torch.sum(rel_entr(data, estimate), axis=axis)
     else:
