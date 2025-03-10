@@ -114,7 +114,7 @@ data = data/torch.sum(data)
 
 n_points = 25
 
-index_x, index_y = 3, 11
+index_x, index_y = 5, 7
 
 abe_x = np.linspace(-4, 4, num=n_points)
 abe_y = np.linspace(-4, 4, num=n_points)
@@ -169,10 +169,10 @@ fig, ax = plt.subplots(1,1)
 divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='5%', pad=0.05)
 
-im = ax.imshow(loss_map, norm = LogNorm(), extent = (abe_x[0], abe_x[-1], abe_y[0], abe_y[-1]))
+im = ax.imshow(loss_map, norm = LogNorm(), extent = (abe_x[0], abe_x[-1], abe_y[-1], abe_y[0]))
 fig.colorbar(im, cax=cax, orientation='vertical')
 
-ax.scatter(truth[0], truth[1], marker = 'x', color='red')
+ax.scatter(truth[1], truth[0], marker = 'x', color='red')
 
 #%%
 

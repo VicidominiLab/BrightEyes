@@ -154,8 +154,8 @@ def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: floa
     
     x0 = np.zeros(zer_to_fit)
     bounds = np.ones((zer_to_fit, 2))
-    bounds[:, 0] = -5
-    bounds[:, 1] = +5
+    bounds[:, 0] = -4
+    bounds[:, 1] = +4
     
     excitation = exPar.copy()
     emission = emPar.copy()
