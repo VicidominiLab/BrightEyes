@@ -123,6 +123,9 @@ zer_to_fit = zer_max - FIXED_ZERNIKE
 
 x0 = np.zeros((n_points, n_points, zer_to_fit))
 
+for z in exPar.abe_index[FIXED_ZERNIKE:]:
+    x0[:,:,z-FIXED_ZERNIKE] = np.ones((n_points, n_points)) * exPar.abe_ampli[z]
+
 for x in range(n_points):
     for y in range(n_points):
         x0[x,y,index_x-FIXED_ZERNIKE] = abe_x[x]
