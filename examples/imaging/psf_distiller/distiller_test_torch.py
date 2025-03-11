@@ -108,15 +108,14 @@ data = data/torch.sum(data)
 #%%
 
 import torch
-from scipy.stats import qmc
 
 zer_to_fit = zer_max - FIXED_ZERNIKE
 
 x0 = torch.zeros(zer_to_fit, dtype=torch.float32, requires_grad=True)
 
 bounds = np.ones((zer_to_fit, 2))
-bounds[:, 0] = -4
-bounds[:, 1] = +4
+bounds[:, 0] = -5
+bounds[:, 1] = +5
 
 excitation = exPar.copy()
 emission = emPar.copy()
@@ -137,52 +136,33 @@ kwargs = {'data' : data,
           'process': process
           }
 
-# Number of optimization runs (starting points)
-num_starts = 10
-
-lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)  # 2D problem
-samples = lhs_sampler.random(n=num_starts)  # Generate LHS samples
-scaled_samples = qmc.scale(samples, bounds[:,0], bounds[:,1])  # Scale to bounds
-
-# Convert to PyTorch tensor
-start_points = torch.tensor(scaled_samples, dtype=torch.float32)
-
 optimizer = torch.optim.Adam([x0], lr=0.1)
 
 curr = time.time()
 
-history = [[]] * num_starts
+history = []
 
-for i, start in enumerate(start_points):
-    
-    print(f"\nStarting Optimization {i+1}/{num_starts} from {start.numpy()}")
+for step in range(500):
+    optimizer.zero_grad()  # Reset gradients
 
-    # Initialize trainable parameters
-    x0 = start.clone().detach().requires_grad_(True)
+    # Compute loss using trainable and fixed parameters
+    loss = dis.loss_function(x0, **kwargs)
 
-    for step in range(150):
-        optimizer.zero_grad()  # Reset gradients
-    
-        # Compute loss using trainable and fixed parameters
-        loss = dis.loss_function(x0, **kwargs)
-    
-        history[i].append(loss.item())
-    
-        # Compute gradients
-        loss.backward()
-    
-        # Perform optimization step
-        optimizer.step()
-    
-        # Print progress
-        if step % 10 == 0:
-            print(f"Step {step}: Loss = {loss.item():.6f}, Params = {x0.detach().numpy()}")
+    history.append(loss.item())
 
+    # Compute gradients
+    loss.backward()
 
-idx = torch.argmin(history[:,-1])
+    # Perform optimization step
+    optimizer.step()
+
+    # Print progress
+    if step % 10 == 0:
+        print(f"Step {step}: Loss = {loss.item():.6f}, Params = {x0.detach().numpy()}")
+
 
 # Print final optimized parameters
-print("Optimized parameters:", x0[idx].detach().numpy())
+print("Optimized parameters:", x0.detach().numpy())
 
 elapsed = time.time() - curr
 
