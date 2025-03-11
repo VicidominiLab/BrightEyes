@@ -12,9 +12,6 @@ import time
 
 #%%
 
-# import sys
-# sys.path.insert(0, '../src/')
-
 from psf_ism_distiller.distiller import FIXED_ZERNIKE
 import psf_ism_distiller.distiller as dis
 
@@ -22,7 +19,7 @@ process = 'gpu'
 
 #%%
 
-# plt.close('all')
+plt.close('all')
 
 #%%
 
@@ -125,21 +122,22 @@ excitation.abe_index = zernike_idx
 emission.abe_index = zernike_idx
 
 import pyswarms as ps
+from pyswarms.utils.plotters import plot_cost_history
 
-# options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9}
+options = {'c1': 0.5, 'c2': 0.8, 'w': 0.9}
 
-options = {'c1': 0.5, 'c2': 0.3, 'w': 0.9, 'k': 2, 'p': 2}
+# options = {'c1': 2, 'c2': 2, 'w': 1.5, 'k': 2, 'p': 2}
 
 x_max = 5 * np.ones(zer_to_fit)
 x_min = -1 * x_max
 bounds = (x_min, x_max)
 
-# optimizer = ps.single.GlobalBestPSO(n_particles=10, dimensions=zer_to_fit,
-#                                     bounds=bounds, options=options)
-
-
-optimizer = ps.single.LocalBestPSO(n_particles=30, dimensions=zer_to_fit,
+optimizer = ps.single.GlobalBestPSO(n_particles=20, dimensions=zer_to_fit,
                                     bounds=bounds, options=options)
+
+
+# optimizer = ps.single.LocalBestPSO(n_particles=10, dimensions=zer_to_fit,
+#                                     bounds=bounds, options=options)
 
 
 kwargs = {'data' : data,
@@ -154,7 +152,17 @@ kwargs = {'data' : data,
           'process': process
           }
 
-cost, pos = optimizer.optimize(dis.loss_function, iters = 300, **kwargs)
+curr = time.time()
+
+cost, pos = optimizer.optimize(dis.loss_function, iters = 500, **kwargs)
+
+elapsed = time.time() - curr
+
+print(f'Time = {elapsed:.2f} s')
+
+#%%
+
+plot_cost_history(cost_history=optimizer.cost_history)
 
 #%%
 

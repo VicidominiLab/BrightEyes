@@ -114,7 +114,7 @@ data = data/torch.sum(data)
 
 n_points = 25
 
-index_x, index_y = 5, 7
+index_x, index_y = 6, 7
 
 abe_x = np.linspace(-4, 4, num=n_points)
 abe_y = np.linspace(-4, 4, num=n_points)

@@ -75,9 +75,9 @@ def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None,
 
     nch = grid.Nch
     
-    expar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_coeff])
+    expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_coeff])
     
-    empar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_coeff])
+    empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_coeff])
 
     if grid.Nz > 1:
         psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
@@ -123,7 +123,7 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
         grid.M = x0[0]
         zer_coeff = x0[1:]
     else:
-        zer_coeff = x0
+        zer_coeff = x0.clone()
 
     if vectorized is True:
         estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
@@ -143,7 +143,7 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
 
     loss_value = loss.cpu().detach().numpy()
 
-    return loss_value
+    return loss
 
 
 def fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,

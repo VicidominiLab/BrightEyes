@@ -112,12 +112,16 @@ data = data/torch.sum(data)
 
 minimizer = 'differential_evolution'
 # minimizer = 'dual_annealing'
-loss = 'mse'
+loss = 'mae'
 
 kwargs = {'maxiter' : 1000,
           'mutation' : (0.5, 1.99),
           # 'recombination': 0.9,
+          # 'popsize': 15,
+          # 'strategy': "best1bin",
+          # 'init': 'sobol',
           'disp' : True,
+          # 'vectorized': True,
           # 'updating' : 'deferred',
           # 'workers' :  -1,
           }
