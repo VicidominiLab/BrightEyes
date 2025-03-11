@@ -1,0 +1,241 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+import brighteyes_ism.simulation.PSF_sim as sim
+import brighteyes_ism.analysis.Graph_lib as gr
+
+from s2ism.psf_estimator import GridFinder
+
+import torch
+
+import time
+
+#%%
+
+from psf_ism_distiller.distiller import FIXED_ZERNIKE
+import psf_ism_distiller.distiller as dis
+
+process = 'gpu'
+
+#%%
+
+plt.close('all')
+
+#%%
+
+exPar = sim.simSettings()
+exPar.na = 1.4    # numerical aperture
+exPar.wl = 640    # wavelength [nm]
+exPar.gamma = 45  # parameter describing the light polarization
+exPar.beta = 90   # parameter describing the light polarization
+exPar.n = 1.5
+exPar.mask_sampl = 101 # 128
+
+# exPar.mask = 'vortex'
+
+exPar.abe_index = [4, 6, 9, 14]
+exPar.abe_ampli = [1, 1.2, 0.8, 1.5]
+
+zer_max = 15
+zernike_idx = np.arange(zer_max)
+zernike_input = torch.zeros(zer_max)
+zernike_input[exPar.abe_index] = torch.Tensor(exPar.abe_ampli)
+
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = zernike_input
+
+names = exPar.aberration
+
+emPar = exPar.copy()
+emPar.wl = 660
+
+grid = sim.GridParameters()
+grid.pxsizex = 10
+grid.Nx = 201
+
+grid.pxsizez = 100
+grid.Nz = 1
+
+grid.pxpitch = 75e3
+grid.pxdim = 75e3
+grid.pinhole_shape = 'circle'
+grid.N = 5
+grid.M = 450
+
+grid.rotation = np.pi/8
+# grid.mirroring = -1
+
+# wavefront_gt = exPar.wavefront
+
+#%%
+
+radius = 40 # nm
+
+obj = dis.disk(grid, radius, fourier = True, process = process)
+
+#%%
+
+device = 'cuda' if process == 'gpu' else 'cpu'
+
+spad = sim.custom_detector(grid, device)
+
+#%%
+
+x0 = zernike_input[FIXED_ZERNIKE:]
+
+data = dis.forward(x0, exPar, emPar, grid, spad = spad, process = process, obj=obj)
+
+if grid.Nz > 1:
+    fig = gr.StackSlider(data.cpu().detach().numpy().sum(-1), grid.pxsizex, grid.pxsizez)
+else:
+    fig = gr.ShowDataset(data.cpu())
+
+#%%
+
+signal = 1e5
+
+data *= signal
+
+data = torch.poisson(data)
+
+if grid.Nz > 1:
+    fig = gr.StackSlider(data.cpu().detach().numpy().sum(-1), grid.pxsizex, grid.pxsizez)
+else:
+    fig = gr.ShowDataset(data.cpu())
+
+data = data/torch.sum(data)
+
+#%%
+
+import torch
+from scipy.stats import qmc
+
+zer_to_fit = zer_max - FIXED_ZERNIKE
+
+x0 = torch.zeros(zer_to_fit, dtype=torch.float32, requires_grad=True)
+
+bounds = np.ones((zer_to_fit, 2))
+bounds[:, 0] = -4
+bounds[:, 1] = +4
+
+excitation = exPar.copy()
+emission = emPar.copy()
+
+zernike_idx = np.arange(zer_max)
+excitation.abe_index = zernike_idx
+emission.abe_index = zernike_idx
+
+kwargs = {'data' : data,
+          'expar': excitation,
+          'empar': emission,
+          'grid': grid,
+          'spad': spad,
+          'obj': obj,
+          'fit_mag': False,
+          'loss': 'mse',
+          'vectorized': False,
+          'process': process
+          }
+
+# Number of optimization runs (starting points)
+num_starts = 10
+
+lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)  # 2D problem
+samples = lhs_sampler.random(n=num_starts)  # Generate LHS samples
+scaled_samples = qmc.scale(samples, bounds[:,0], bounds[:,1])  # Scale to bounds
+
+# Convert to PyTorch tensor
+start_points = torch.tensor(scaled_samples, dtype=torch.float32)
+
+optimizer = torch.optim.Adam([x0], lr=0.1)
+
+curr = time.time()
+
+history = [[]] * num_starts
+
+for i, start in enumerate(start_points):
+    
+    print(f"\nStarting Optimization {i+1}/{num_starts} from {start.numpy()}")
+
+    # Initialize trainable parameters
+    x0 = start.clone().detach().requires_grad_(True)
+
+    for step in range(150):
+        optimizer.zero_grad()  # Reset gradients
+    
+        # Compute loss using trainable and fixed parameters
+        loss = dis.loss_function(x0, **kwargs)
+    
+        history[i].append(loss.item())
+    
+        # Compute gradients
+        loss.backward()
+    
+        # Perform optimization step
+        optimizer.step()
+    
+        # Print progress
+        if step % 10 == 0:
+            print(f"Step {step}: Loss = {loss.item():.6f}, Params = {x0.detach().numpy()}")
+
+
+idx = torch.argmin(history[:,-1])
+
+# Print final optimized parameters
+print("Optimized parameters:", x0[idx].detach().numpy())
+
+elapsed = time.time() - curr
+
+print(f'Time = {elapsed:.2f} s')
+
+#%%
+
+plt.figure()
+plt.plot(np.asarray(history))
+
+#%%
+
+zernike_idx = np.arange(zer_max)
+
+zernike_output = torch.cat([torch.zeros(FIXED_ZERNIKE), x0])
+
+plt.figure()
+plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
+plt.bar(zernike_idx, zernike_output.cpu().detach().numpy(), alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
+
+plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
+
+plt.gca().set_xticks(zernike_idx)
+plt.gca().set_xticklabels(names, rotation=45, ha = 'right')
+
+plt.legend()
+
+plt.tight_layout()
+
+#%%
+
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0])
+
+emPar.abe_index = zernike_idx
+emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0])
+
+wavefront_fit = exPar.wavefront
+
+#%%
+
+fit, *_ = sim.SPAD_PSF_2D(grid, exPar, emPar, spad=spad, process = process)
+
+fig = gr.ShowDataset(fit)
+
+#%%
+
+fig, ax = plt.subplots(1,2, sharex=True, sharey=True)
+
+ax[0].imshow(wavefront_gt, cmap='seismic')
+ax[0].axis('off')
+ax[0].set_title('Ground truth')
+
+ax[1].imshow(wavefront_fit, cmap='seismic')
+ax[1].axis('off')
+ax[1].set_title('Fit')
