@@ -65,7 +65,7 @@ grid.M = 450
 grid.rotation = np.pi/8
 # grid.mirroring = -1
 
-# wavefront_gt = exPar.wavefront
+wavefront_gt = exPar.wavefront
 
 #%%
 
@@ -213,11 +213,11 @@ plt.ylabel('Loss')
 
 zernike_idx = np.arange(zer_max)
 
-zernike_output = torch.cat([torch.zeros(FIXED_ZERNIKE), x0])
+zernike_output = torch.cat([torch.zeros(FIXED_ZERNIKE), result[idx]]).cpu().detach().numpy()
 
 plt.figure()
 plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
-plt.bar(zernike_idx, zernike_output.cpu().detach().numpy(), alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
+plt.bar(zernike_idx, zernike_output, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
 
 plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
 
@@ -231,10 +231,10 @@ plt.tight_layout()
 #%%
 
 exPar.abe_index = zernike_idx
-exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0.detach().numpy()])
+exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result[idx].detach().numpy()])
 
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0.detach().numpy()])
+emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result[idx].detach().numpy()])
 
 wavefront_fit = exPar.wavefront
 
