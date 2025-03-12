@@ -110,27 +110,46 @@ data = data/torch.sum(data)
 
 #%%
 
-minimizer = 'differential_evolution'
-# minimizer = 'dual_annealing'
-loss = 'mae'
+# minimizer = 'differential_evolution'
+# # minimizer = 'dual_annealing'
+# loss = 'mae'
 
-kwargs = {'maxiter' : 1000,
-          'mutation' : (0.5, 1.99),
-          # 'recombination': 0.9,
-          # 'popsize': 15,
-          # 'strategy': "best1bin",
-          # 'init': 'sobol',
-          'disp' : True,
-          # 'vectorized': True,
-          # 'updating' : 'deferred',
-          # 'workers' :  -1,
-          }
+# kwargs = {'maxiter' : 1000,
+#           'mutation' : (0.5, 1.99),
+#           # 'recombination': 0.9,
+#           # 'popsize': 15,
+#           # 'strategy': "best1bin",
+#           # 'init': 'sobol',
+#           'disp' : True,
+#           # 'vectorized': True,
+#           # 'updating' : 'deferred',
+#           # 'workers' :  -1,
+#           }
+
+# curr = time.time()
+
+# result = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=radius,
+#                      zer_max=zer_max, loss = loss, minimizer = minimizer,
+#                      process = process, show_hist = True, **kwargs)
+
+# elapsed = time.time() - curr
+
+# print(f'Time = {elapsed:.2f} s')
+
+#%%
+
+loss = 'mae'
+initialization = 'sobol'
+num_starts = 10
+max_iter = 200
+bounds = 2
 
 curr = time.time()
 
 result = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=radius,
-                     zer_max=zer_max, loss = loss, minimizer = minimizer,
-                     process = process, show_hist = True, **kwargs)
+                     zer_max=zer_max, loss = loss,
+                     initialization=initialization, num_starts=num_starts,
+                     max_iter=max_iter, bound=bounds, process = process)
 
 elapsed = time.time() - curr
 
@@ -140,7 +159,7 @@ print(f'Time = {elapsed:.2f} s')
 
 zernike_idx = np.arange(zer_max)
 
-zernike_output = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
+zernike_output = np.concatenate([np.zeros(FIXED_ZERNIKE), result[0].cpu().detach().numpy()])
 
 plt.figure()
 plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')

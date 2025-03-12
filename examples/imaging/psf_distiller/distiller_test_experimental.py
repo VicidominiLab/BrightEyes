@@ -14,10 +14,10 @@ import time
 
 #%%
 
-import sys
-sys.path.insert(0, '../src/')
+from psf_ism_distiller.distiller import FIXED_ZERNIKE
+import psf_ism_distiller.distiller as dis
 
-from distiller import *
+process = 'gpu'
 
 #%%
 
@@ -70,7 +70,7 @@ grid.pxsizex = meta.dx*1e3
 grid.Nx = data.shape[0]
 
 grid.pxpitch = 75e3
-grid.pxdim = 50e3
+grid.pxdim = 75e3
 grid.pinhole_shape = 'circle'
 grid.N = 5
 grid.M = 450
@@ -92,7 +92,7 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 
 curr = time.time()
 
-result = fit_psf(data, exPar, emPar, grid, spad, loss = 'mse')
+result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40, num_starts=50, max_iter=500)
 
 elapsed = time.time() - curr
 
@@ -100,14 +100,21 @@ print(f'Time = {elapsed:.2f} s')
 
 #%%
 
+plt.figure()
+plt.semilogy(np.asarray(history).T)
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
+
+#%%
+
 from poppy.zernike import zern_name
 
-zer_max = 12
+zer_max = 15
 
 zernike_idx = np.arange(zer_max)
 names = [zern_name(x) for x in zernike_idx]
 
-zernike_output = np.concatenate([np.zeros(4), result.x])
+zernike_output = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
 
 plt.figure()
 plt.bar(zernike_idx, zernike_output, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
@@ -124,11 +131,11 @@ plt.tight_layout()
 
 #%%
 
-exPar.abe_index = zernike_idx[1:]
-exPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
 
-emPar.abe_index = zernike_idx[1:]
-emPar.abe_ampli = np.concatenate([np.zeros(3), result.x])
+emPar.abe_index = zernike_idx
+emPar.abe_ampli = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
 
 wavefront_fit = exPar.wavefront
 
