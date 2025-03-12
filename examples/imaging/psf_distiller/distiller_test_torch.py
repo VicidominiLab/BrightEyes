@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import brighteyes_ism.simulation.PSF_sim as sim
 import brighteyes_ism.analysis.Graph_lib as gr
 
-from s2ism.psf_estimator import GridFinder
-
 import torch
 
 import time
@@ -139,7 +137,7 @@ kwargs = {'data' : data,
           }
 
 # Number of optimization runs (starting points)
-num_starts = 50
+num_starts = 10
 max_iter = 200
 
 sampling = 'sobol'
@@ -205,7 +203,7 @@ print(f'\nTime = {elapsed:.2f} s')
 #%%
 
 plt.figure()
-plt.plot(np.asarray(history).T)
+plt.semilogy(np.asarray(history).T)
 plt.xlabel('Iteration')
 plt.ylabel('Loss')
 

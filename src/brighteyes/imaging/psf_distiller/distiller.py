@@ -75,9 +75,9 @@ def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None,
 
     nch = grid.Nch
     
-    expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_coeff])
+    expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
     
-    empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_coeff])
+    empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
 
     if grid.Nz > 1:
         psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
