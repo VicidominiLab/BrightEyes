@@ -33,7 +33,7 @@ exPar.mask_sampl = 101 # 128
 
 # exPar.mask = 'vortex'
 
-exPar.abe_index = [5, 7, 9, 12]
+exPar.abe_index = [6, 8, 10, 13]
 exPar.abe_ampli = [1, 1.2, 0.8, 1.5]
 
 zer_max = 15
@@ -92,7 +92,7 @@ else:
 
 #%%
 
-signal = 1e5
+signal = 1e6
 
 data *= signal
 
@@ -110,15 +110,14 @@ data = data/torch.sum(data)
 import sys
 import torch
 from scipy.stats import qmc
-from tqdm import trange
 
 zer_to_fit = zer_max - FIXED_ZERNIKE
 
 x0 = torch.zeros(zer_to_fit, dtype=torch.float32, requires_grad=True)
 
 bounds = np.ones((zer_to_fit, 2))
-bounds[:, 0] = -1
-bounds[:, 1] = +1
+bounds[:, 0] = -2
+bounds[:, 1] = +2
 
 excitation = exPar.copy()
 emission = emPar.copy()
@@ -134,30 +133,38 @@ kwargs = {'data' : data,
           'spad': spad,
           'obj': obj,
           'fit_mag': False,
-          'loss': 'mse',
+          'loss': 'mae',
           'vectorized': False,
           'process': process
           }
 
 # Number of optimization runs (starting points)
-num_starts = 20
-max_iter = 100
+num_starts = 50
+max_iter = 200
 
-lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)  # 12D problem
-samples = lhs_sampler.random(n=num_starts)  # Generate LHS samples
+sampling = 'sobol'
+
+if sampling == 'lhs':
+    lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)
+    samples = lhs_sampler.random(n=num_starts - 1)  # Generate LHS samples
+elif sampling == 'sobol':
+    sobol_sampler = qmc.Sobol(d=zer_to_fit)
+    samples = sobol_sampler.random(n=num_starts-1)  # Generate Sobol samples
+
 scaled_samples = qmc.scale(samples, bounds[:,0], bounds[:,1])  # Scale to bounds
+scaled_samples = np.concatenate([np.zeros((1,zer_to_fit)), scaled_samples], axis=0)
 
 # Convert to PyTorch tensor
 start_points = torch.tensor(scaled_samples, dtype=torch.float32)
 
-curr = time.time()
-
 history = torch.zeros( (num_starts, max_iter) )
 result = torch.zeros( (num_starts, zer_to_fit) )
 
+curr = time.time()
+
 for i, start in enumerate(start_points):
     
-    print(f"\nOptimization: {i+1}/{num_starts}")
+    print(f"\nOptimization: {i+1}/{len(start_points)}")
 
     # Initialize trainable parameters
     x0 = start.clone().detach().requires_grad_(True)
@@ -184,22 +191,23 @@ for i, start in enumerate(start_points):
         sys.stdout.write('\r' + iteration + '\t' + status)
         sys.stdout.flush()
         
-        
     result[i] = x0.clone()
 
 idx = torch.argmin(history[:,-1])
 
 # Print final optimized parameters
-print("Optimized parameters:", result[idx].detach().numpy())
+print("\nOptimized parameters:", result[idx].detach().numpy())
 
 elapsed = time.time() - curr
 
-print(f'Time = {elapsed:.2f} s')
+print(f'\nTime = {elapsed:.2f} s')
 
 #%%
 
 plt.figure()
 plt.plot(np.asarray(history).T)
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
 
 #%%
 
@@ -223,10 +231,10 @@ plt.tight_layout()
 #%%
 
 exPar.abe_index = zernike_idx
-exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0])
+exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0.detach().numpy()])
 
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0])
+emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), x0.detach().numpy()])
 
 wavefront_fit = exPar.wavefront
 
