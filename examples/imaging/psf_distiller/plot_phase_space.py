@@ -124,14 +124,14 @@ zer_to_fit = zer_max - FIXED_ZERNIKE
 x0 = np.zeros((n_points, n_points, zer_to_fit))
 
 for z in exPar.abe_index[FIXED_ZERNIKE:]:
-    x0[:,:,z-FIXED_ZERNIKE] = np.ones((n_points, n_points)) * exPar.abe_ampli[z]
+    x0[:,:,z-FIXED_ZERNIKE] = np.ones((n_points, n_points)) * exPar.abe_ampli[z].cpu().detach().numpy()
 
 for x in range(n_points):
     for y in range(n_points):
         x0[x,y,index_x-FIXED_ZERNIKE] = abe_x[x]
         x0[x,y,index_y-FIXED_ZERNIKE] = abe_y[y]
 
-x0 = x0.reshape( (n_points**2, zer_to_fit) )
+x0 = torch.as_tensor(x0.reshape( (n_points**2, zer_to_fit) ))
 
 excitation = exPar.copy()
 emission = emPar.copy()
