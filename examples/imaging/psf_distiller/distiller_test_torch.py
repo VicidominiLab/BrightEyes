@@ -33,7 +33,7 @@ exPar.mask_sampl = 101 # 128
 
 # exPar.mask = 'vortex'
 
-exPar.abe_index = [4, 6, 9, 14]
+exPar.abe_index = [5, 7, 9, 12]
 exPar.abe_ampli = [1, 1.2, 0.8, 1.5]
 
 zer_max = 15
@@ -107,15 +107,18 @@ data = data/torch.sum(data)
 
 #%%
 
+import sys
 import torch
+from scipy.stats import qmc
+from tqdm import trange
 
 zer_to_fit = zer_max - FIXED_ZERNIKE
 
 x0 = torch.zeros(zer_to_fit, dtype=torch.float32, requires_grad=True)
 
 bounds = np.ones((zer_to_fit, 2))
-bounds[:, 0] = -5
-bounds[:, 1] = +5
+bounds[:, 0] = -1
+bounds[:, 1] = +1
 
 excitation = exPar.copy()
 emission = emPar.copy()
@@ -136,33 +139,58 @@ kwargs = {'data' : data,
           'process': process
           }
 
-optimizer = torch.optim.Adam([x0], lr=0.1)
+# Number of optimization runs (starting points)
+num_starts = 20
+max_iter = 100
+
+lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)  # 12D problem
+samples = lhs_sampler.random(n=num_starts)  # Generate LHS samples
+scaled_samples = qmc.scale(samples, bounds[:,0], bounds[:,1])  # Scale to bounds
+
+# Convert to PyTorch tensor
+start_points = torch.tensor(scaled_samples, dtype=torch.float32)
 
 curr = time.time()
 
-history = []
+history = torch.zeros( (num_starts, max_iter) )
+result = torch.zeros( (num_starts, zer_to_fit) )
 
-for step in range(500):
-    optimizer.zero_grad()  # Reset gradients
+for i, start in enumerate(start_points):
+    
+    print(f"\nOptimization: {i+1}/{num_starts}")
 
-    # Compute loss using trainable and fixed parameters
-    loss = dis.loss_function(x0, **kwargs)
+    # Initialize trainable parameters
+    x0 = start.clone().detach().requires_grad_(True)
 
-    history.append(loss.item())
+    optimizer = torch.optim.Adam([x0], lr=0.1)
 
-    # Compute gradients
-    loss.backward()
+    for step in range(max_iter):
+        optimizer.zero_grad()  # Reset gradients
+    
+        # Compute loss using trainable and fixed parameters
+        loss = dis.loss_function(x0, **kwargs)
+    
+        history[i, step] = loss.item()
+    
+        # Compute gradients
+        loss.backward()
+    
+        # Perform optimization step
+        optimizer.step()
+    
+        # Print progress
+        iteration = f'Iteration: {step+1}/{max_iter}'
+        status = f'Loss: {loss.item():.2E}'
+        sys.stdout.write('\r' + iteration + '\t' + status)
+        sys.stdout.flush()
+        
+        
+    result[i] = x0.clone()
 
-    # Perform optimization step
-    optimizer.step()
-
-    # Print progress
-    if step % 10 == 0:
-        print(f"Step {step}: Loss = {loss.item():.6f}, Params = {x0.detach().numpy()}")
-
+idx = torch.argmin(history[:,-1])
 
 # Print final optimized parameters
-print("Optimized parameters:", x0.detach().numpy())
+print("Optimized parameters:", result[idx].detach().numpy())
 
 elapsed = time.time() - curr
 
@@ -171,7 +199,7 @@ print(f'Time = {elapsed:.2f} s')
 #%%
 
 plt.figure()
-plt.plot(np.asarray(history))
+plt.plot(np.asarray(history).T)
 
 #%%
 
