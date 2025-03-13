@@ -20,6 +20,8 @@ from scipy.special import rel_entr
 
 import string
 
+import warnings
+
 #%%
 
 FIXED_ZERNIKE = 3
@@ -153,7 +155,7 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
             num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
             process: str = 'cpu'):
 
-    zer_to_fit = zer_max - FIXED_ZERNIKE # neglect piston, tip, tilt
+    zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
 
     excitation = expar.copy()
     emission = empar.copy()
@@ -183,8 +185,12 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
         lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)
         samples = lhs_sampler.random(n=num_starts - 1)  # Generate LHS samples
     elif initialization == 'sobol':
-        sobol_sampler = qmc.Sobol(d=zer_to_fit)
-        samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",
+                                    message="The balance properties of Sobol' points require n to be a power of 2.")
+
+            sobol_sampler = qmc.Sobol(d=zer_to_fit)
+            samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
     else:
         raise Exception('Initialization method unknown.')
 
