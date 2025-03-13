@@ -207,6 +207,7 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
         x0 = start.clone().detach().requires_grad_(True)
 
         optimizer = torch.optim.Adam([x0], lr=0.1)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
 
         for step in range(max_iter):
             optimizer.zero_grad()  # Reset gradients
@@ -221,6 +222,7 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
 
             # Perform optimization step
             optimizer.step()
+            scheduler.step(loss)
 
             # Print progress
             iteration = f'Iteration: {step + 1}/{max_iter}'
