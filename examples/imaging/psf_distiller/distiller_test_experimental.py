@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+import torch
+
 from brighteyes_ism.dataio import mcs
 import brighteyes_ism.simulation.PSF_sim as sim
 import brighteyes_ism.analysis.Graph_lib as gr
@@ -112,31 +114,8 @@ plt.ylabel('Loss')
 
 #%%
 
-from poppy.zernike import zern_name
-
 zer_max = 15
-
 zernike_idx = np.arange(zer_max)
-names = [zern_name(x) for x in zernike_idx]
-
-zernike_output = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
-
-plt.figure()
-plt.bar(zernike_idx, zernike_output, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'fit')
-
-# plt.xlabel('Zernike coefficient')
-plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
-
-plt.gca().set_xticks(zernike_idx)
-plt.gca().set_xticklabels(names, rotation=45)
-
-plt.legend()
-
-plt.tight_layout()
-
-#%%
-
-import torch
 
 zer_ex = torch.cat([result[:1], result[2:]]).cpu().detach()
 exPar.abe_index = zernike_idx
@@ -149,8 +128,6 @@ emPar.abe_ampli = torch.cat([torch.zeros(3), zer_em])
 names = exPar.aberration
 
 #%%
-
-zernike_idx = np.arange(zer_max)
 
 zernike_output_ex = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_ex])
 zernike_output_em = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_em])
@@ -173,7 +150,7 @@ plt.tight_layout()
 wavefront_fit_ex = exPar.wavefront
 wavefront_fit_em = emPar.wavefront
 
-fig, ax = plt.subplots(1,1, sharex=True, sharey=True)
+fig, ax = plt.subplots(1,2, sharex=True, sharey=True)
 
 ax[0].imshow(wavefront_fit_ex, cmap='seismic')
 ax[0].axis('off')
