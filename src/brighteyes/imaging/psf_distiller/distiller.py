@@ -75,7 +75,7 @@ def fit_detector(data, grid, exPar, emPar):
     return spad
 
 
-def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None, pxdwelltime=None, process='cpu'):
+def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, process='cpu'):
 
     nch = grid.Nch
     
@@ -96,17 +96,12 @@ def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None,
     else:
         dset = psf
     
-    if dark_noise is not None:
-        for c in range(nch):
-            dset[..., c] += dark_noise[c]*pxdwelltime
-    
     dset /= dset.sum()
     
     return dset
 
 
-def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, dark_noise=None, pxdwelltime=None,
-                       process='cpu'):
+def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, process='cpu'):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
