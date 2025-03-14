@@ -262,7 +262,7 @@ def minimizer(params, max_iter, verbose: str = True, **kwargs):
             sys.stdout.write('\r' + iteration + '\t' + status)
             sys.stdout.flush()
 
-        return x0, history
+    return x0, history
 
 
 def _old_fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
