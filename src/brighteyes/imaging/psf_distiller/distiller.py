@@ -76,8 +76,6 @@ def fit_detector(data, grid, exPar, emPar):
 
 
 def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, process='cpu'):
-
-    nch = grid.Nch
     
     expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
     
