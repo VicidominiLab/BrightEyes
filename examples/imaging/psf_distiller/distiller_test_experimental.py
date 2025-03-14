@@ -96,7 +96,8 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 
 curr = time.time()
 
-result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40, num_starts=33, max_iter=250)
+result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40,
+                              delta_focus=True, num_starts=33, max_iter=250)
 
 elapsed = time.time() - curr
 
@@ -135,13 +136,54 @@ plt.tight_layout()
 
 #%%
 
+import torch
+
+zer_ex = torch.cat([result[:1], result[2:]]).cpu().detach()
 exPar.abe_index = zernike_idx
-exPar.abe_ampli = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
+exPar.abe_ampli = torch.cat([torch.zeros(3), zer_ex])
 
+zer_em = torch.cat([result[:2], result[3:]]).cpu().detach()
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = np.concatenate([np.zeros(3), result.cpu().detach().numpy()])
+emPar.abe_ampli = torch.cat([torch.zeros(3), zer_em])
 
-wavefront_fit = exPar.wavefront
+names = exPar.aberration
+
+#%%
+
+zernike_idx = np.arange(zer_max)
+
+zernike_output_ex = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_ex])
+zernike_output_em = np.concatenate([np.zeros(FIXED_ZERNIKE), zer_em])
+
+plt.figure()
+plt.bar(zernike_idx, zernike_output_ex, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'Excitation')
+plt.bar(zernike_idx, zernike_output_em, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'Emission')
+
+plt.ylabel(r'Aberration amplitude ($OPD/\lambda)$')
+
+plt.gca().set_xticks(zernike_idx)
+plt.gca().set_xticklabels(names, rotation=45, ha = 'right')
+
+plt.legend()
+
+plt.tight_layout()
+
+#%%
+
+wavefront_fit_ex = exPar.wavefront
+wavefront_fit_em = emPar.wavefront
+
+fig, ax = plt.subplots(1,1, sharex=True, sharey=True)
+
+ax[0].imshow(wavefront_fit_ex, cmap='seismic')
+ax[0].axis('off')
+ax[0].set_title('Excitation')
+
+ax[1].imshow(wavefront_fit_em, cmap='seismic')
+ax[1].axis('off')
+ax[1].set_title('Emission')
+
+#%%
 
 fit, *_ = sim.SPAD_PSF_2D(grid_fit, exPar, emPar, spad=spad, process='cpu')
 
