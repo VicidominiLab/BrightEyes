@@ -146,10 +146,11 @@ bounds = 2
 
 curr = time.time()
 
-result = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=radius,
-                     zer_max=zer_max, loss = loss,
-                     initialization=initialization, num_starts=num_starts,
-                     max_iter=max_iter, bound=bounds, process = process)
+result, history = dis.fit_psf(data, exPar, emPar, grid, spad, 
+                              bead_radius=radius, zer_max=zer_max, loss = loss,
+                              initialization=initialization,
+                              num_starts=num_starts, max_iter=max_iter,
+                              bound=bounds, process = process)
 
 elapsed = time.time() - curr
 
@@ -159,7 +160,7 @@ print(f'Time = {elapsed:.2f} s')
 
 zernike_idx = np.arange(zer_max)
 
-zernike_output = np.concatenate([np.zeros(FIXED_ZERNIKE), result[0].cpu().detach().numpy()])
+zernike_output = np.concatenate([np.zeros(FIXED_ZERNIKE), result.cpu().detach().numpy()])
 
 plt.figure()
 plt.bar(zernike_idx, zernike_input, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
@@ -177,10 +178,10 @@ plt.tight_layout()
 #%%
 
 exPar.abe_index = zernike_idx
-exPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
+exPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), result])
 
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = np.concatenate([np.zeros(FIXED_ZERNIKE), result.x])
+emPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), result])
 
 wavefront_fit = exPar.wavefront
 

@@ -138,7 +138,7 @@ kwargs = {'data' : data,
 
 # Number of optimization runs (starting points)
 num_starts = 10
-max_iter = 200
+max_iter = 1000
 
 sampling = 'sobol'
 
@@ -168,6 +168,7 @@ for i, start in enumerate(start_points):
     x0 = start.clone().detach().requires_grad_(True)
 
     optimizer = torch.optim.Adam([x0], lr=0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20, verbose=True)
 
     for step in range(max_iter):
         optimizer.zero_grad()  # Reset gradients
@@ -182,11 +183,14 @@ for i, start in enumerate(start_points):
     
         # Perform optimization step
         optimizer.step()
-    
+        scheduler.step(loss)
+        lr = scheduler.get_last_lr()
+        
         # Print progress
         iteration = f'Iteration: {step+1}/{max_iter}'
         status = f'Loss: {loss.item():.2E}'
-        sys.stdout.write('\r' + iteration + '\t' + status)
+        current_lr = f'Learning rate: {lr}'
+        sys.stdout.write('\r' + iteration + '\t' + status+ '\t' + current_lr)
         sys.stdout.flush()
         
     result[i] = x0.clone()

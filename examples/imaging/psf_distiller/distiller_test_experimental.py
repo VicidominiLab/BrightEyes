@@ -34,12 +34,14 @@ dset, meta = mcs.load(fullpath)
 
 #%%
 
+from skimage.filters import gaussian
+
 data = dset[:,38].sum(axis=(0,-2))
 data = data[100:-100, 100:-100]
 data = data/data.sum()
 
 nx, ny = data.shape[:2]
-cx, cy, cc = tool.ArgMaxND(data)[0]
+cx, cy, cc = tool.ArgMaxND(gaussian(data, 4, channel_axis = -1))[0]
 
 sx, sy = nx//2 - cx, ny//2 - cy
 
@@ -81,6 +83,8 @@ grid_fit = GridFinder(grid)
 
 grid_fit.estimate(data, exPar.wl, emPar.wl, exPar.na)
 
+grid_fit.M = 450
+
 grid_fit.Print()
 
 spad = sim.custom_detector(grid_fit, 'cpu')
@@ -92,7 +96,7 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 
 curr = time.time()
 
-result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40, num_starts=50, max_iter=500)
+result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40, num_starts=33, max_iter=250)
 
 elapsed = time.time() - curr
 
