@@ -92,6 +92,8 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
         Array of pinholes.
     obj : torch.tensor
         Object to convolve with the PSF.
+    delta_focus : bool
+        If True, the defocus parameter can be different for excitation and emission.
     process : str
         Device running the computation. It can be 'cpu' or 'gpu'.
 
@@ -143,8 +145,46 @@ def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, delta
     return torch.stack(datasets, dim=0).to(device)
 
 
-def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = False, loss: str = 'mse',
+def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings,
+                  grid: sim.GridParameters, spad: torch.tensor, obj=None, fit_mag: bool = False, loss: str = 'mse',
                   delta_focus: bool = False, vectorized: bool = False, process: str = 'cpu'):
+    """
+    Loss function for the optimization of the Zernike coefficients. It calculates the difference between the measured
+    data and the forward model. The loss can be calculated using different metrics. The forward model can be calculated
+    using the vectorized version. The function returns the loss, calculated for each agent.
+
+    Parameters
+    ----------
+    x0 : torch.tensor
+        Zernike coefficients.
+    data : torch.tensor
+        Measured data.
+    expar : sim.simSettings
+        Excitation parameters.
+    empar : sim.simSettings
+        Emission parameters.
+    grid : sim.GridParameters
+        Grid parameters.
+    spad : torch.tensor
+        Array of pinholes.
+    obj : torch.tensor
+        Object to convolve with the PSF.
+    fit_mag : bool
+        If True, the magnification of the microscope is also optimized.
+    loss : str
+        Metric to calculate the loss. It can be 'mse', 'mae' or 'kl'.
+    delta_focus : bool
+        If True, the defocus parameter can be different for excitation and emission.
+    vectorized : bool
+        If True, the forward model is calculated using the vectorized version.
+    process : str
+        Device running the computation. It can be 'cpu' or 'gpu'.
+
+    Returns
+    -------
+    loss : torch.tensor
+        Value of the loss at point x0. If vectorized is True, it contains the loss for each agent.
+    """
 
     if fit_mag is True:
         grid.M = x0[0]
@@ -171,9 +211,55 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
     return loss
 
 
-def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: float = 0, delta_focus: bool = False,
-            loss: str = 'mae', num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
+def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
+            spad: torch.tensor, zer_max: int = 15, bead_radius: float = 0, delta_focus: bool = False, loss: str = 'mae',
+            num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
             verbose: str = True, process: str = 'cpu'):
+    """
+    It fits the Zernike coefficients to the measured data. The optimization is performed using the Adam optimizer with
+    multiple starting points. The optimization can be performed using different metrics and different initialization
+    methods (Sobol and Latin Hypercube sampling).
+
+    Parameters
+    ----------
+    data : torch.tensor
+        Measured data.
+    expar : sim.simSettings
+        Excitation parameters.
+    empar : sim.simSettings
+        Emission parameters.
+    grid : sim.GridParameters
+        Grid parameters.
+    spad : torch.tensor
+        Array of pinholes.
+    zer_max : int
+        Maximum number of Zernike coefficients to fit (excluding the first three: piston, tip, and tilt).
+    bead_radius : float
+        Radius of the bead to convolve with the PSF.
+    delta_focus : bool
+        If True, the defocus parameter can be different for excitation and emission.
+    loss : str
+        Metric to calculate the loss. It can be 'mse', 'mae' or 'kl'.
+    num_starts : int
+        Number of starting points for the optimization.
+    max_iter : int
+        Maximum number of iterations for the optimization.
+    bound : int
+        Bounds of the hypercube where to perform the initialization.
+    initialization : str
+        Initialization method. It can be 'lhs' or 'sobol'.
+    verbose : str
+        If True, it prints the progress of the optimization.
+    process : str
+        Device running the computation. It can be 'cpu' or 'gpu'.
+
+    Returns
+    -------
+    best_result : torch.tensor
+        Optimized Zernike coefficients.
+    history : torch.tensor
+        History of the loss during the optimization.
+    """
 
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
     if delta_focus is True:
@@ -228,7 +314,26 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
     return best_result, history
 
 
-def generate_starting_points(ndim, num_starts, bound, initialization):
+def generate_starting_points(ndim: int, num_starts: int, bound: float, initialization: str):
+    """
+    It generates starting points for the optimization. The points are generated using Latin Hypercube or Sobol sampling.
+
+    Parameters
+    ----------
+    ndim : int
+        Number of dimensions.
+    num_starts : int
+        Number of starting points.
+    bound : float
+        Bounds of the hypercube where to perform the initialization.
+    initialization : str
+        Initialization method. It can be 'lhs' or 'sobol'.
+
+    Returns
+    -------
+    start_points : torch.tensor
+        Starting points for the optimization.
+    """
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning)
@@ -253,7 +358,30 @@ def generate_starting_points(ndim, num_starts, bound, initialization):
     return start_points
 
 
-def minimizer(params, max_iter, verbose: str = True, **kwargs):
+def minimizer(params: torch.tensor, max_iter: int, verbose: str = True, **kwargs):
+    """
+    It performs the optimization of the Zernike coefficients using the Adam optimizer.  The optimization is performed
+    using the loss function defined in the kwargs. The function returns the optimized parameters and the history of the
+    loss during the optimization.
+
+    Parameters
+    ----------
+    params : torch.tensor
+        Initial parameters.
+    max_iter : int
+        Maximum number of iterations.
+    verbose : str
+        If True, it prints the progress of the optimization.
+    kwargs : dict
+        Dictionary with the parameters for the loss function.
+
+    Returns
+    -------
+    x0 : torch.tensor
+        Optimized parameters.
+    history : torch.tensor
+        History of the loss during the optimization.
+    """
 
     history = torch.zeros(max_iter)
 
