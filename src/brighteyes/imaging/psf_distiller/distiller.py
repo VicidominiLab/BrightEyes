@@ -1,7 +1,5 @@
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 import sys
 
 import torch
@@ -13,8 +11,6 @@ import brighteyes_ism.simulation.PSF_sim as sim
 from brighteyes_ism.simulation.utils import partial_convolution
 
 from s2ism.psf_estimator import GridFinder
-
-from scipy.optimize import differential_evolution, dual_annealing
 
 from scipy.special import rel_entr
 
