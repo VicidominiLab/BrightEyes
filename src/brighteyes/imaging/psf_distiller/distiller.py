@@ -64,6 +64,7 @@ def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
 
 def fit_detector(data, grid, exPar, emPar):
 
+
     grid_fit = GridFinder(grid)
     
     grid_fit.estimate(data, exPar.wl, emPar.wl, exPar.na)
@@ -75,7 +76,34 @@ def fit_detector(data, grid, exPar, emPar):
     return spad
 
 
-def forward(zer_coeff, expar, empar, grid, spad=None, obj=None, process='cpu'):
+def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
+            spad: torch.tensor = None, obj: torch.tensor =None, process: str = 'cpu'):
+    '''
+    Forward model for the PSF.  It calculates the PSF for a given set of Zernike coefficients.
+    It can also convolve the PSF with a sphere of given radius. The PSF is normalized to sum 1.
+
+    Parameters
+    ----------
+    zer_coeff : torch.tensor
+        Zernike coefficients.
+    expar : sim.simSettings
+        Excitation parameters.
+    empar : sim.simSettings
+        Emission parameters.
+    grid : sim.GridParameters
+        Grid parameters.
+    spad : torch.tensor
+        Array of pinholes.
+    obj : torch.tensor
+        Object to convolve with the PSF.
+    process : str
+        Device running the computation. It can be 'cpu' or 'gpu'.
+
+    Returns
+    -------
+    dset : torch.tensor
+        PSF.
+    '''
     
     expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
     
