@@ -153,7 +153,7 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
 
 def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: float = 0, loss: str = 'mae',
             num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
-            process: str = 'cpu'):
+            verbose: str = True, process: str = 'cpu'):
 
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
 
@@ -181,70 +181,88 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
               'process': process
               }
 
-    if initialization == 'lhs':
-        lhs_sampler = qmc.LatinHypercube(d=zer_to_fit)
-        samples = lhs_sampler.random(n=num_starts - 1)  # Generate LHS samples
-    elif initialization == 'sobol':
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore",
-                                    message="The balance properties of Sobol' points require n to be a power of 2.")
-
-            sobol_sampler = qmc.Sobol(d=zer_to_fit)
-            samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
-    else:
-        raise Exception('Initialization method unknown.')
-
-    bounds = np.ones((zer_to_fit, 2))
-    bounds[:, 0] = -bound
-    bounds[:, 1] = +bound
-
-    scaled_samples = qmc.scale(samples, bounds[:, 0], bounds[:, 1])  # Scale to bounds
-    scaled_samples = np.concatenate([np.zeros((1, zer_to_fit)), scaled_samples], axis=0)
-    start_points = torch.tensor(scaled_samples, dtype=torch.float32)
+    start_points = generate_starting_points(zer_to_fit, num_starts, bound, initialization)
 
     history = torch.zeros((num_starts, max_iter))
     result = torch.zeros((num_starts, zer_to_fit))
 
     for i, start in enumerate(start_points):
+        if verbose is True:
+            print(f"\nOptimization: {i + 1}/{len(start_points)}")
 
-        print(f"\nOptimization: {i + 1}/{len(start_points)}")
-
-        # Initialize trainable parameters
-        x0 = start.clone().detach().requires_grad_(True)
-
-        optimizer = torch.optim.Adam([x0], lr=0.1)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
-
-        for step in range(max_iter):
-            optimizer.zero_grad()  # Reset gradients
-
-            # Compute loss using trainable and fixed parameters
-            loss = loss_function(x0, **kwargs)
-
-            history[i, step] = loss.item()
-
-            # Compute gradients
-            loss.backward()
-
-            # Perform optimization step
-            optimizer.step()
-            scheduler.step(loss)
-
-            # Print progress
-            iteration = f'Iteration: {step + 1}/{max_iter}'
-            status = f'Loss: {loss.item():.2E}'
-            sys.stdout.write('\r' + iteration + '\t' + status)
-            sys.stdout.flush()
+        x0, h0 = minimizer(start, max_iter, verbose=verbose, **kwargs)
 
         result[i] = x0.clone()
+        history[i] = h0.clone()
 
     idx = torch.argmin(history[:, -1])
     best_result = result[idx]
 
     # Print final optimized parameters
-    print("\nOptimized parameters:", result[idx].detach().numpy())
+    if verbose is True:
+        print("\nOptimized parameters:\n", best_result.detach().numpy())
 
     return best_result, history
+
+
+def generate_starting_points(ndim, num_starts, bound, initialization):
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+
+        if initialization == 'lhs':
+            lhs_sampler = qmc.LatinHypercube(d=ndim)
+            samples = lhs_sampler.random(n=num_starts - 1)  # Generate LHS samples
+        elif initialization == 'sobol':
+                sobol_sampler = qmc.Sobol(d=ndim)
+                samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
+        else:
+            raise Exception('Initialization method unknown.')
+
+    bounds = np.ones((ndim, 2))
+    bounds[:, 0] = -bound
+    bounds[:, 1] = +bound
+
+    scaled_samples = qmc.scale(samples, bounds[:, 0], bounds[:, 1])  # Scale to bounds
+    scaled_samples = np.concatenate([np.zeros((1, ndim)), scaled_samples], axis=0)
+    start_points = torch.tensor(scaled_samples, dtype=torch.float32)
+
+    return start_points
+
+
+def minimizer(params, max_iter, verbose: str = True, **kwargs):
+
+    history = torch.zeros(max_iter)
+
+    # Initialize trainable parameters
+    x0 = params.clone().detach().requires_grad_(True)
+
+    optimizer = torch.optim.Adam([x0], lr=0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
+
+    for step in range(max_iter):
+        optimizer.zero_grad()  # Reset gradients
+
+        # Compute loss using trainable and fixed parameters
+        loss = loss_function(x0, **kwargs)
+
+        history[step] = loss.item()
+
+        # Compute gradients
+        loss.backward()
+
+        # Perform optimization step
+        optimizer.step()
+        scheduler.step(loss)
+
+        # Print progress
+        if verbose is True:
+            iteration = f'Iteration: {step + 1}/{max_iter}'
+            status = f'Loss: {loss.item():.2E}'
+            sys.stdout.write('\r' + iteration + '\t' + status)
+            sys.stdout.flush()
+
+        return x0, history
 
 
 def _old_fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
