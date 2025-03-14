@@ -73,7 +73,7 @@ def fit_detector(data, grid, exPar, emPar):
 
 
 def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
-            spad: torch.tensor = None, obj: torch.tensor = None, process: str = 'cpu'):
+            spad: torch.tensor = None, obj: torch.tensor = None, delta_focus: bool = False, process: str = 'cpu'):
     """
     Forward model for the PSF.  It calculates the PSF for a given set of Zernike coefficients.
     It can also convolve the PSF with a sphere of given radius. The PSF is normalized to sum 1.
@@ -100,10 +100,17 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
     dset : torch.tensor
         PSF.
     """
+
+    if delta_focus is True:
+        zer_ex = torch.cat([zer_coeff[:1], zer_coeff[2:]])
+        zer_em = torch.cat([zer_coeff[:2], zer_coeff[3:]])
+    else:
+        zer_ex = zer_coeff
+        zer_em = zer_coeff
+
+    expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_ex)])
     
-    expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
-    
-    empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
+    empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_em)])
 
     if grid.Nz > 1:
         psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
@@ -123,7 +130,7 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
     return dset
 
 
-def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, process='cpu'):
+def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, delta_focus: bool = False, process='cpu'):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
@@ -131,13 +138,13 @@ def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, proce
     datasets = []
 
     for n in range(n_agents):
-        datasets.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, process=process))
+        datasets.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process))
 
     return torch.stack(datasets, dim=0).to(device)
 
 
 def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = False, loss: str = 'mse',
-                  vectorized: bool = False, process: str = 'cpu'):
+                  delta_focus: bool = False, vectorized: bool = False, process: str = 'cpu'):
 
     if fit_mag is True:
         grid.M = x0[0]
@@ -146,9 +153,9 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
         zer_coeff = x0.clone()
 
     if vectorized is True:
-        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
+        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process)
     else:
-        estimate = forward(zer_coeff, expar, empar, grid, spad, obj, process=process)
+        estimate = forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process)
 
     axis = tuple(-np.arange(1, data.ndim+1))
 
@@ -164,11 +171,13 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
     return loss
 
 
-def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: float = 0, loss: str = 'mae',
-            num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
+def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: float = 0, delta_focus: bool = False,
+            loss: str = 'mae', num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
             verbose: str = True, process: str = 'cpu'):
 
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
+    if delta_focus is True:
+        zer_to_fit = zer_to_fit + 1
 
     excitation = expar.copy()
     emission = empar.copy()
@@ -188,6 +197,7 @@ def fit_psf(data, expar, empar, grid, spad, zer_max: int = 15, bead_radius: floa
               'grid': grid,
               'spad': spad,
               'obj': obj,
+              'delta_focus': delta_focus,
               'fit_mag': False,
               'loss': loss,
               'vectorized': False,
