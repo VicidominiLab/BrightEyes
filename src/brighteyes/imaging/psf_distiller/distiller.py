@@ -26,8 +26,6 @@ import warnings
 
 FIXED_ZERNIKE = 3
 
-iter_annealing = 1
-
 
 def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
     """
@@ -146,8 +144,6 @@ def loss_function(x0, data, expar, empar, grid, spad, obj=None, fit_mag: bool = 
     else:
         raise Exception("Loss function unknown.")
 
-    loss_value = loss.cpu().detach().numpy()
-
     return loss
 
 
@@ -263,93 +259,3 @@ def minimizer(params, max_iter, verbose: str = True, **kwargs):
             sys.stdout.flush()
 
     return x0, history
-
-
-def _old_fit_psf(data, exPar, emPar, grid, spad, zer_max: int = 15, bead_radius: float = 0, fit_mag: bool = False,
-            show_hist: bool = False, minimizer: str = 'differential_evolution', loss: str = 'mse', process: str = 'cpu',
-            **minimizer_params):
-
-    zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
-    
-    x0 = np.zeros(zer_to_fit)
-    bounds = np.ones((zer_to_fit, 2))
-    bounds[:, 0] = -4
-    bounds[:, 1] = +4
-    
-    excitation = exPar.copy()
-    emission = emPar.copy()
-    
-    zernike_idx = np.arange(zer_max)
-    excitation.abe_index = zernike_idx
-    emission.abe_index = zernike_idx
-
-    if bead_radius > 0:
-        obj = disk(grid, bead_radius, process=process)
-    else:
-        obj = None
-
-    if minimizer == 'differential_evolution':
-
-        if 'mutation' not in minimizer_params:
-            minimizer_params.update({'mutation': (0.5, 1.9)})
-
-        if 'disp' not in minimizer_params:
-            minimizer_params.update({'disp': True})
-
-        if show_hist == True:
-
-            fig, ax = plt.subplots(1, 1)
-            names = excitation.aberration
-
-            ax.set_xticks(zernike_idx)
-            ax.set_xticklabels(names, rotation=45, ha='right')
-
-            rects = ax.bar(zernike_idx, np.zeros(zer_max), alpha=0.5, linewidth=1, edgecolor='black')
-            plt.ion()
-            callback = lambda intermediate_result: callback_evolution(intermediate_result, fig=fig, ax=ax, rects=rects)
-        else:
-            callback = None
-
-        if 'vectorized' in minimizer_params:
-            if minimizer_params['vectorized'] is True:
-                vectorized = True
-            else:
-                vectorized = True
-        else:
-            vectorized = False
-
-        result = differential_evolution(loss_function, x0=x0, bounds=bounds, callback=callback,
-                                        args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, vectorized, process),
-                                        **minimizer_params)
-    elif minimizer == 'dual_annealing':
-
-        global iter_annealing
-        iter_annealing = 1
-
-        result = dual_annealing(loss_function, x0=x0, bounds=bounds, callback=callback_annealing,
-                                args=(data, excitation, emission, grid, spad, obj, fit_mag, loss, process),
-                                **minimizer_params)
-    else:
-        raise Exception('Minimizer unknown.')
-
-    return result
-
-
-def callback_evolution(intermediate_result, fig, ax, rects):
-
-    y = intermediate_result.x
-
-    for n, rect in enumerate(rects[FIXED_ZERNIKE:]):
-        rect.set_height(intermediate_result.x[n])
-
-    ax.set_ylim([y.min()-0.2, y.max()+0.2])
-
-    fig.tight_layout()
-
-    plt.pause(0.01)
-
-
-def callback_annealing(x, f, context):
-    global iter_annealing
-    print(f'Iteration: {iter_annealing} \t f(x) = {f:.4E}')
-    iter_annealing += 1
