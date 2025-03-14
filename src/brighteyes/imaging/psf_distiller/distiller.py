@@ -77,8 +77,8 @@ def fit_detector(data, grid, exPar, emPar):
 
 
 def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
-            spad: torch.tensor = None, obj: torch.tensor =None, process: str = 'cpu'):
-    '''
+            spad: torch.tensor = None, obj: torch.tensor = None, process: str = 'cpu'):
+    """
     Forward model for the PSF.  It calculates the PSF for a given set of Zernike coefficients.
     It can also convolve the PSF with a sphere of given radius. The PSF is normalized to sum 1.
 
@@ -103,7 +103,7 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
     -------
     dset : torch.tensor
         PSF.
-    '''
+    """
     
     expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_coeff)])
     
