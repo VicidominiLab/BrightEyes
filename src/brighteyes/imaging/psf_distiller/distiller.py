@@ -48,7 +48,7 @@ def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
     z = (torch.arange(-(grid.Nz // 2), grid.Nz // 2 + np.mod(grid.Nz, 2)) * grid.pxsizez).float()
 
     zz, xx, yy = torch.meshgrid(z, x, x, indexing='ij')
-    r = torch.sqrt(xx ** 2 + yy ** 2 + zz**2)
+    r = torch.sqrt(xx ** 2 + yy ** 2 + zz ** 2)
 
     sphere = torch.where(r < radius, 1, 0)
 
@@ -59,16 +59,14 @@ def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
 
 
 def fit_detector(data, grid, exPar, emPar):
-
-
     grid_fit = GridFinder(grid)
-    
+
     grid_fit.estimate(data, exPar.wl, emPar.wl, exPar.na)
-    
+
     grid_fit.Print()
-    
+
     spad = sim.custom_detector(grid_fit, 'cpu')
-    
+
     return spad
 
 
@@ -111,13 +109,13 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
         zer_em = zer_coeff
 
     expar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_ex)])
-    
+
     empar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), torch.as_tensor(zer_em)])
 
     if grid.Nz > 1:
-        psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
+        psf, *_ = sim.SPAD_PSF_3D(grid, expar, empar, spad=spad, process=process, output='tensor')
     else:
-        psf, *_ = sim.SPAD_PSF_2D(grid, expar, empar, spad=spad, process=process, output = 'tensor')
+        psf, *_ = sim.SPAD_PSF_2D(grid, expar, empar, spad=spad, process=process, output='tensor')
 
     if obj is not None:
         alphabet = list(string.ascii_lowercase)
@@ -126,14 +124,13 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
         dset = partial_convolution(obj, psf, obj_axes, psf_axes, obj_axes, fourier=(1, 0))
     else:
         dset = psf
-    
+
     dset /= dset.sum()
-    
+
     return dset
 
 
 def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, delta_focus: bool = False, process='cpu'):
-
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
     n_agents = zer_coeff.shape[0]
@@ -193,14 +190,15 @@ def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, 
         zer_coeff = x0.clone()
 
     if vectorized is True:
-        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process)
+        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus,
+                                      process=process)
     else:
         estimate = forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process)
 
-    axis = tuple(-np.arange(1, data.ndim+1))
+    axis = tuple(-np.arange(1, data.ndim + 1))
 
     if loss == 'mse':
-        loss = torch.sum(torch.abs(data - estimate)**2, axis=axis)
+        loss = torch.sum(torch.abs(data - estimate) ** 2, axis=axis)
     elif loss == 'mae':
         loss = torch.sum(torch.abs(data - estimate), axis=axis)
     elif loss == 'kl':
@@ -342,8 +340,8 @@ def generate_starting_points(ndim: int, num_starts: int, bound: float, initializ
             lhs_sampler = qmc.LatinHypercube(d=ndim)
             samples = lhs_sampler.random(n=num_starts - 1)  # Generate LHS samples
         elif initialization == 'sobol':
-                sobol_sampler = qmc.Sobol(d=ndim)
-                samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
+            sobol_sampler = qmc.Sobol(d=ndim)
+            samples = sobol_sampler.random(n=num_starts - 1)  # Generate Sobol samples
         else:
             raise Exception('Initialization method unknown.')
 
