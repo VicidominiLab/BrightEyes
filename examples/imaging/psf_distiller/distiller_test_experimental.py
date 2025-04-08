@@ -56,6 +56,8 @@ gr.ShowDataset(data)
 shift_vectors, _ = apr.ShiftVectors(data, 10, 12)
 gr.PlotShiftVectors(shift_vectors, meta.dx)
 
+gr.ShowFingerprint(data)
+
 #%%
 
 exPar = sim.simSettings()
@@ -74,7 +76,7 @@ grid.pxsizex = meta.dx*1e3
 grid.Nx = data.shape[0]
 
 grid.pxpitch = 75e3
-grid.pxdim = 75e3
+grid.pxdim = 50e3
 grid.pinhole_shape = 'circle'
 grid.N = 5
 grid.M = 450
@@ -84,8 +86,6 @@ grid.M = 450
 grid_fit = GridFinder(grid)
 
 grid_fit.estimate(data, exPar.wl, emPar.wl, exPar.na)
-
-grid_fit.M = 450
 
 grid_fit.Print()
 

@@ -71,7 +71,7 @@ def fit_detector(data, grid, exPar, emPar):
 
 
 def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
-            spad: torch.tensor = None, obj: torch.tensor = None, delta_focus: bool = False, process: str = 'cpu'):
+            spad: torch.tensor = None, obj: torch.tensor = None, independent_wavefront: bool = False, process: str = 'cpu'):
     """
     Forward model for the PSF.  It calculates the PSF for a given set of Zernike coefficients.
     It can also convolve the PSF with a sphere of given radius. The PSF is normalized to sum 1.
@@ -90,8 +90,8 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
         Array of pinholes.
     obj : torch.tensor
         Object to convolve with the PSF.
-    delta_focus : bool
-        If True, the defocus parameter can be different for excitation and emission.
+    independent_wavefront : bool
+        If True, the wavefronts can be different for excitation and emission.
     process : str
         Device running the computation. It can be 'cpu' or 'gpu'.
 
@@ -101,9 +101,9 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
         PSF.
     """
 
-    if delta_focus is True:
-        zer_ex = torch.cat([zer_coeff[:1], zer_coeff[2:]])
-        zer_em = torch.cat([zer_coeff[:2], zer_coeff[3:]])
+    if independent_wavefront is True:
+        zer_ex = zer_coeff[0]
+        zer_em = zer_coeff[1]
     else:
         zer_ex = zer_coeff
         zer_em = zer_coeff
@@ -144,7 +144,7 @@ def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, delta
 
 def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings,
                   grid: sim.GridParameters, spad: torch.tensor, obj=None, fit_mag: bool = False, loss: str = 'mse',
-                  delta_focus: bool = False, vectorized: bool = False, process: str = 'cpu'):
+                  independent_wavefront: bool = False, vectorized: bool = False, process: str = 'cpu'):
     """
     Loss function for the optimization of the Zernike coefficients. It calculates the difference between the measured
     data and the forward model. The loss can be calculated using different metrics. The forward model can be calculated
@@ -190,10 +190,11 @@ def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, 
         zer_coeff = x0.clone()
 
     if vectorized is True:
-        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus,
-                                      process=process)
+        estimate = vectorized_forward(zer_coeff, expar, empar, grid, spad, obj,
+                                      independent_wavefront=independent_wavefront, process=process)
     else:
-        estimate = forward(zer_coeff, expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process)
+        estimate = forward(zer_coeff, expar, empar, grid, spad, obj, independent_wavefront=independent_wavefront,
+                           process=process)
 
     axis = tuple(-np.arange(1, data.ndim + 1))
 
@@ -210,7 +211,7 @@ def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, 
 
 
 def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
-            spad: torch.tensor, zer_max: int = 15, bead_radius: float = 0, delta_focus: bool = False, loss: str = 'mae',
+            spad: torch.tensor, zer_max: int = 15, bead_radius: float = 0, independent_wavefront: bool = False, loss: str = 'mae',
             num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
             verbose: str = True, process: str = 'cpu'):
     """
@@ -260,8 +261,8 @@ def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, 
     """
 
     zer_to_fit = zer_max - FIXED_ZERNIKE  # neglect piston, tip, tilt
-    if delta_focus is True:
-        zer_to_fit = zer_to_fit + 1
+    if independent_wavefront is True:
+        zer_to_fit = 2*zer_to_fit
 
     excitation = expar.copy()
     emission = empar.copy()
@@ -281,7 +282,7 @@ def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, 
               'grid': grid,
               'spad': spad,
               'obj': obj,
-              'delta_focus': delta_focus,
+              'independent_wavefront': independent_wavefront,
               'fit_mag': False,
               'loss': loss,
               'vectorized': False,
@@ -383,8 +384,14 @@ def minimizer(params: torch.tensor, max_iter: int, verbose: str = True, **kwargs
 
     history = torch.zeros(max_iter)
 
+    x0 = params.clone().detach()
+
+    # Reshape x0 to match the expected input shape
+    if kwargs['independent_wavefront'] is True:
+        x0 = x0.reshape((2, -1))
+
     # Initialize trainable parameters
-    x0 = params.clone().detach().requires_grad_(True)
+    x0 = x0.requires_grad_(True)
 
     optimizer = torch.optim.Adam([x0], lr=0.1)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
