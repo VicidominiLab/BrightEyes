@@ -99,7 +99,7 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 curr = time.time()
 
 result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40,
-                              delta_focus=True, num_starts=33, max_iter=250)
+                              independent_wavefront=True, num_starts=33, max_iter=250)
 
 elapsed = time.time() - curr
 

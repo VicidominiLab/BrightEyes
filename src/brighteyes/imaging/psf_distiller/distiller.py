@@ -418,4 +418,7 @@ def minimizer(params: torch.tensor, max_iter: int, verbose: str = True, **kwargs
             sys.stdout.write('\r' + iteration + '\t' + status)
             sys.stdout.flush()
 
+    if kwargs['independent_wavefront'] is True:
+        x0 = torch.ravel(x0)
+
     return x0, history
