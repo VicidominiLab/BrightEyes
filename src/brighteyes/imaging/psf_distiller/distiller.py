@@ -211,9 +211,9 @@ def loss_function(x0: torch.tensor, data: torch.tensor, expar: sim.simSettings, 
 
 
 def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, grid: sim.GridParameters,
-            spad: torch.tensor, zer_max: int = 15, bead_radius: float = 0, independent_wavefront: bool = False, loss: str = 'mae',
-            num_starts: int = 10, max_iter: int = 200, bound: int = 2, initialization: str = 'sobol',
-            verbose: str = True, process: str = 'cpu'):
+            spad: torch.tensor, zer_max: int = 15, bead_radius: float = 0, independent_wavefront: bool = False,
+            equal_start: bool = False, loss: str = 'mae', num_starts: int = 10, max_iter: int = 200, bound: int = 2,
+            initialization: str = 'sobol', verbose: str = True, process: str = 'cpu'):
     """
     It fits the Zernike coefficients to the measured data. The optimization is performed using the Adam optimizer with
     multiple starting points. The optimization can be performed using different metrics and different initialization
@@ -289,7 +289,11 @@ def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, 
               'process': process
               }
 
-    start_points = generate_starting_points(zer_to_fit, num_starts, bound, initialization)
+    if independent_wavefront is True and equal_start is True:
+        start_points = generate_starting_points(zer_to_fit//2, num_starts, bound, initialization)
+        start_points = torch.cat([start_points, start_points], dim=1)
+    else:
+        start_points = generate_starting_points(zer_to_fit, num_starts, bound, initialization)
 
     history = torch.zeros((num_starts, max_iter))
     result = torch.zeros((num_starts, zer_to_fit))
@@ -331,7 +335,7 @@ def generate_starting_points(ndim: int, num_starts: int, bound: float, initializ
     Returns
     -------
     start_points : torch.tensor
-        Starting points for the optimization.
+        Starting points for the optimization (num_starts x ndim).
     """
 
     with warnings.catch_warnings():

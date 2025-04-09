@@ -99,7 +99,7 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 curr = time.time()
 
 result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40,
-                              independent_wavefront=True, num_starts=33, max_iter=250)
+                              independent_wavefront=True, num_starts=17, max_iter=300)
 
 elapsed = time.time() - curr
 
@@ -117,13 +117,15 @@ plt.ylabel('Loss')
 zer_max = 15
 zernike_idx = np.arange(zer_max)
 
-zer_ex = torch.cat([result[:1], result[2:]]).cpu().detach()
-exPar.abe_index = zernike_idx
-exPar.abe_ampli = torch.cat([torch.zeros(3), zer_ex])
+n_zer = zer_max - FIXED_ZERNIKE
 
-zer_em = torch.cat([result[:2], result[3:]]).cpu().detach()
+zer_ex = result[:n_zer].cpu().detach()
+exPar.abe_index = zernike_idx
+exPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_ex])
+
+zer_em = result[n_zer:].cpu().detach()
 emPar.abe_index = zernike_idx
-emPar.abe_ampli = torch.cat([torch.zeros(3), zer_em])
+emPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), zer_em])
 
 names = exPar.aberration
 
@@ -165,3 +167,7 @@ ax[1].set_title('Emission')
 fit, *_ = sim.SPAD_PSF_2D(grid_fit, exPar, emPar, spad=spad, process='cpu')
 
 fig = gr.ShowDataset(fit)
+
+#%%
+
+gr.ShowFingerprint(fit)
