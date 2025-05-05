@@ -20,7 +20,7 @@ import warnings
 
 #%%
 
-FIXED_ZERNIKE = 3
+FIXED_ZERNIKE = 1
 
 
 def disk(grid, radius: float, fourier: bool = True, process: str = 'cpu'):
@@ -130,14 +130,16 @@ def forward(zer_coeff: torch.tensor, expar: sim.simSettings, empar: sim.simSetti
     return dset
 
 
-def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, delta_focus: bool = False, process='cpu'):
+def vectorized_forward(zer_coeff, expar, empar, grid, spad=None, obj=None, independent_wavefront: bool = False,
+                       process='cpu'):
     device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
 
     n_agents = zer_coeff.shape[0]
     datasets = []
 
     for n in range(n_agents):
-        datasets.append(forward(zer_coeff[n], expar, empar, grid, spad, obj, delta_focus=delta_focus, process=process))
+        datasets.append(forward(zer_coeff[n], expar, empar, grid, spad, obj,
+                                independent_wavefront=independent_wavefront, process=process))
 
     return torch.stack(datasets, dim=0).to(device)
 
