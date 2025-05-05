@@ -114,7 +114,7 @@ data = data/torch.sum(data)
 
 n_points = 25
 
-index_x, index_y = 6, 7
+index_x, index_y = 5, 7
 
 abe_x = np.linspace(-4, 4, num=n_points)
 abe_y = np.linspace(-4, 4, num=n_points)
@@ -170,9 +170,17 @@ divider = make_axes_locatable(ax)
 cax = divider.append_axes('right', size='5%', pad=0.05)
 
 im = ax.imshow(loss_map, norm = LogNorm(), extent = (abe_x[0], abe_x[-1], abe_y[-1], abe_y[0]))
-fig.colorbar(im, cax=cax, orientation='vertical')
+cbar = fig.colorbar(im, cax=cax, orientation='vertical')
 
 ax.scatter(truth[1], truth[0], marker = 'x', color='red')
+
+ax.set_xlabel(fr'$c_{index_x}(rad)$')
+ax.set_ylabel(fr'$c_{index_y}(rad)$')
+
+cbar.ax.set_ylabel(r'$L_2$ loss')
+
+fig.tight_layout()
+fig.savefig('L2_landscape.png', dpi = 300)
 
 #%%
 
