@@ -267,7 +267,7 @@ fig = gr.ShowDataset(fit)
 fig.suptitle('Distilled PSFs')
 
 fig.tight_layout()
-plt.savefig('em_wavefront.png', dpi = 300)
+plt.savefig('distilled_psfs.png', dpi = 300)
 
 #%% compare fingerprints
 

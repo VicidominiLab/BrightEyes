@@ -30,28 +30,61 @@ plt.close('all')
 path = r'\\iitfsvge101.iit.local\mms\Data MMS server\STED-ISM\AxialDeconvolution\Beads\Gold - 2'
 file = r'data-07-12-2023-12-31-52.h5'
 
+# path = r'\\iitfsvge101.iit.local\mms\Data MMS server\Other\PSF_distiller\2025-04-24_PSF_beads_distiller\100nm_gold'
+# file = r'data-24-04-2025-17-05-28.h5'
+
 fullpath = os.path.join(path, file)
 
 dset, meta = mcs.load(fullpath)
 
 #%%
 
+# import napari
+
+# viewer = napari.Viewer()
+# viewer.add_image(dset)
+
+#%% pre-process data
+
+if meta.nz > 1:
+    z0 = 38
+    data_rep = dset[:,z0].sum(-2)
+else:
+    data_rep = dset.sum(axis=(1,-2))
+    
+data_rep = data_rep[:, 100:-100, 100:-100]
+
+#%%
+
 from skimage.filters import gaussian
 
-data = dset[:,38].sum(axis=(0,-2))
-data = data[100:-100, 100:-100]
+# data = dset[:,38].sum(axis=(0,-2))
+# data = data[100:-100, 100:-100]
+# nx, ny = data.shape[:2]
+
+nrep, nx, ny, nch = data_rep.shape
+
+data = np.empty_like(data_rep)
+
+for k in range(nrep):
+    cx, cy, cc = tool.ArgMaxND(gaussian(data_rep[k], 4, channel_axis = -1))[0]
+
+    sx, sy = nx//2 - cx, ny//2 - cy
+
+    data[k] = np.roll(data_rep[k], [sx, sy], axis = (0, 1))
+
+data = data.sum(0)
+
 data = data/data.sum()
-
-nx, ny = data.shape[:2]
-cx, cy, cc = tool.ArgMaxND(gaussian(data, 4, channel_axis = -1))[0]
-
-sx, sy = nx//2 - cx, ny//2 - cy
-
-data = np.roll(data, [sx, sy], axis = (0, 1))
 
 #%%
 
 gr.ShowDataset(data)
+
+plt.tight_layout()
+plt.savefig('exp_data.png', dpi = 300)
+
+#%%
 
 shift_vectors, _ = apr.ShiftVectors(data, 10, 12)
 gr.PlotShiftVectors(shift_vectors, meta.dx)
@@ -69,7 +102,7 @@ exPar.n = 1.5
 exPar.mask_sampl = 101 #128
 
 emPar = exPar.copy()
-emPar.wl = 640
+emPar.wl = 660
 
 grid = sim.GridParameters()
 grid.pxsizex = meta.dx*1e3
@@ -79,7 +112,7 @@ grid.pxpitch = 75e3
 grid.pxdim = 50e3
 grid.pinhole_shape = 'circle'
 grid.N = 5
-grid.M = 450
+grid.M = 500 #450
 
 #%%
 
@@ -99,7 +132,7 @@ plt.imshow(spad.cpu().detach().numpy().sum(-1))
 curr = time.time()
 
 result, history = dis.fit_psf(data, exPar, emPar, grid, spad, bead_radius=40,
-                              independent_wavefront=True, num_starts=17, max_iter=300)
+                              independent_wavefront=True, num_starts=17, max_iter=200)
 
 elapsed = time.time() - curr
 
@@ -147,6 +180,8 @@ plt.legend()
 
 plt.tight_layout()
 
+plt.savefig('exp_hist.png', dpi = 300)
+
 #%%
 
 wavefront_fit_ex = exPar.wavefront
@@ -162,11 +197,17 @@ ax[1].imshow(wavefront_fit_em, cmap='seismic')
 ax[1].axis('off')
 ax[1].set_title('Emission')
 
+fig.tight_layout()
+fig.savefig('exp_wavefront.png', dpi = 300)
+
 #%%
 
 fit, *_ = sim.SPAD_PSF_2D(grid_fit, exPar, emPar, spad=spad, process='cpu')
 
 fig = gr.ShowDataset(fit)
+
+fig.tight_layout()
+fig.savefig('exp_fit.png', dpi = 300)
 
 #%%
 
