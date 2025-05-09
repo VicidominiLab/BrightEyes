@@ -109,8 +109,7 @@ else:
 
 fig.suptitle('Clean data')
 fig.tight_layout()
-
-fig.savefig('clean_data.png', dpi = 300)
+# fig.savefig('clean_data.png', dpi = 300)
 
 #%% generate noisy data
 
@@ -127,8 +126,7 @@ else:
 
 fig.suptitle('Noisy data')
 fig.tight_layout()
-
-fig.savefig('noisy_data.png', dpi = 300)
+# fig.savefig('noisy_data.png', dpi = 300)
 
 data = data/torch.sum(data)
 
@@ -154,16 +152,6 @@ elapsed = time.time() - curr
 
 print(f'Time = {elapsed:.2f} s')
 
-#%% calculate fit result
-
-n_zer = zer_max - FIXED_ZERNIKE
-
-fit_ex = result[:n_zer].cpu().detach()
-exPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), fit_ex])
-
-fit_em = result[n_zer:].cpu().detach()
-emPar.abe_ampli = torch.cat([torch.zeros(FIXED_ZERNIKE), fit_em])
-
 #%% show minimization history
 
 plt.figure()
@@ -173,12 +161,11 @@ plt.ylabel('Loss')
 plt.title('Minimization history')
 
 plt.tight_layout()
-
-plt.savefig('history.png', dpi = 300)
+# plt.savefig('history.png', dpi = 300)
 
 #%% excitation fit result
 
-zernike_output_ex = np.concatenate([np.zeros(FIXED_ZERNIKE), fit_ex.numpy()])
+zernike_output_ex = result[0]
 
 plt.figure()
 plt.bar(zernike_idx, zernike_ex, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
@@ -193,12 +180,11 @@ plt.gca().set_title('Excitation')
 plt.legend()
 
 plt.tight_layout()
-
-plt.savefig('ex_hist.png', dpi = 300)
+# plt.savefig('ex_hist.png', dpi = 300)
 
 #%% emission fit result
 
-zernike_output_em = np.concatenate([np.zeros(FIXED_ZERNIKE), fit_em.numpy()])
+zernike_output_em = result[1]
 
 plt.figure()
 plt.bar(zernike_idx, zernike_em, alpha = 0.5, linewidth = 1, edgecolor = 'black', label = 'ground truth')
@@ -213,8 +199,7 @@ plt.gca().set_title('Emission')
 plt.legend()
 
 plt.tight_layout()
-
-plt.savefig('em_hist.png', dpi = 300)
+# plt.savefig('em_hist.png', dpi = 300)
 
 #%% calculate fit wavefront
 
@@ -241,7 +226,7 @@ ax[1].axis('off')
 ax[1].set_title('Excitation fit')
 
 fig.tight_layout()
-plt.savefig('ex_wavefront.png', dpi = 300)
+# plt.savefig('ex_wavefront.png', dpi = 300)
 
 #%% show emission wavefront
 
@@ -256,7 +241,7 @@ ax[1].axis('off')
 ax[1].set_title('Emission fit')
 
 fig.tight_layout()
-plt.savefig('em_wavefront.png', dpi = 300)
+# plt.savefig('em_wavefront.png', dpi = 300)
 
 #%% show distilled psfs
 
@@ -267,7 +252,7 @@ fig = gr.ShowDataset(fit)
 fig.suptitle('Distilled PSFs')
 
 fig.tight_layout()
-plt.savefig('distilled_psfs.png', dpi = 300)
+# plt.savefig('distilled_psfs.png', dpi = 300)
 
 #%% compare fingerprints
 
@@ -282,4 +267,4 @@ ax[1].set_title('Fit')
 fig.suptitle('Fingerprint')
 
 fig.tight_layout()
-plt.savefig('fingerprints.png', dpi = 300)
+# plt.savefig('fingerprints.png', dpi = 300)
