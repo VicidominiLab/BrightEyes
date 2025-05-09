@@ -310,13 +310,46 @@ def fit_psf(data: torch.tensor, expar: sim.simSettings, empar: sim.simSettings, 
         history[i] = h0.clone()
 
     idx = torch.argmin(history[:, -1])
-    best_result = result[idx]
+    best_result = structure_result(result[idx], zer_max, independent_wavefront)
 
     # Print final optimized parameters
     if verbose is True:
         print("\nOptimized parameters:\n", best_result.detach().numpy())
 
     return best_result, history
+
+
+def structure_result(result, zer_max: int, independent_wavefront: bool = False):
+    """
+    It restructures the result of the optimization. It adds zeros to the beginning of the result vector to account for
+    the fixed Zernike coefficients. It also separates the excitation and emission Zernike coefficients if the wavefronts
+    are independent.
+
+    Parameters
+    ----------
+    result : torch.tensor
+        Result of the optimization.
+    zer_max : int
+        Maximum order of Zernike coefficients considered in the optimization, including fixed ones.
+    independent_wavefront : bool
+        If True, the wavefronts can be different for excitation and emission.
+
+    Returns
+    -------
+    zer_fit : torch.tensor
+        Restructured Zernike coefficients.
+    """
+
+    n_zer = zer_max - FIXED_ZERNIKE
+
+    if independent_wavefront is True:
+        zer_ex = torch.cat([torch.zeros(FIXED_ZERNIKE), result[:n_zer].cpu().detach()])
+        zer_em = torch.cat([torch.zeros(FIXED_ZERNIKE), result[n_zer:].cpu().detach()])
+        zer_fit = torch.stack([zer_ex, zer_em], dim=0)
+    else:
+        zer_fit = torch.cat([torch.zeros(FIXED_ZERNIKE), result.cpu().detach()])
+
+    return zer_fit
 
 
 def generate_starting_points(ndim: int, num_starts: int, bound: float, initialization: str):
