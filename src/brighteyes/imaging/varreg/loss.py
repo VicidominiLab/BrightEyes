@@ -1,9 +1,13 @@
 import torch
 import string
 
+<<<<<<< HEAD:loss.py
+def fidelity_loss(dataset, obj_set, psf, full_KL=False):
+=======
 from .utils import partial_convolution_rfft, centered_pad
 
 def fidelity_loss(dataset, obj_set, psf):
+>>>>>>> 95d8d78d8b88fb0c574abb6872f1a441e7fb50b1:src/varreg/loss.py
     """
     Compute the fidelity loss between true and predicted values.
 
@@ -32,6 +36,8 @@ def fidelity_loss(dataset, obj_set, psf):
     forward = partial_convolution_rfft(psf_pad, obj_set, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(0,0))
 
     fidelity = forward - dataset * torch.log( forward )
+    if full_KL:
+        fidelity = fidelity + dataset * torch.log( dataset ) - dataset
 
     idx = ~torch.isfinite(fidelity)
     fidelity[ idx ] = 0
