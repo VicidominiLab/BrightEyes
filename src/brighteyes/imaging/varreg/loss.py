@@ -5,31 +5,33 @@ from .utils import partial_convolution_rfft, centered_pad
 
 def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     """
-    Compute the fidelity loss between true and predicted values.
+    Compute the fidelity loss between data and the forward value from predicted solution.
 
     Parameters:
-    y_true (array-like): True values.
-    y_pred (array-like): Predicted values.
+    dataset (Tensor): Input data tensor with dimensions Nx x Ny or Nx x Ny x K.
+    obj_set (Tensor): Predicted object tensor with dimensions num_iter x Nx x Ny or num_iter x Nx x Ny x K.
+    psf (Tensor): Point spread function with dimensions Mx x My or Mx x My x K.
+    full_KL (bool): Whether to use full KL divergence with normalization.
 
     Returns:
-    float: Fidelity loss value.
+    Tensor: Computed fidelity loss.
     """
 
     alphabet = string.ascii_lowercase
-    n_dim = obj_set.ndim
+    n_dim = obj_set.ndim      # 3 or 4
+    num_axis_to_conv = 2  
 
-    str_psf = alphabet[:n_dim]
-    str_obj = alphabet[:n_dim]
-    if n_dim >2:
-        axis_str = alphabet[:n_dim - 1]
-    else:
-        axis_str = alphabet[:n_dim]
+    str_psf = alphabet[1:n_dim]   # 'bc' or 'bcd'
+    str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
+    axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
 
     ny, nx = dataset.shape[:2]
 
     psf_pad = centered_pad(psf, target_shape=(ny, nx))  # Centered padding of PSF to match dataset shape
 
     forward = partial_convolution_rfft(psf_pad, obj_set, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(0,0))
+    
+    dataset = dataset.unsqueeze(-1)
 
     fidelity = forward - dataset * torch.log( forward )
     if full_KL:
