@@ -32,11 +32,14 @@ def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: st
 
     return conv
 
-def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl',
+def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl', dim3: str = None,
                              axis: str = 'jk', fourier: tuple = (False, False), padding: list = None):
 
-    dim3 = dim1 + dim2
-    dim3 = ''.join(sorted(set(dim3), key=dim3.index))
+    if dim3 is None:
+        dim3 = dim1 + dim2
+        dim3 = ''.join(sorted(set(dim3), key=dim3.index))
+    elif not isinstance(dim3, str):
+        raise ValueError("dim3 must be a string")
 
     dims = [dim1, dim2, dim3]
     axis_list = [[d.find(c) for c in axis] for d in dims]

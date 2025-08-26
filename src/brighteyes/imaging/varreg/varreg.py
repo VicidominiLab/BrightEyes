@@ -1,6 +1,7 @@
 import torch
 import string
 import numpy as np
+import torch.optim as optim
 
 from torch.nn import functional
 from torch.fft import rfftn, irfftn, ifftshift
@@ -8,6 +9,7 @@ from torch import real, einsum
 from tqdm import tqdm
 
 from .utils import partial_convolution_rfft, centered_pad
+from .loss import fidelity_loss, regularization_loss
 
 from .regularizers import grad_l2, grad_l1, grad_kl
 
@@ -192,3 +194,84 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         return obj_all
     else:
         raise ValueError("rec_to_save must be 'last' or 'all'.")
+
+
+def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
+                     regularizer='l2', lr=1e-3,  process = 'gpu', full_KL=False, verbose=True):
+    """
+    Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
+
+    Parameters:
+        dataset (Tensor): Tensore dei dati di dimensione (Nx, Ny) o (Nx, Ny, K).
+        psf (Tensor): Point Spread Function, dimensione (Mx, My) o (Mx, My, K).
+        regularizer (str): Tipo di regolarizzazione ('l1', 'l2', 'kl').
+        lr (float): Learning rate di Adam.
+        num_iter (int): Numero di iterazioni.
+        full_KL (bool): Se True, usa la forma completa della KL.
+        verbose (bool): Se True, stampa i progressi.
+
+    Returns:
+        obj_set (Tensor): Tensore ottimizzato di dimensioni (Nx, Ny, K).
+    """
+
+    # Ensure tensors are on the correct device
+    if process == 'gpu' and torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
+
+    dset = torch.from_numpy(dset).float().to(device)
+    psf = torch.from_numpy(psf).float().to(device)
+    
+    # Axis to sum for flux conservation
+    axis_to_sum = tuple(range(dset.ndim - 1))
+    flux = dset.sum(axis_to_sum, keepdim=True)
+
+
+    # Initialization
+    size = [num_iter + 1] + list(dset.shape)
+    obj_all = torch.empty(size).to(device)
+    obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
+    obj_set = obj_all[0]
+    obj_set.requires_grad = True
+
+    # Dictionary with losses
+    losses = {
+        'total': [],
+        'fidelity': [],
+        'regularization': []
+    }
+
+
+    optimizer = optim.Adam([obj_set], lr=lr)
+
+    for it in range(num_iter):
+        optimizer.zero_grad()
+
+        # Calcolo dei termini di perdita
+        loss_fidelity = fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
+        loss_reg = lambda_value * regularization_loss(obj_set, regularizer=regularizer)
+
+        loss = loss_fidelity + loss_reg
+
+        # Backprop + update
+        loss.backward()
+        optimizer.step()
+
+        # Imporre positività (opzionale per KL)
+        with torch.no_grad():
+            obj_set.clamp_(min=1e-8)
+            
+            
+        # Save solution
+        obj_all[it+1] = obj_set.detach()
+        # Save losses
+        losses['total'].append(loss.item())
+        losses['fidelity'].append(loss_fidelity.item())
+        losses['regularization'].append(loss_reg.item())
+
+        if verbose and (it % max(1, num_iter // 10) == 0 or it == num_iter - 1):
+            print(f"Iter {it+1}/{num_iter} | Loss: {loss.item():.6f} "
+                  f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}")
+
+    return obj_all.detach(), losses
