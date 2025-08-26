@@ -12,6 +12,32 @@ from .utils import partial_convolution_rfft, centered_pad
 from .regularizers import grad_l2, grad_l1, grad_kl
 
 
+def forward(otf, obj):
+    """
+    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
+    The dimension K is optional.
+
+    Parameters:
+        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
+        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
+
+    Returns:
+        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
+    """
+
+    conv_dims = 2 # to generalize to 3D later
+
+    alphabet = string.ascii_lowercase
+
+    str_psf = alphabet[:otf.ndim]
+    str_obj = alphabet[:obj.ndim]
+    axis_str = alphabet[:conv_dims]
+
+    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
+
+    return dset
+
+
 def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regularizer: str):
     """
     Performs a single iteration update for SGM with variance regularization.
@@ -21,7 +47,6 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
         obj (Tensor): Current estimate of the object of shape Nx x Ny x K.
         psf_fft (Tensor): Fourier transform of the PSF.
         psf_m_fft (Tensor): Fourier transform of the flipped PSF.
-        obj_mean (Tensor): Mean of obj across K.
         lam (float): Variance regularization parameter.
         weight (float): Regularization weight.
         method (str): 'osl' or 'abs' or 'sgm'.
@@ -30,28 +55,26 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     Returns:
         Tensor: Updated object tensor of shape Nx x Ny x K.
     """
+
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    alphabet = string.ascii_lowercase
-    n_dim = obj.ndim
-
-    str_psf = alphabet[:n_dim - 1]
-    str_first = alphabet[:n_dim]
-    str_second = alphabet[:n_dim]
-    axis_str = alphabet[:n_dim - 1]
-
     # === forward convolution ===
-    img_estimate_k = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=str_first, axis=axis_str, fourier=(1, 0))
+    img_estimate_k = forward(psf_fft, obj)
+    # img_estimate_k = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=str_first, axis=axis_str, fourier=(1, 0))
     fraction = img / (img_estimate_k + eps)
+
     del img_estimate_k
+
+    update_k = forward(psf_m_fft, fraction)
+
+    # update_k = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=str_second, axis=axis_str, fourier=(1, 0)
+
+    del fraction
 
     # === Metodo OSL ===
     if method.lower() == 'osl':
         obj_mean = obj.mean(dim=-1, keepdim=True)
-        update_k = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=str_second, axis=axis_str,
-                                            fourier=(1, 0))
-        del fraction
 
         denom = 1 + 2 * lam * weight * (obj - obj_mean)
         obj_update = update_k / (denom + eps)
@@ -60,9 +83,6 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     # === Metodo ABS ===
     elif method.lower() == 'abs':
         obj_mean = obj.mean(dim=-1, keepdim=True)
-        update_k = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=str_second, axis=axis_str,
-                                            fourier=(1, 0))
-        del fraction
 
         denom = 1 + 2 * lam * weight * torch.abs(obj - obj_mean)
         obj_update = update_k / (denom + eps)
@@ -80,9 +100,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
         else:
             raise ValueError("Regularizer must be 'variance', 'kl', or 'l1'.")
 
-        update_k = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=str_second, axis=axis_str,
-                                            fourier=(1, 0)) + lam * weight * u
-        del fraction
+        update_k = update_k + lam * weight * u
 
         denom = 1 + lam * weight * v
         obj_update = update_k / denom

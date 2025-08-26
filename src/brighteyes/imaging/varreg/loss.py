@@ -25,9 +25,9 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
     axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
 
-    ny, nx = dataset.shape[:2]
+    sz = dataset.shape[:num_axis_to_conv]
 
-    psf_pad = centered_pad(psf, target_shape=(ny, nx))  # Centered padding of PSF to match dataset shape
+    psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
 
     forward = partial_convolution_rfft(psf_pad, obj_set, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(0,0))
     
