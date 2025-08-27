@@ -3,6 +3,8 @@ import string
 import numpy as np
 import torch.optim as optim
 
+from scipy.ndimage import gaussian_filter
+
 from torch.nn import functional
 from torch.fft import rfftn, irfftn, ifftshift
 from torch import real, einsum
@@ -196,7 +198,7 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
+def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, initialization : str = 'flat',
                      regularizer='l2', lr=1e-3,  process = 'gpu', full_KL=False, verbose=True):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
@@ -227,11 +229,19 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
     axis_to_sum = tuple(range(dset.ndim - 1))
     flux = dset.sum(axis_to_sum, keepdim=True)
 
-
     # Initialization
     size = [num_iter + 1] + list(dset.shape)
     obj_all = torch.empty(size).to(device)
-    obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
+
+    if initialization == 'flat':
+        obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
+    elif initialization == 'data':
+        axis_to_conv = tuple(range(2))
+        obj_all[0] = torch.tensor(gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes = axis_to_conv)).to(device)
+        obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
+    else:
+        raise ValueError("Initialization must be 'flat' or 'data'.")
+
     obj_set = obj_all[0]
     obj_set.requires_grad = True
 
@@ -245,11 +255,13 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
 
     optimizer = optim.Adam([obj_set], lr=lr)
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
+
     for it in range(num_iter):
         optimizer.zero_grad()
 
         # Calcolo dei termini di perdita
-        loss_fidelity = fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
+        loss_fidelity = alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
         loss_reg = lambda_value * regularization_loss(obj_set, regularizer=regularizer)
 
         loss = loss_fidelity + loss_reg
@@ -257,6 +269,7 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
         # Backprop + update
         loss.backward()
         optimizer.step()
+        scheduler.step(loss)
 
         # Imporre positività (opzionale per KL)
         with torch.no_grad():
@@ -272,6 +285,7 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01,
 
         if verbose and (it % max(1, num_iter // 10) == 0 or it == num_iter - 1):
             print(f"Iter {it+1}/{num_iter} | Loss: {loss.item():.6f} "
-                  f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}")
+                  f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}"
+                  f" | LR: {optimizer.param_groups[0]['lr']:.6f}")
 
     return obj_all.detach(), losses
