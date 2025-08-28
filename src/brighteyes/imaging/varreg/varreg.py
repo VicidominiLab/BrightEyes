@@ -164,21 +164,22 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
         obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
     else:
         raise ValueError("Initialization must be 'flat' or 'data'.")
-    
+    idx = 0
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj = update_fft(dset, obj_all[-1], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
+        obj_set = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
         
         #flux conservation
         if normalize is True:
-            obj = obj * flux / obj.sum(axis_to_sum, keepdim = True)
+            obj_set = obj_set * flux / obj_set.sum(axis_to_sum, keepdim=True)
 
         if rec_to_save == 'all':
-            obj_all[m + 1] = obj
+            idx = m + 1
         elif rec_to_save == 'last':
-            obj_all[-1] = obj
+            idx = -1
         else:
             raise ValueError("rec_to_save must be 'last' or 'all'.")
+        obj_all[idx] = obj_set
 
         if tol is not None:
             rel_diff = torch.norm(obj_all[m + 1] - obj_all[m]) / torch.norm(obj_all[m])
