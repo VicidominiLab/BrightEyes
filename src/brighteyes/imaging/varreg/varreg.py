@@ -148,11 +148,12 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     # Initialization
+    size = list(dset.shape)
     if rec_to_save == 'last':
-        size = [1] + list(dset.shape)
+        size = [1] + size
     elif rec_to_save == 'all':
-        size = [max_iter + 1] + list(dset.shape)
-        
+        size = [max_iter + 1] + size
+
     obj_all = torch.empty(size).to(device)
     
     if initialization == 'flat':
@@ -245,21 +246,27 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
 
 def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, weight:str = 'id',
                       initialization: str = 'flat', regularizer: str ='l2', lr=1e-3,  process: str = 'gpu',
-                      full_KL: bool =False, verbose: bool =True):
+                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
     Parameters:
-        dataset (Tensor): Tensore dei dati di dimensione (Nx, Ny) o (Nx, Ny, K).
-        psf (Tensor): Point Spread Function, dimensione (Mx, My) o (Mx, My, K).
-        regularizer (str): Tipo di regolarizzazione ('l1', 'l2', 'kl').
-        lr (float): Learning rate di Adam.
-        num_iter (int): Numero di iterazioni.
-        full_KL (bool): Se True, usa la forma completa della KL.
-        verbose (bool): Se True, stampa i progressi.
+        dset (Tensor): dataset tensor of shape (Nx, Ny) o (Nx, Ny, K).
+        psf (Tensor): Point Spread Function tensor with dimension (Mx, My) o (Mx, My, K).
+        num_iter (int): Number of iterations.
+        lambda_value (float): Weight for the regularization term.
+        alpha_value (float): Weight for the fidelity term.
+        weight (str): Type of weight to use ('id' for identity, 'snr' for Signal Noise Ratio).
+        initialization (str): Initialization method for the object estimate ('flat' or 'data').
+        regularizer (str): type of regularization ('l1', 'l2', 'kl').
+        lr (float): Learning rate of Adam.
+        process (str): Processing mode ('cpu' or 'gpu').
+        full_KL (bool): If True, use the full form of KL.
+        rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
+        verbose (bool): If True, print progress.
 
     Returns:
-        obj_set (Tensor): Tensore ottimizzato di dimensioni (Nx, Ny, K).
+        obj_set (Tensor): Optimized tensor of shape (Nx, Ny, K).
     """
 
     # Ensure tensors are on the correct device
@@ -291,8 +298,6 @@ def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
     obj_set = obj_all[0]
     obj_set.requires_grad = True
 
-
-
     # Dictionary with losses
     losses = {
         'total': [],
@@ -303,7 +308,7 @@ def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
     optimizer = optim.Adam([obj_set], lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
 
-    for it in range(num_iter):
+    for m in range(num_iter):
         optimizer.zero_grad()
 
         # Calcolo dei termini di perdita
@@ -319,17 +324,22 @@ def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
 
         # Imporre positività (opzionale per KL)
         with torch.no_grad():
-            obj_set.clamp_(min=1e-8)
+            obj_set.clamp_(min=1e-10)
 
         # Save solution
-        obj_all[it+1] = obj_set.detach()
+        if rec_to_save == 'all':
+            obj_all[m + 1] = obj_set.detach()
+        elif rec_to_save == 'last':
+            obj_all[-1] = obj_set.detach()
+        else:
+            raise ValueError("rec_to_save must be 'last' or 'all'.")
         # Save losses
         losses['total'].append(loss.item())
         losses['fidelity'].append(loss_fidelity.item())
         losses['regularization'].append(loss_reg.item())
 
-        if verbose and (it % max(1, num_iter // 10) == 0 or it == num_iter - 1):
-            print(f"Iter {it+1}/{num_iter} | Loss: {loss.item():.6f} "
+        if verbose and (m % max(1, num_iter // 10) == 0 or m == num_iter - 1):
+            print(f"Iter {m+1}/{num_iter} | Loss: {loss.item():.6f} "
                   f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}"
                   f" | LR: {optimizer.param_groups[0]['lr']:.6f}")
 
