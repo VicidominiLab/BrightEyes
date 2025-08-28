@@ -3,6 +3,8 @@ import string
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
+from .utils import calculate_weight_map
+
 from .utils import partial_convolution_rfft, centered_pad
 
 def fidelity_loss(dataset, obj_set, psf, full_KL=False):
@@ -64,7 +66,8 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     return fidelity.sum(axis=axis_to_sum)  # Sum over all but the first dimension (num_iter if present)
 
 
-def regularization_loss(obj_set, regularizer: str = 'l2', iteration_axis: bool = False):
+def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regularizer: str = 'l2', weight: str = 'id',
+                        iteration_axis: bool = False):
     """
     Compute the variance regularization term for a set of objects.
 
@@ -91,5 +94,14 @@ def regularization_loss(obj_set, regularizer: str = 'l2', iteration_axis: bool =
         residuals = obj_mean * torch.log( obj_mean / obj_set )
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
+
+    if weight == "snr" and dset is not None:
+        weight_map = calculate_weight_map(dset)
+    elif weight == "id":
+        weight_map = 1
+    else:
+        raise ValueError("W must be either 'snr' or 'id'")
+
+    residuals = residuals * weight_map
 
     return residuals.sum(axis=axis_to_sum)
