@@ -244,7 +244,7 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, weight:str = 'id',
+def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, W = 1,
                       initialization: str = 'flat', regularizer: str ='l2', lr=1e-3,  process: str = 'gpu',
                       full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):
     """
@@ -256,7 +256,7 @@ def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
         num_iter (int): Number of iterations.
         lambda_value (float): Weight for the regularization term.
         alpha_value (float): Weight for the fidelity term.
-        weight (str): Type of weight to use ('id' for identity, 'snr' for Signal Noise Ratio).
+        W (float or tensor): Regularization weight a scalar or tensor of shape Nx x Ny.
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         regularizer (str): type of regularization ('l1', 'l2', 'kl').
         lr (float): Learning rate of Adam.
@@ -313,7 +313,7 @@ def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
 
         # Calcolo dei termini di perdita
         loss_fidelity = alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
-        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, weight=weight, regularizer=regularizer)
+        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
 
         loss = loss_fidelity + loss_reg
 

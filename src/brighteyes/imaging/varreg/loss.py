@@ -29,16 +29,6 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a batch dimension
         n_dim = n_dim + 1
-        # str_psf = alphabet[:n_dim]   # 'abc' or 'abcd'
-        # str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
-        # axis_str = alphabet[:num_axis_to_conv] # 'ab'
-        # axis_to_sum = tuple(range(obj_set.ndim))
-    # else:
-    #     str_psf = alphabet[1:n_dim]   # 'bc' or 'bcd'
-    #     str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
-    #     axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
-    #     str_final = str_obj
-    #     axis_to_sum = tuple(range(1, obj_set.ndim))
         
     str_psf = alphabet[1:n_dim]   # 'bc' or 'bcd'
     str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
@@ -66,7 +56,7 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     return fidelity.sum(axis=axis_to_sum)  # Sum over all but the first dimension (num_iter if present)
 
 
-def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regularizer: str = 'l2', weight: str = 'id',
+def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regularizer: str = 'l2', W=1,
                         iteration_axis: bool = False):
     """
     Compute the variance regularization term for a set of objects.
