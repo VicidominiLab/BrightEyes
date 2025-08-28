@@ -93,14 +93,14 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     # === Metodo SGM ===
     elif method.lower() == 'sgm':
 
-        if regularizer == 'variance':
+        if regularizer == 'l2':
             u, v = grad_l2(obj)
         elif regularizer == 'kl':
             u, v = grad_kl(obj)
         elif regularizer == 'l1':
             u, v = grad_l1(obj)
         else:
-            raise ValueError("Regularizer must be 'variance', 'kl', or 'l1'.")
+            raise ValueError("Regularizer must be 'l2', 'kl', or 'l1'.")
 
         update_k = update_k + lam * weight * u
 
@@ -129,7 +129,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
         tol (float): Convergence tolerance to stop iterations.
         method (str): algorithm 'osl' or 'abs' or 'sgm'.
         device (str): device to perform computation on ('cpu' or 'cuda').
-        regularizer (str): distance to measure the differences between o_k and o_mean: 'variance', 'kl', or 'l1'.
+        regularizer (str): distance to measure the differences between o_k and o_mean: 'l2', 'kl', or 'l1'.
         initialization (str): initialization method for the object estimate ('flat' or 'data').
         normalize (bool): whether to normalize the object estimate at each iteration.
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
@@ -190,22 +190,23 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     return obj_all
 
 
-def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_save='last', method='osl', process='gpu',
-                            regularizer='variance', initialization='flat', normalize=False):
+def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None, method='sgm',
+                            regularizer='l2', initialization='flat', normalize=False, process='gpu', rec_to_save='last'):
+        
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
     Parameters:
         dset (ndarray): Input dataset of shape Nx x Ny x K x Ch.
         psf (ndarray): PSF kernel of shape Mx x My x K x Ch.
-        lam (float): Variance regularization parameter.
+        lambda_value (float): Variance regularization parameter.
         W (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
         tol (float): Convergence tolerance.
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
         method (str): Update method ('osl', 'abs', or 'sgm').
         process (str): Processing mode ('cpu' or 'gpu').
-        regularizer (str): Regularization type to measure distance ('variance', 'kl', or 'l1').
+        regularizer (str): Regularization type to measure distance ('l2', 'kl', or 'l1').
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
 
@@ -234,7 +235,7 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lam, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
 
     if rec_to_save == 'last':
         return obj_all[-1]
@@ -244,22 +245,22 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, W = 1,
-                      initialization: str = 'flat', regularizer: str ='l2', lr=1e-3,  process: str = 'gpu',
-                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):
+def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 0.01, W = 1, num_iter=500, lr=1e-3,
+                      regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
+                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):    
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
     Parameters:
         dset (Tensor): dataset tensor of shape (Nx, Ny) o (Nx, Ny, K).
         psf (Tensor): Point Spread Function tensor with dimension (Mx, My) o (Mx, My, K).
-        num_iter (int): Number of iterations.
         lambda_value (float): Weight for the regularization term.
         alpha_value (float): Weight for the fidelity term.
         W (float or tensor): Regularization weight a scalar or tensor of shape Nx x Ny.
-        initialization (str): Initialization method for the object estimate ('flat' or 'data').
-        regularizer (str): type of regularization ('l1', 'l2', 'kl').
+        num_iter (int): Number of iterations.
         lr (float): Learning rate of Adam.
+        regularizer (str): type of regularization ('l1', 'l2', 'kl').
+        initialization (str): Initialization method for the object estimate ('flat' or 'data').
         process (str): Processing mode ('cpu' or 'gpu').
         full_KL (bool): If True, use the full form of KL.
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
