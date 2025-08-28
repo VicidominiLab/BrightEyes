@@ -42,7 +42,7 @@ def forward(otf, obj):
     return dset
 
 
-def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regularizer: str):
+def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: str, regularizer: str):
     """
     Performs a single iteration update for SGM with variance regularization.
 
@@ -52,6 +52,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
         psf_fft (Tensor): Fourier transform of the PSF.
         psf_m_fft (Tensor): Fourier transform of the flipped PSF.
         lam (float): Variance regularization parameter.
+        alpha (float): Fidelity term regularization parameter.
         weight (float): Regularization weight.
         eps (float): Epsilon to avoid division by zero.
         method (str): 'osl' or 'abs' or 'sgm'.
@@ -70,7 +71,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
 
     del img_estimate_k
 
-    update_k = forward(psf_m_fft, fraction)
+    update_k = alpha * forward(psf_m_fft, fraction)
 
     del fraction
 
@@ -114,7 +115,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     return obj_new
 
 
-def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device, regularizer, initialization, normalize, rec_to_save):
+def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization, normalize, rec_to_save):
 
     """
     Performs a single iteration update for the reconstruction process.
@@ -125,6 +126,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
         psf_m_fft (Tensor): Fourier transform of the flipped PSF of shape Nx x Ny x K x Ch.
         max_iter (int): Maximum number of iterations.
         lam (float): Variance regularization parameter.
+        alpha (float): Fidelity term regularization parameter.
         weight (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         tol (float): Convergence tolerance to stop iterations.
         method (str): algorithm 'osl' or 'abs' or 'sgm'.
@@ -169,7 +171,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     idx = 0
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_set = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
+        obj_set = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, method, regularizer)
         
         #flux conservation
         if normalize is True:
@@ -193,7 +195,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     return obj_all
 
 
-def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None, method='sgm',
+def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu', rec_to_save='last'):
         
     """
@@ -203,6 +205,7 @@ def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None,
         dset (ndarray): Input dataset of shape Nx x Ny x K x Ch.
         psf (ndarray): PSF kernel of shape Mx x My x K x Ch.
         lambda_value (float): Variance regularization parameter.
+        alpha_value (float): Fidelity term regularization parameter.
         W (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
         tol (float): Convergence tolerance.
@@ -238,7 +241,7 @@ def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None,
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':
@@ -247,7 +250,7 @@ def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None,
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 0.01, W = 1, num_iter=500, lr=1e-3,
+def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_iter=500, lr=1e-3,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
                       full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):    
     """
@@ -319,10 +322,15 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 0.01, W = 1, n
         optimizer.zero_grad()
 
         # Calcolo dei termini di perdita
-        loss_fidelity = alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
+        loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
         loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
 
         loss = loss_fidelity + loss_reg
+
+        # Save losses
+        losses['total'].append(loss.item())
+        losses['fidelity'].append(loss_fidelity.item())
+        losses['regularization'].append(loss_reg.item())
 
         # Backprop + update
         loss.backward()
@@ -331,19 +339,15 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 0.01, W = 1, n
 
         # Imporre positività (opzionale per KL)
         with torch.no_grad():
-            obj_set.clamp_(min=1e-10)
+            obj_set.clamp_(min=1e-8)
 
         # Save solution
         if rec_to_save == 'all':
             obj_all[m + 1] = obj_set.detach()
         elif rec_to_save == 'last':
-            obj_all[-1] = obj_set.detach()
+            obj_all[0] = obj_set.detach()
         else:
             raise ValueError("rec_to_save must be 'last' or 'all'.")
-        # Save losses
-        losses['total'].append(loss.item())
-        losses['fidelity'].append(loss_fidelity.item())
-        losses['regularization'].append(loss_reg.item())
 
         if verbose and (m % max(1, num_iter // 10) == 0 or m == num_iter - 1):
             print(f"Iter {m+1}/{num_iter} | Loss: {loss.item():.6f} "
