@@ -252,7 +252,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=
 
 def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_iter=500, lr=1e-3,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
-                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True):    
+                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: str = False):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
@@ -283,6 +283,14 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
+
+    if sum_rep is True:
+        dset = dset.sum(dim=-1, keepdim=True)
+        n_rep = 1
+    else:
+        n_rep = dset.shape[-1]
+
+    psf = psf.unsqueeze(-1).repeat(*([1] * psf.ndim), n_rep)
     
     # Axis to sum for flux conservation
     axis_to_sum = tuple(range(dset.ndim - 1))
@@ -315,29 +323,33 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         'regularization': []
     }
 
-    optimizer = optim.Adam([obj_set], lr=lr)
+    optimizer = optim.Adam([obj_set], lr=lr, amsgrad=True)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
 
     for m in range(num_iter):
         optimizer.zero_grad()
 
-        # Calcolo dei termini di perdita
+        # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
-        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
 
-        loss = loss_fidelity + loss_reg
+        if sum_rep is True:
+            loss_reg = torch.tensor([0])
+            loss = loss_fidelity
+        else:
+            loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
+            loss = loss_fidelity + loss_reg
 
-        # Save losses
+        # Store loss values
         losses['total'].append(loss.item())
         losses['fidelity'].append(loss_fidelity.item())
         losses['regularization'].append(loss_reg.item())
 
-        # Backprop + update
+        # Backpropagation + update
         loss.backward()
         optimizer.step()
         scheduler.step(loss)
 
-        # Imporre positività (opzionale per KL)
+        # Non-negativity constraint
         with torch.no_grad():
             obj_set.clamp_(min=1e-8)
 
