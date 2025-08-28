@@ -50,7 +50,7 @@ def save_gif(tensore, params, indici, filepath, min_val=0, max_val=1e7, cmap='vi
         
     imageio.mimsave(filepath, frames, fps=fps)
 
-def create_entry_dataframe(index, params, fig_paths, gif_paths):
+def create_entry_dataframe(index, params, fig_paths):
     return {
         "id": index,
         "K": params["K"],
@@ -59,15 +59,14 @@ def create_entry_dataframe(index, params, fig_paths, gif_paths):
         "lambda": params["lambda"],
         "W": params["W"],
         "method": params["method"],
+        "initialization": params["initialization"],
         "Figure over K": f"<a href='{fig_paths[0]}' target='_blank'>Figure over K</a>",
         "Figure results": f"<a href='{fig_paths[1]}' target='_blank'>Figure results</a>",
         "Figure KL": f"<a href='{fig_paths[2]}' target='_blank'>Figure KL</a>",
         "Figure best iter": f"<a href='{fig_paths[3]}' target='_blank'>Figure best iter</a>",
-        "GIF PowerSpectrum": f"<a href='{gif_paths[0]}' target='_blank'>GIF PowerSpectrum</a>",
-        "GIF noise variance": f"<a href='{gif_paths[1]}' target='_blank'>GIF noise variance</a>",
     }
 
-def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, tensor_PowSpec, tensor_noise_variance, indices, params, output_dir, plot_K=True, save_gifs=False, print_csv=True):
+def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, params, output_dir, plot_K=True, print_csv=True):
 
     """
     Save the results of an experiment to a file.
@@ -105,8 +104,7 @@ def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, tensor_PowSpec
     fig2_path = os.path.join(output_dir, f"{next_id}_figResults.png")
     fig3_path = os.path.join(output_dir, f"{next_id}_figKL.png")
     fig4_path = os.path.join(output_dir, f"{next_id}_figBestIter.png")
-    gif1_path = os.path.join(output_dir, f"{next_id}_gifPowSpec.gif")
-    gif2_path = os.path.join(output_dir, f"{next_id}_gifNoiseVariance.gif")
+
 
     # Save figures
     if plot_K:
@@ -115,13 +113,8 @@ def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, tensor_PowSpec
     fig_KL.savefig(fig3_path)
     fig_best.savefig(fig4_path)
 
-    # Save GIFs
-    if save_gifs:
-        save_gif(tensor_PowSpec, params, indices, gif1_path)
-        save_gif(tensor_noise_variance, params, indices, gif2_path)
-
     # New row
-    new_entry = create_entry_dataframe(next_id, params, [fig1_path, fig2_path, fig3_path, fig4_path], [gif1_path, gif2_path])
+    new_entry = create_entry_dataframe(next_id, params, [fig1_path, fig2_path, fig3_path, fig4_path])
     df_log = pd.concat([df_log, pd.DataFrame([new_entry])], ignore_index=True)
     df_log.to_csv(log_path, index=False)
 
@@ -132,7 +125,7 @@ def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, tensor_PowSpec
     if print_csv:
         display(HTML(df_log.to_html(escape=False)))
 
-def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex, rl, kl_rl, indices, output_dir, plot_K=True, save_gifs=False, print_csv=False):
+def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_rl, output_dir, compute_adam=False, plot_K=False, print_csv=False):
     """
     Run a single experiment with the given parameters and save the results.
     
@@ -143,13 +136,11 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex,
         weight (ndarray): Weight map of shape Nx x Ny.
         ground_truth (ndarray): Ground truth image of shape Nx x Ny.
         img (ndarray): Image of shape Nx x Ny. It is the dset summed over K.
-        pxsizex (float): Pixel size in the x direction.
         rl (ndarray): Richardson-Lucy reconstruction of shape num_iter x Nx x Ny.
         kl_rl (ndarray): KL divergence for Richardson-Lucy reconstruction array of length num_iter.
-        indices (list): List of indices for the iterations to save in the GIFs.
         output_dir (str): Output directory for saving results.
+        compute_adam (bool): Whether to compute Adam solution.
         plot_K (bool): Whether to plot the figure of all K solutions.
-        save_gif (bool): Whether to save GIFs.
         print_csv (bool): Whether to print the CSV log.
     """
     # Create output directory if it doesn't exist
@@ -160,7 +151,11 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex,
                         max_iter=params["num_iter"], tol=None, rec_to_save='all', process='gpu', method=params["method"],
                         regularizer = params["regularizer"], normalize = False)
     varreg_mean = varreg_solution.mean(axis=-1)
-    
+    if compute_adam:
+        adam_solution = varreg.Adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lam=params["lambda"], alpha_value=1,
+                        initialization = params["initialization"], regularizer = params["regularizer"], lr=params["lr"],
+                        process='gpu', full_KL= False,  rec_to_save='all', verbose=False)
+
     # Plots to save
     rec_idx=-1
     if plot_K:
@@ -168,6 +163,8 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex,
         fig_K.suptitle(f"K={params['K']}, n_iter={params['num_iter'] if rec_idx==-1 else rec_idx}, lambda={params['lambda']}, W={params['W']}, method={params['method']}", fontsize=16)
     else:
         fig_K = None
+        
+    pxsizex = params["pixelsize"]
         
     fig_res, ax_res = plt.subplots(1, 4, figsize=(30, 7))
     gra.ShowImg(img, pxsizex*1e-3, fig = fig_res, ax=ax_res[0])
@@ -215,16 +212,10 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex,
     fig_bestres.suptitle(f"K={params['K']}, n_iter='best', lambda={params['lambda']}, \
                     W={params['W']}, method={params['method']}", fontsize=16)
     
-    # Compute power spectrum and noise variance
-    if save_gif:
-        noise_mean, noise_variance = utils.calculate_noise_variance(varreg_solution)
-    else:
-        noise_mean, noise_variance = None, None
-
     # Save the results
     os.makedirs(output_dir, exist_ok=True)
 
-    save_experiment_results(fig_K, fig_res, fig_kl, fig_bestres, noise_mean, noise_variance, indices, params, output_dir, plot_K=plot_K, save_gifs=save_gifs, print_csv=print_csv)
+    save_experiment_results(fig_K, fig_res, fig_kl, fig_bestres, params, output_dir, plot_K=plot_K, print_csv=print_csv)
 
     plt.close('all')
     return varreg_solution

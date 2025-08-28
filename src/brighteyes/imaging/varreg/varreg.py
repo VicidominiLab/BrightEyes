@@ -53,8 +53,9 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
         psf_m_fft (Tensor): Fourier transform of the flipped PSF.
         lam (float): Variance regularization parameter.
         weight (float): Regularization weight.
-        method (str): 'osl' or 'abs' or 'sgm'.
         eps (float): Epsilon to avoid division by zero.
+        method (str): 'osl' or 'abs' or 'sgm'.
+        regularizer (str): distance to measure the differences between o_k and o_mean: 'variance', 'kl', or 'l1'.
 
     Returns:
         Tensor: Updated object tensor of shape Nx x Ny x K.
@@ -65,14 +66,11 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
 
     # === forward convolution ===
     img_estimate_k = forward(psf_fft, obj)
-    # img_estimate_k = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=str_first, axis=axis_str, fourier=(1, 0))
     fraction = img / (img_estimate_k + eps)
 
     del img_estimate_k
 
     update_k = forward(psf_m_fft, fraction)
-
-    # update_k = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=str_second, axis=axis_str, fourier=(1, 0)
 
     del fraction
 
@@ -116,7 +114,33 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     return obj_new
 
 
-def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device, regularizer, initialization, normalize):
+def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device, regularizer, initialization, normalize, rec_to_save):
+
+    """
+    Performs a single iteration update for the reconstruction process.
+
+    Parameters:
+        dset (Tensor): Input data of shape Nx x Ny x K x Ch.
+        psf_fft (Tensor): Fourier transform of the PSF of shape Nx x Ny x K x Ch.
+        psf_m_fft (Tensor): Fourier transform of the flipped PSF of shape Nx x Ny x K x Ch.
+        max_iter (int): Maximum number of iterations.
+        lam (float): Variance regularization parameter.
+        weight (float): Regularization weight a scalar or tensor of shape Nx x Ny.
+        tol (float): Convergence tolerance to stop iterations.
+        method (str): algorithm 'osl' or 'abs' or 'sgm'.
+        device (str): device to perform computation on ('cpu' or 'cuda').
+        regularizer (str): distance to measure the differences between o_k and o_mean: 'variance', 'kl', or 'l1'.
+        initialization (str): initialization method for the object estimate ('flat' or 'data').
+        normalize (bool): whether to normalize the object estimate at each iteration.
+        rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
+
+    Returns:
+        Tensor: Updated object tensor of shape Nx x Ny x K.
+    """
+
+    if rec_to_save == 'last' and tol is not None:
+        raise ValueError("If rec_to_save is 'last', tol must be None.")
+
     eps = torch.finfo(torch.float32).eps
 
     # Axis to sum for flux conservation
@@ -124,7 +148,11 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     # Initialization
-    size = [max_iter + 1] + list(dset.shape)
+    if rec_to_save == 'last':
+        size = [1] + list(dset.shape)
+    elif rec_to_save == 'all':
+        size = [max_iter + 1] + list(dset.shape)
+        
     obj_all = torch.empty(size).to(device)
     
     if initialization == 'flat':
@@ -138,11 +166,18 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_all[m + 1] = update_fft(dset, obj_all[m], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
+        obj = update_fft(dset, obj_all[-1], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
 
         #flux conservation
         if normalize is True:
-            obj_all[m + 1] = obj_all[m + 1] * flux / obj_all[m + 1].sum(axis_to_sum, keepdim = True)
+            obj = obj * flux / obj.sum(axis_to_sum, keepdim = True)
+
+        if rec_to_save == 'all':
+            obj_all[m + 1] = obj
+        elif rec_to_save == 'last':
+            obj_all[-1] = obj
+        else:
+            raise ValueError("rec_to_save must be 'last' or 'all'.")
 
         if tol is not None:
             rel_diff = torch.norm(obj_all[m + 1] - obj_all[m]) / torch.norm(obj_all[m])
@@ -160,15 +195,17 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
     Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x K.
-        psf (ndarray): PSF kernel.
-        W (float): Regularization weight.
+        dset (ndarray): Input dataset of shape Nx x Ny x K x Ch.
+        psf (ndarray): PSF kernel of shape Mx x My x K x Ch.
+        lam (float): Variance regularization parameter.
+        W (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
         tol (float): Convergence tolerance.
-        process (str): Processing mode ('cpu' or 'gpu').
-        regularizer (str): Regularization type ('variance', 'kl', or 'l1').
-        method (str): Update method ('osl', 'abs', or 'sgm').
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
+        method (str): Update method ('osl', 'abs', or 'sgm').
+        process (str): Processing mode ('cpu' or 'gpu').
+        regularizer (str): Regularization type to measure distance ('variance', 'kl', or 'l1').
+        initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
 
     Returns:
@@ -196,7 +233,7 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lam, W, tol, method, device, regularizer, initialization, normalize)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lam, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
 
     if rec_to_save == 'last':
         return obj_all[-1]
@@ -262,7 +299,6 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
 
 
     optimizer = optim.Adam([obj_set], lr=lr)
-
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
 
     for it in range(num_iter):
