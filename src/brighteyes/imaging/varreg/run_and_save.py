@@ -154,14 +154,11 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, pxsizex,
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Compute the SNR and weight map
-    snr = utils.calculate_snr(dset)
-    weight_map = utils.calculate_weight_map(dset)
 
     # Run the experiment
     varreg_solution = varreg.variance_reconstruction(dset, psf, lam=params["lambda"], W=weight,
-                        max_iter=params["num_iter"], tol=None, rec_to_save='all', process='gpu', method=params["method"])
+                        max_iter=params["num_iter"], tol=None, rec_to_save='all', process='gpu', method=params["method"],
+                        regularizer = params["regularizer"], normalize = False)
     varreg_mean = varreg_solution.mean(axis=-1)
     
     # Plots to save

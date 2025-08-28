@@ -116,7 +116,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, weight, eps, method: str, regu
     return obj_new
 
 
-def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device, regularizer, normalize):
+def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device, regularizer, initialization, normalize):
     eps = torch.finfo(torch.float32).eps
 
     # Axis to sum for flux conservation
@@ -126,8 +126,16 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     # Initialization
     size = [max_iter + 1] + list(dset.shape)
     obj_all = torch.empty(size).to(device)
-    obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
-
+    
+    if initialization == 'flat':
+        obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
+    elif initialization == 'data':
+        axis_to_conv = tuple(range(2))
+        obj_all[0] = torch.tensor(gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes = axis_to_conv)).to(device)
+        obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
+    else:
+        raise ValueError("Initialization must be 'flat' or 'data'.")
+    
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
         obj_all[m + 1] = update_fft(dset, obj_all[m], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
@@ -147,7 +155,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
 
 
 def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_save='last', method='osl', process='gpu',
-                            regularizer='variance', normalize=False):
+                            regularizer='variance', initialization='flat', normalize=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
@@ -188,7 +196,7 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lam, W, tol, method, device, regularizer, normalize)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lam, W, tol, method, device, regularizer, initialization, normalize)
 
     if rec_to_save == 'last':
         return obj_all[-1]
@@ -198,8 +206,8 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, initialization : str = 'flat',
-                     regularizer='l2', lr=1e-3,  process = 'gpu', full_KL=False, verbose=True):
+def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, initialization: str = 'flat',
+                     regularizer: str ='l2', lr=1e-3,  process: str = 'gpu', full_KL: bool =False, verbose: bool =True):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
