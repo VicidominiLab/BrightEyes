@@ -105,7 +105,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
 
         update_k = update_k + lam * weight * u
 
-        denom = 1 + lam * weight * v
+        denom = alpha*1 + lam * weight * v
         obj_update = update_k / denom
         obj_new = obj * obj_update
 
@@ -316,7 +316,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     }
 
     optimizer = optim.Adam([obj_set], lr=lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
 
     for m in range(num_iter):
         optimizer.zero_grad()

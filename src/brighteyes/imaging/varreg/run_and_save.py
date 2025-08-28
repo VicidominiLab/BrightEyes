@@ -155,10 +155,7 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
         adam_solution = varreg.adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lambda_value=params["lambda"], alpha_value=1,
                         weight=params["W"], initialization = params["initialization"], regularizer = params["regularizer"], lr=params["lr"],
                         process='gpu', full_KL= False, rec_to_save='all', verbose=False)
-        
-        adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, weight:str = 'id',
-                      initialization: str = 'flat', regularizer: str ='l2', lr=1e-3,  process: str = 'gpu',
-                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True)
+
 
     # Plots to save
     rec_idx=-1
