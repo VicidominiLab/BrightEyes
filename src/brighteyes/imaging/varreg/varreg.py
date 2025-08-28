@@ -243,8 +243,9 @@ def variance_reconstruction(dset, psf, lam, W=1, max_iter=50, tol=None, rec_to_s
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, initialization: str = 'flat',
-                     regularizer: str ='l2', lr=1e-3,  process: str = 'gpu', full_KL: bool =False, verbose: bool =True):
+def adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 0.01, weight:str = 'id',
+                      initialization: str = 'flat', regularizer: str ='l2', lr=1e-3,  process: str = 'gpu',
+                      full_KL: bool =False, verbose: bool =True):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
@@ -290,13 +291,14 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
     obj_set = obj_all[0]
     obj_set.requires_grad = True
 
+
+
     # Dictionary with losses
     losses = {
         'total': [],
         'fidelity': [],
         'regularization': []
     }
-
 
     optimizer = optim.Adam([obj_set], lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20)
@@ -306,7 +308,7 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
 
         # Calcolo dei termini di perdita
         loss_fidelity = alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
-        loss_reg = lambda_value * regularization_loss(obj_set, regularizer=regularizer)
+        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, weight=weight, regularizer=regularizer)
 
         loss = loss_fidelity + loss_reg
 
@@ -318,8 +320,7 @@ def Adam_optimize_obj(dset, psf, num_iter=500, lambda_value=0.01, alpha_value = 
         # Imporre positività (opzionale per KL)
         with torch.no_grad():
             obj_set.clamp_(min=1e-8)
-            
-            
+
         # Save solution
         obj_all[it+1] = obj_set.detach()
         # Save losses
