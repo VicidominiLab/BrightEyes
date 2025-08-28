@@ -164,6 +164,8 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
         obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
     else:
         raise ValueError("Initialization must be 'flat' or 'data'.")
+    
+    
     idx = 0
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
@@ -284,7 +286,11 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 0.01, W = 1, n
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     # Initialization
-    size = [num_iter + 1] + list(dset.shape)
+    size = list(dset.shape)
+    if rec_to_save == 'last':
+        size = [1] + size
+    elif rec_to_save == 'all':
+        size = [num_iter + 1] + size
     obj_all = torch.empty(size).to(device)
 
     if initialization == 'flat':
