@@ -168,7 +168,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, weight, tol, method, device
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
         obj = update_fft(dset, obj_all[-1], psf_fft, psf_m_fft, lam, weight, eps, method, regularizer)
-
+        
         #flux conservation
         if normalize is True:
             obj = obj * flux / obj.sum(axis_to_sum, keepdim = True)
@@ -203,12 +203,12 @@ def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None,
         W (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
         tol (float): Convergence tolerance.
-        rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
         method (str): Update method ('osl', 'abs', or 'sgm').
-        process (str): Processing mode ('cpu' or 'gpu').
         regularizer (str): Regularization type to measure distance ('l2', 'kl', or 'l1').
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
+        process (str): Processing mode ('cpu' or 'gpu').
+        rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
 
     Returns:
         Tensor: Reconstructed volume of shape Nx x Ny x K.
@@ -236,7 +236,6 @@ def variance_reconstruction(dset, psf, lambda_value, W=1, max_iter=50, tol=None,
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
     obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
-
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':

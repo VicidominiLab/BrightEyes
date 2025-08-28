@@ -85,13 +85,6 @@ def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regula
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
-    if weight == "snr" and dset is not None:
-        weight_map = calculate_weight_map(dset)
-    elif weight == "id":
-        weight_map = 1
-    else:
-        raise ValueError("W must be either 'snr' or 'id'")
-
-    residuals = residuals * weight_map
+    residuals = residuals * W
 
     return residuals.sum(axis=axis_to_sum)
