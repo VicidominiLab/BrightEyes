@@ -328,16 +328,10 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     optimizer = optim.Adam([obj_set], lr=lr, amsgrad=True)
 
     # ---- Cosine Warmup ----
-    warmup_steps = 100
-
-    def cosine_warmup_lambda(step):
-        if step < warmup_steps:
-            return 0.5 * (1 - math.cos(math.pi * step / warmup_steps))
-        return 1.0
-
-    warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=cosine_warmup_lambda)
 
     plateau_scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
+
+    scheduler = WarmupWithPlateau(optimizer, plateau_scheduler, warmup_steps=200)
 
     # ---- Minimizer ----
     for m in range(num_iter):
@@ -358,10 +352,8 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         # Backpropagation + update
         loss.backward()
         optimizer.step()
-        if m < warmup_steps:
-            warmup_scheduler.step()
-        else:
-            plateau_scheduler.step(loss)
+
+        scheduler.step(loss)
 
         # Non-negativity constraint
         with torch.no_grad():
@@ -381,3 +373,44 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
                   f" | LR: {optimizer.param_groups[0]['lr']:.6f}")
 
     return obj_all.detach(), losses
+
+
+class WarmupWithPlateau(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, plateau_scheduler, warmup_steps=100, last_epoch=-1):
+        self.plateau_scheduler = plateau_scheduler
+        self.warmup_steps = warmup_steps
+        self.warmup_active = True
+        self.prev_loss = None
+        self.base_lrs = [group['lr'] for group in optimizer.param_groups]  # store initial LR
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        if self.warmup_active:
+            step = max(1, self.last_epoch + 1)
+            warmup_factor = 0.5 * (1 - math.cos(math.pi * min(step, self.warmup_steps) / self.warmup_steps))
+            return [base_lr * warmup_factor for base_lr in self.base_lrs]
+        else:
+            # After warmup, return whatever LR is set by plateau scheduler
+            return [group['lr'] for group in self.optimizer.param_groups]
+
+    def step(self, loss=None, epoch=None):
+        if loss is not None:
+            if isinstance(loss, torch.Tensor):
+                loss = loss.item()
+
+            # Stop warmup if loss increases
+            if self.prev_loss is not None and loss > self.prev_loss:
+                self.warmup_active = False
+
+            self.prev_loss = loss
+
+            # Step plateau scheduler only after warmup ends
+            if not self.warmup_active:
+                self.plateau_scheduler.step(loss, epoch)
+
+        # Update optimizer LRs according to warmup or leave as is
+        new_lrs = self.get_lr()
+        for group, lr in zip(self.optimizer.param_groups, new_lrs):
+            group['lr'] = lr
+
+        return super().step(epoch)
