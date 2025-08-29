@@ -2,6 +2,7 @@ import torch
 import string
 import numpy as np
 import torch.optim as optim
+import math
 
 from scipy.ndimage import gaussian_filter
 
@@ -320,34 +321,47 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     losses = {
         'total': [],
         'fidelity': [],
-        'regularization': []
+        'regularization': [],
+        'learning_rate': []
     }
 
     optimizer = optim.Adam([obj_set], lr=lr, amsgrad=True)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
 
+    # ---- Cosine Warmup ----
+    warmup_steps = 100
+
+    def cosine_warmup_lambda(step):
+        if step < warmup_steps:
+            return 0.5 * (1 - math.cos(math.pi * step / warmup_steps))
+        return 1.0
+
+    warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=cosine_warmup_lambda)
+
+    plateau_scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
+
+    # ---- Minimizer ----
     for m in range(num_iter):
         optimizer.zero_grad()
 
         # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
 
-        if sum_rep is True:
-            loss_reg = torch.tensor([0])
-            loss = loss_fidelity
-        else:
-            loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
-            loss = loss_fidelity + loss_reg
+        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
+        loss = loss_fidelity + loss_reg
 
         # Store loss values
         losses['total'].append(loss.item())
         losses['fidelity'].append(loss_fidelity.item())
         losses['regularization'].append(loss_reg.item())
+        losses['learning_rate'].append(optimizer.param_groups[0]['lr'])
 
         # Backpropagation + update
         loss.backward()
         optimizer.step()
-        scheduler.step(loss)
+        if m < warmup_steps:
+            warmup_scheduler.step()
+        else:
+            plateau_scheduler.step(loss)
 
         # Non-negativity constraint
         with torch.no_grad():
