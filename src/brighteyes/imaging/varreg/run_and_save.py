@@ -57,31 +57,32 @@ def create_entry_dataframe(index, params, fig_paths):
         "signal": params["signal"],
         "num_iter": params["num_iter"],
         "lambda": params["lambda"],
-        "W": params["W"],
+        "alpha": params["alpha"],
         "method": params["method"],
+        "regularizer": params["regularizer"],
         "initialization": params["initialization"],
-        "Figure over K": f"<a href='{fig_paths[0]}' target='_blank'>Figure over K</a>",
-        "Figure results": f"<a href='{fig_paths[1]}' target='_blank'>Figure results</a>",
+        "W": params["W"],
+        "lr": params["lr"],
+        "Figure results": f"<a href='{fig_paths[0]}' target='_blank'>Figure results</a>",
+        "Figure loss": f"<a href='{fig_paths[1]}' target='_blank'>Figure loss</a>",
         "Figure KL": f"<a href='{fig_paths[2]}' target='_blank'>Figure KL</a>",
         "Figure best iter": f"<a href='{fig_paths[3]}' target='_blank'>Figure best iter</a>",
+        "Figure PSNR": f"<a href='{fig_paths[4]}' target='_blank'>Figure PSNR</a>",
     }
 
-def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, params, output_dir, plot_K=True, print_csv=True):
+def save_experiment_results(fig_results, fig_loss, fig_KL, fig_best, fig_PSNR, params, output_dir, print_csv=True):
 
     """
     Save the results of an experiment to a file.
     
     Parameters:
-        fig_K: Figure with all the K results.
         fig_results: Figure for the results.
+        fig_loss: Figure for the loss over iterations.
         fig_KL: Figure for the KL divergence over iterations.
         fig_best: Figure for the best iteration result.
-        tensor_PowSpec: Tensor for the power spectrum with dimensions (num_iter, kx, ky).
-        tensor_noise_variance: Tensor for the noise variance with dimensions (num_iter, kx, ky).
-        indices: Indices of iterations to save in the GIFs.
+        fig_PSNR: Figure for the PSNR over iterations.
         params: Parameters of the experiment.
         output_dir: Output directory for saving the results.
-        plot_K: Whether to plot the K figure.
         save_gif: Whether to save GIFs.
         print_csv: Whether to print the CSV log.
 
@@ -97,24 +98,22 @@ def save_experiment_results(fig_K, fig_results, fig_KL, fig_best, params, output
         next_id = 0
 
     # Create paths for figures and GIFs
-    if plot_K:
-        fig1_path = os.path.join(output_dir, f"{next_id}_figK.png")
-    else:
-        fig1_path = None
-    fig2_path = os.path.join(output_dir, f"{next_id}_figResults.png")
+    fig1_path = os.path.join(output_dir, f"{next_id}_figResults.png")
+    fig2_path = os.path.join(output_dir, f"{next_id}_figLoss.png")
     fig3_path = os.path.join(output_dir, f"{next_id}_figKL.png")
     fig4_path = os.path.join(output_dir, f"{next_id}_figBestIter.png")
+    fig5_path = os.path.join(output_dir, f"{next_id}_figPSNR.png")
 
 
     # Save figures
-    if plot_K:
-        fig_K.savefig(fig1_path)
-    fig_results.savefig(fig2_path)
+    fig_results.savefig(fig1_path)
+    fig_loss.savefig(fig2_path)
     fig_KL.savefig(fig3_path)
     fig_best.savefig(fig4_path)
+    fig_PSNR.savefig(fig5_path)
 
     # New row
-    new_entry = create_entry_dataframe(next_id, params, [fig1_path, fig2_path, fig3_path, fig4_path])
+    new_entry = create_entry_dataframe(next_id, params, [fig1_path, fig2_path, fig3_path, fig4_path, fig5_path])
     df_log = pd.concat([df_log, pd.DataFrame([new_entry])], ignore_index=True)
     df_log.to_csv(log_path, index=False)
 
