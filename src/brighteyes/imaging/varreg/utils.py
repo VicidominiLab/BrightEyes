@@ -221,7 +221,7 @@ def compute_radial_noise_variance(obj):
     return torch.tensor(radial_variance)
 
 
-def peak_signal_to_noise_ratio(img, img_ref, normalize_entries = True):
+def peak_signal_to_noise_ratio(img_ref, img, normalize_entries = True):
     """
     Compute the Peak Signal-to-Noise Ratio (PSNR) between two images.
 
@@ -252,3 +252,40 @@ def peak_signal_to_noise_ratio(img, img_ref, normalize_entries = True):
     psnr = 20 * torch.log10( img_ref.max() / torch.sqrt(mse) )
 
     return torch.squeeze(psnr).numpy()
+
+def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False):
+    """
+    Compute the Kullback-Leibler divergence (KL divergence) between two images.
+
+    Parameters:
+        img (Tensor): Input image of shape Nx x Ny.
+        img_ref (Tensor): Reference image of shape Nx x Ny.
+
+    Returns:
+        kl_div (Array): KL divergence value.
+    """
+
+    if eps is None:
+        eps = torch.finfo(torch.float32).eps
+    img = torch.tensor(img, dtype=torch.float32) if not isinstance(img, torch.Tensor) else img.float()
+    img_ref = torch.tensor(img_ref, dtype=torch.float32) if not isinstance(img_ref, torch.Tensor) else img_ref.float()
+
+    diff_dim = img.ndim - img_ref.ndim
+
+    if diff_dim > 0:
+        img_ref = img_ref.unsqueeze(0)
+
+    axis_to_sum = tuple(range(diff_dim, img.ndim))
+
+    if normalize_entries is True:
+        img = img / torch.sum(img, dim=axis_to_sum, keepdim=True)
+        img_ref = img_ref / torch.sum(img_ref, dim=axis_to_sum, keepdim=True)
+
+    arg = img / (img_ref + eps)
+    fidelity = img * torch.log( arg + eps )
+    if full_KL:
+        fidelity = fidelity + img_ref - img
+
+    kl_div = torch.sum(fidelity, dim=axis_to_sum)
+
+    return torch.squeeze(kl_div).numpy()

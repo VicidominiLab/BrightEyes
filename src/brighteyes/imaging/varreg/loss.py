@@ -7,7 +7,7 @@ from .utils import calculate_weight_map
 
 from .utils import partial_convolution_rfft, centered_pad
 
-def fidelity_loss(dataset, obj_set, psf, full_KL=False):
+def fidelity_loss(dataset, obj_set, psf, eps=None,full_KL=False):
     """
     Compute the fidelity loss between data and the forward value from predicted solution.
 
@@ -20,11 +20,13 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
     Returns:
     Tensor: Computed fidelity loss.
     """
+    
+    if eps is None:
+        eps = 1e-2
 
     alphabet = string.ascii_lowercase
     n_dim = obj_set.ndim      # 3 or 4
     num_axis_to_conv = 2  
-    
 
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a batch dimension
@@ -44,7 +46,6 @@ def fidelity_loss(dataset, obj_set, psf, full_KL=False):
 
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
 
-    eps = 1e-2
     fidelity = forward - dataset * torch.log(forward + eps)
 
     if full_KL:

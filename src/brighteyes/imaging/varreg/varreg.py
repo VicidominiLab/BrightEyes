@@ -291,6 +291,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     else:
         n_rep = dset.shape[-1]
 
+    # Repeat the psf for each repetition
     psf = psf.unsqueeze(-1).repeat(*([1] * psf.ndim), n_rep)
     
     # Axis to sum for flux conservation
@@ -306,15 +307,16 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     obj_all = torch.empty(size).to(device)
 
     if initialization == 'flat':
-        obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
+        initiz = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
     elif initialization == 'data':
         axis_to_conv = tuple(range(2))
-        obj_all[0] = torch.tensor(gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes = axis_to_conv)).to(device)
-        obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
+        initiz = torch.tensor(gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes = axis_to_conv)).to(device)
+        initiz = initiz * flux / initiz.sum()
     else:
         raise ValueError("Initialization must be 'flat' or 'data'.")
 
-    obj_set = obj_all[0]
+    obj_all[0] = initiz
+    obj_set = initiz
     obj_set.requires_grad = True
 
     # Dictionary with losses
@@ -332,7 +334,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     plateau_scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
 
     scheduler = WarmupWithPlateau(optimizer, plateau_scheduler, warmup_steps=200)
-
+    
     # ---- Minimizer ----
     for m in range(num_iter):
         optimizer.zero_grad()
@@ -354,7 +356,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         optimizer.step()
 
         scheduler.step(loss)
-
+        
         # Non-negativity constraint
         with torch.no_grad():
             obj_set.clamp_(min=1e-8)
@@ -366,7 +368,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
             obj_all[0] = obj_set.detach()
         else:
             raise ValueError("rec_to_save must be 'last' or 'all'.")
-
+        
         if verbose and (m % max(1, num_iter // 10) == 0 or m == num_iter - 1):
             print(f"Iter {m+1}/{num_iter} | Loss: {loss.item():.6f} "
                   f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}"
