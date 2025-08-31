@@ -1,4 +1,6 @@
+from email import utils
 import os
+import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,8 +11,9 @@ from IPython.display import display, HTML
 from matplotlib.patches import Circle
 from PIL import Image
 
-from . import varreg
-from . import utils
+from varreg import varreg, loss, utils
+from varreg import run_and_save as rs
+
 
 def frequency_axes(shape, pxsize: float = 1):
     sy = shape[-3]
@@ -146,76 +149,196 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
     os.makedirs(output_dir, exist_ok=True)
 
     # Run the experiment
-    varreg_solution = varreg.variance_reconstruction(dset, psf, lam=params["lambda"], W=weight,
-                        max_iter=params["num_iter"], tol=None, rec_to_save='all', process='gpu', method=params["method"],
-                        regularizer = params["regularizer"], normalize = False)
+    varreg_solution = varreg.variance_reconstruction(dset, psf, lambda_value=params["lambda"], alpha_value=params["alpha"], W=weight,
+                            max_iter=params["num_iter"], tol=None, method=params["method"],
+                            regularizer=params["regularizer"], initialization=params["initialization"], normalize=False,
+                            process='gpu', rec_to_save='all')
     varreg_mean = varreg_solution.mean(axis=-1)
-    if compute_adam:
-        adam_solution = varreg.adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lambda_value=params["lambda"], alpha_value=1,
-                        weight=params["W"], initialization = params["initialization"], regularizer = params["regularizer"], lr=params["lr"],
-                        process='gpu', full_KL= False, rec_to_save='all', verbose=False)
+    
+    adam_solution, losses = varreg.adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lambda_value=params["lambda"], alpha_value=params["alpha"],
+                                                 initialization=params["initialization"], W=weight, regularizer=params["regularizer"],
+                                                 lr=params["lr"], process='gpu', full_KL=False, rec_to_save='all', verbose=False, sum_rep = False)
+    adam_mean = adam_solution.sum(axis=-1)
+    del adam_solution
 
-
-    # Plots to save
-    rec_idx=-1
-    if plot_K:
-        fig_K = gra.ShowDataset(varreg_solution[rec_idx], figsize = (8, 10))
-        fig_K.suptitle(f"K={params['K']}, n_iter={params['num_iter'] if rec_idx==-1 else rec_idx}, lambda={params['lambda']}, W={params['W']}, method={params['method']}", fontsize=16)
-    else:
-        fig_K = None
-        
     pxsizex = params["pixelsize"]
-        
-    fig_res, ax_res = plt.subplots(1, 4, figsize=(30, 7))
-    gra.ShowImg(img, pxsizex*1e-3, fig = fig_res, ax=ax_res[0])
+    full_KL = False
+    rec_idx=-1
+    n_rep = dset.shape[-1]
+    psf_rep = np.repeat(psf[..., np.newaxis], n_rep, -1)
+
+    fig_res, ax_res = plt.subplots(1, 5, figsize=(30, 7))
+    gra.ShowImg(img[15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[0])
     ax_res[0].set_title('Raw Image')
-    gra.ShowImg(rl[rec_idx], pxsizex*1e-3, fig = fig_res, ax=ax_res[1])
+    gra.ShowImg(rl[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[1])
     ax_res[1].set_title('Richardson-Lucy')
-    gra.ShowImg(varreg_mean[rec_idx], pxsizex*1e-3, fig = fig_res, ax=ax_res[2])
+    gra.ShowImg(varreg_mean[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[2])
     ax_res[2].set_title('Variance Regularization - Mean')
-    gra.ShowImg(ground_truth, pxsizex*1e-3, fig = fig_res, ax=ax_res[3])
-    ax_res[3].set_title('Ground Truth')
+    gra.ShowImg(adam_mean[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[3])
+    ax_res[3].set_title('Adam Optimization')
+    gra.ShowImg(ground_truth[15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[4])
+    ax_res[4].set_title('Ground Truth')
     fig_res.suptitle(f"K={params['K']}, n_iter={params['num_iter'] if rec_idx==-1 else rec_idx}, \
                 lambda={params['lambda']}, W={params['W']}, method={params['method']}", fontsize=16)
-    
+            
     # KL divergence
-    kl_var = tools.kl_divergence(ground_truth, varreg_mean.numpy(), normalize_entries = True)
-    
-    #plot KL divergence
-    fig_kl, ax_kl = plt.subplots(1, 1, figsize=(20, 10))
+    fidelity_rl = loss.fidelity_loss(torch.tensor(img), torch.tensor(rl), torch.tensor(psf))
+    fidelity = loss.fidelity_loss(torch.tensor(dset), varreg_solution, torch.tensor(psf_rep))
+    regularization = loss.regularization_loss(varreg_solution, iteration_axis=True)
+    del varreg_solution
 
+    fidelity_loss = params["alpha"]*fidelity
+    reg_loss = params["lambda"]*regularization
+    total_loss = fidelity_loss + reg_loss
+    
+    if compute_adam:
+        total_loss_adam = np.asarray(losses['total'])
+        fidelity_adam = np.asarray(losses['fidelity'])
+        regularization_adam = np.asarray(losses['regularization'])
+        learning_rate_adam = np.asarray(losses['learning_rate'])
+    
+        fig_loss, ax_loss = plt.subplots(2,3, figsize=(20,10))
+
+        ax_loss[0,0].plot(fidelity_rl, color = 'red', label = 'fidelity_rl')
+        ax_loss[0,0].legend()
+        ax_loss[0,0].set_title('Richardson-Lucy')
+        ax_loss[0,0].set_xlabel('Iterations')
+        ax_loss[0,0].set_ylabel('Loss')
+
+        ax_loss[0,1].plot(fidelity_loss, label = 'fidelity')
+        ax_loss[0,1].plot(total_loss, label = 'total = fidelity + lambda*reg')
+        ax_loss[0,1].legend()
+        ax_loss[0,1].set_title('Variance Regularization')
+        ax_loss[0,1].set_xlabel('Iterations')
+        ax_loss[0,1].set_ylim([total_loss.min()*0.95, total_loss[-1]*1.05])
+
+        ax_loss[0,2].plot(reg_loss, color='green', label = 'regularization')
+        ax_loss[0,2].legend()
+        ax_loss[0,2].set_title('Variance Regularization')
+        ax_loss[0,2].set_xlabel('Iterations')
+        ax_loss[0,2].set_ylabel('Loss')
+
+        #New line
+
+        ax_loss[1,0].plot(learning_rate_adam, color = 'red', label = 'fidelity_rl')
+        ax_loss[1,0].legend()
+        ax_loss[1,0].set_title('Learning rate Adam')
+        ax_loss[1,0].set_xlabel('Iterations')
+        ax_loss[1,0].set_ylabel('lr')
+
+        ax_loss[1,1].plot(fidelity_adam, label = 'fidelity')
+        ax_loss[1,1].plot(total_loss_adam, label = 'total = fidelity + lambda*reg')
+        ax_loss[1,1].legend()
+        ax_loss[1,1].set_title('Variance Regularization')
+        ax_loss[1,1].set_xlabel('Iterations')
+        #ax_loss[1,1].set_ylim([total_loss_adam.min()*0.95, total_loss_adam[-1]*1.05])
+
+        ax_loss[1,2].plot(regularization_adam, color='green', label = 'regularization')
+        ax_loss[1,2].legend()
+        ax_loss[1,2].set_title('Variance Regularization')
+        ax_loss[1,2].set_xlabel('Iterations')
+        ax_loss[1,2].set_ylabel('Loss')
+        #ax_loss[1,2].set_ylim([0, regularization_adam.max()*1.05])
+
+        # Added lateral description
+        fig_loss.text(0.06, 0.7, 'sgm', va='center', rotation='vertical', fontsize=14, fontweight='bold')
+        fig_loss.text(0.06, 0.3, 'Adam', va='center', rotation='vertical', fontsize=14, fontweight='bold')
+        
+        fig_loss.suptitle(str(params)[1:-1], fontsize=16)
+
+    else:
+        fig_loss, ax_loss = plt.subplots(1,3, figsize=(20,10))
+        ax_loss[0].plot(fidelity_rl, color = 'red', label = 'learning_rate')
+        ax_loss[0].legend()
+        ax_loss[0].set_title('Richardson-Lucy')
+        ax_loss[0].set_xlabel('Iterations')
+        ax_loss[0].set_ylabel('Loss')
+
+        ax_loss[1].plot(fidelity_loss, label = 'fidelity')
+        ax_loss[1].plot(total_loss, label = 'total = alpha*fidelity + lambda*reg')
+        ax_loss[1].legend()
+        ax_loss[1].set_title('Variance Regularization')
+        ax_loss[1].set_xlabel('Iterations')
+        #ax[1,1].set_ylim([total_loss_adam.min()*0.95, total_loss_adam.max()*1.05])
+
+        ax_loss[2].plot(reg_loss, color='green', label = 'regularization')
+        ax_loss[2].legend()
+        ax_loss[2].set_title('Variance Regularization')
+        ax_loss[2].set_xlabel('Iterations')
+        ax_loss[2].set_ylabel('Loss')
+        
+        fig_loss.suptitle(str(params)[1:-1], fontsize=16)
+        
+        
+    #plot KL divergence
+    kl_rl = utils.kl_divergence(ground_truth, rl, normalize_entries = True)
+    kl_var = utils.kl_divergence(ground_truth, varreg_mean, normalize_entries = True)
+    kl_adam = utils.kl_divergence(ground_truth, adam_mean, normalize_entries = True)
+
+    
     idx_rl = np.argmin(kl_rl)
     idx_varreg = np.argmin(kl_var)
+    idx_adam = np.argmin(kl_adam)
 
-    ax_kl.plot(kl_rl, label = f'Richardson-Lucy KL_min={kl_rl[idx_rl]:.3f}')
-    ax_kl.plot(kl_var, label = f'Variance Regularization - Mean KL_min={kl_var[idx_varreg]:.3f}')
-    ax_kl.scatter(idx_rl, kl_rl[idx_rl])
-    ax_kl.scatter(idx_varreg, kl_var[idx_varreg])
+    fig_kl, ax_kl = plt.subplots(1, 1, figsize=(20, 10))
+
+    ax_kl.plot(kl_rl, color='r', label = f'Richardson-Lucy KL_min={kl_rl[idx_rl]:.3f}')
+    ax_kl.plot(kl_var, color='C2', label = f'Variance Regularization - Mean KL_min={kl_var[idx_varreg]:.3f}')
+
+    ax_kl.scatter(idx_rl, kl_rl[idx_rl], color='r')
+    ax_kl.scatter(idx_varreg, kl_var[idx_varreg], color='C2')
+
     ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_rl])
     ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_varreg])
+    
+    ax_kl.plot(kl_adam, color='C0', label = f'Adam Optimization KL_min={kl_adam[idx_adam]:.3f}')
+    ax_kl.scatter(idx_adam, kl_adam[idx_adam], color='C0')
+    ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_adam])
+    
     ax_kl.set_xlabel('Iteration')
     ax_kl.set_ylabel('Normalized KL')
     ax_kl.legend()
-    ax_kl.set_title(f"K={params['K']}, n_iter={params['num_iter']}, lambda={params['lambda']}, \
-                W={params['W']}, method={params['method']}", fontsize=16)
+    ax_kl.set_title(str(params)[1:-1], fontsize=16)
     
     # Plot best iteration
-    fig_bestres, ax_bestres = plt.subplots(1, 4, figsize=(30, 7))
-    gra.ShowImg(img, pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[0])
+    fig_bestres, ax_bestres = plt.subplots(1, 5, figsize=(30, 7))
+
+    gra.ShowImg(img[15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[0])
     ax_bestres[0].set_title('Raw Image')
-    gra.ShowImg(rl[idx_rl], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[1])
+    gra.ShowImg(rl[idx_rl, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[1])
     ax_bestres[1].set_title('Richardson-Lucy')
-    gra.ShowImg(varreg_mean[idx_varreg], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[2])
+    gra.ShowImg(varreg_mean[idx_varreg, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[2])
     ax_bestres[2].set_title('Variance Regularization - Mean')
-    gra.ShowImg(ground_truth, pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[3])
-    ax_bestres[3].set_title('Ground Truth')
-    fig_bestres.suptitle(f"K={params['K']}, n_iter='best', lambda={params['lambda']}, \
-                    W={params['W']}, method={params['method']}", fontsize=16)
+    gra.ShowImg(adam_mean[idx_adam, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[3])
+    ax_bestres[3].set_title('Adam Optimization - Mean')
+    gra.ShowImg(ground_truth[15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[4])
+    ax_bestres[4].set_title('Ground Truth')
+    params_title = params.copy()
+    params_title["num_iter"] = 'best'
+    fig_bestres.suptitle(str(params_title)[1:-1], fontsize=16)
+    
+    # Compute PSNR
+    psnr_rl = utils.peak_signal_to_noise_ratio(ground_truth, rl)
+    psnr_var = utils.peak_signal_to_noise_ratio(ground_truth, varreg_mean)
+        
+    fig_psnr, ax_psnr = plt.subplots(1, 1, figsize=(20, 10))
+
+    ax_psnr.plot(psnr_rl, color='r', label = 'rl')
+    ax_psnr.plot(psnr_var, color='C2', label = 'varreg')
+    
+    psnr_adam = utils.peak_signal_to_noise_ratio(ground_truth, adam_mean)
+    ax_psnr.plot(psnr_adam, color='C0', label = 'adam')
+
+    ax_psnr.set_xlabel('Iteration')
+    ax_psnr.set_ylabel('Normalized PSNR')
+    ax_psnr.legend()
+    ax_psnr.set_title(str(params)[1:-1])
+    
     
     # Save the results
     os.makedirs(output_dir, exist_ok=True)
 
-    save_experiment_results(fig_K, fig_res, fig_kl, fig_bestres, params, output_dir, plot_K=plot_K, print_csv=print_csv)
+    rs.save_experiment_results(fig_res, fig_loss, fig_kl, fig_bestres, fig_psnr, params, output_dir, print_csv=print_csv)
 
     plt.close('all')
-    return varreg_solution
+    return kl_var, kl_adam
