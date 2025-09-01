@@ -8,10 +8,12 @@ from torch import real, einsum
 
 def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: str = 'ijk', dim2: str = 'jkl',
                         axis: str = 'jk', fourier: tuple = (False, False)):
+
     dim3 = dim1 + dim2
     dim3 = ''.join(sorted(set(dim3), key=dim3.index))
 
     dims = [dim1, dim2, dim3]
+
     axis_list = [[d.find(c) for c in axis] for d in dims]
 
     if fourier[0] == False:
@@ -32,8 +34,12 @@ def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: st
 
     return conv
 
-def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl', dim3: str = None,
-                             axis: str = 'jk', fourier: tuple = (False, False), padding: list = None):
+def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl',
+                             axis: str = 'jk',  dim3: str = None, fourier: tuple = (False, False),
+                             padding: list = None):
+
+    kernel = torch.tensor(kernel, dtype=torch.float32) if not isinstance(kernel, torch.Tensor) else kernel.float()
+    volume = torch.tensor(volume, dtype=torch.float32) if not isinstance(volume, torch.Tensor) else volume.float()
 
     if dim3 is None:
         dim3 = dim1 + dim2
@@ -42,8 +48,10 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
         raise ValueError("dim3 must be a string")
 
     dims = [dim1, dim2, dim3]
+
     axis_list = [[d.find(c) for c in axis] for d in dims]
-    
+
+    print(volume.size)
     if padding is None:
         padding = [volume.size(d) for d in axis_list[1]]
 
