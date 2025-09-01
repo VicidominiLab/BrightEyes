@@ -154,15 +154,14 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
                             regularizer=params["regularizer"], initialization=params["initialization"], normalize=False,
                             process='gpu', rec_to_save='all')
     varreg_mean = varreg_solution.mean(axis=-1)
-    varreg_mean[np.isnan(varreg_mean)] = 0
+    varreg_mean = torch.nan_to_num(varreg_mean, nan=0.0)
 
     adam_solution, losses = varreg.adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lambda_value=params["lambda"], alpha_value=params["alpha"],
                                                  initialization=params["initialization"], W=weight, regularizer=params["regularizer"],
                                                  lr=params["lr"], process='gpu', full_KL=False, rec_to_save='all', verbose=False, sum_rep = False)
     adam_mean = adam_solution.sum(axis=-1)
     del adam_solution
-    varreg_mean[np.isnan(varreg_mean)] = 0
-    adam_mean[np.isnan(adam_mean)] = 0
+    adam_mean = torch.nan_to_num(adam_mean, nan=0.0)
 
     pxsizex = params["pixelsize"]
     full_KL = False
