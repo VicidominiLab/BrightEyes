@@ -230,9 +230,10 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
 
-    ny, nx, nrep = dset.shape
+    axis_to_sum = 2
+    sz = dset.shape[:axis_to_sum]
 
-    psf_pad = centered_pad(psf, target_shape=(ny, nx))  # Centered padding of PSF to match dataset shape
+    psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
 
     # Normalize PSF
     psf_norm = psf_pad / psf_pad.sum()
@@ -291,12 +292,18 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
     else:
         n_rep = dset.shape[-1]
 
+    num_axis_to_conv = 2
+
     # Repeat the psf for each repetition
     psf = psf.unsqueeze(-1).repeat(*([1] * psf.ndim), n_rep)
     
     # Axis to sum for flux conservation
     axis_to_sum = tuple(range(dset.ndim - 1))
     flux = dset.sum(axis_to_sum, keepdim=True)
+    
+    sz = dset.shape[:num_axis_to_conv]
+    psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
+    psf_fft = rfftn(psf_pad, dim=tuple(range(num_axis_to_conv)))  # FFT of the PSF
 
     # Initialization
     size = list(dset.shape)
@@ -340,7 +347,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         optimizer.zero_grad()
 
         # Compute loss values
-        loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf, full_KL=full_KL)
+        loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf_fft, full_KL=full_KL)
 
         loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
         loss = loss_fidelity + loss_reg
