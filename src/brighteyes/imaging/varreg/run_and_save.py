@@ -273,11 +273,10 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
         
         
     #plot KL divergence
-    kl_rl = utils.kl_divergence(ground_truth, rl, normalize_entries = True)
+    #kl_rl = utils.kl_divergence(ground_truth, rl, normalize_entries = True)
     kl_var = utils.kl_divergence(ground_truth, varreg_mean, normalize_entries = True)
     kl_adam = utils.kl_divergence(ground_truth, adam_mean, normalize_entries = True)
 
-    
     idx_rl = np.argmin(kl_rl)
     idx_varreg = np.argmin(kl_var)
     idx_adam = np.argmin(kl_adam)
