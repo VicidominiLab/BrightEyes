@@ -15,9 +15,7 @@ def disk(radius, shape):
 
     r = np.sqrt(xx ** 2 + yy ** 2)
 
-    disk = np.where(r <= radius, 1, 0)
-
-    return disk
+    return np.where(r <= radius, 1, 0)
 
 
 def sparse_random_image(shape, num_nonzero, value_range=(0.1, 1.0), dtype=np.float32):
