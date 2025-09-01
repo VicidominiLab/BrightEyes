@@ -51,7 +51,6 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
 
     axis_list = [[d.find(c) for c in axis] for d in dims]
 
-    print(volume.size)
     if padding is None:
         padding = [volume.size(d) for d in axis_list[1]]
 
