@@ -38,8 +38,8 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
                              axis: str = 'jk',  dim3: str = None, fourier: tuple = (False, False),
                              padding: list = None):
 
-    kernel = torch.tensor(kernel, dtype=torch.float32) if not isinstance(kernel, torch.Tensor) else kernel.float()
-    volume = torch.tensor(volume, dtype=torch.float32) if not isinstance(volume, torch.Tensor) else volume.float()
+    kernel = torch.as_tensor(kernel)
+    volume = torch.as_tensor(volume)
 
     if dim3 is None:
         dim3 = dim1 + dim2
