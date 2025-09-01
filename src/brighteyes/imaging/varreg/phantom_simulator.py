@@ -46,4 +46,6 @@ def generate_disk_phantom(shape, num, radius, value_range=(0.1, 1.0), smooth: bo
     if smooth is True:
         phantom = gaussian_filter(phantom, sigma=1)
 
+    phantom[phantom < 0] = 0
+
     return phantom
