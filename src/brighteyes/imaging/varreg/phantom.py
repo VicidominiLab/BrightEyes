@@ -3,7 +3,7 @@ import numpy as np
 
 from scipy.ndimage import gaussian_filter
 
-from .utils import partial_convolution_rfft,
+from .utils import partial_convolution_rfft
 
 
 def disk(radius, shape):
@@ -37,6 +37,7 @@ def sparse_random_image(shape, num_nonzero, value_range=(0.1, 1.0), dtype=np.flo
 
 
 def generate_disk_phantom(shape, num, radius, value_range=(0.1, 1.0), smooth: bool = False):
+
     img = sparse_random_image(shape=shape, num_nonzero=num, value_range=value_range)
     kernel = disk(radius=radius, shape=shape)
 
