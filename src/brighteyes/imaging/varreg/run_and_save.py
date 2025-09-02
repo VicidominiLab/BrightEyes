@@ -183,11 +183,10 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
     fig_res.suptitle(f"K={params['K']}, n_iter={params['num_iter'] if rec_idx==-1 else rec_idx}, \
                 lambda={params['lambda']}, W={params['W']}, method={params['method']}", fontsize=16)
             
-    # KL divergence
+    # Loss computation
     fidelity_rl = loss.fidelity_loss(torch.tensor(img), torch.tensor(rl), torch.tensor(psf))
     fidelity = loss.fidelity_loss(torch.tensor(dset), varreg_solution, torch.tensor(psf_rep))
-    regularization = loss.regularization_loss(varreg_solution, iteration_axis=True)
-    del varreg_solution
+    regularization = loss.regularization_loss(varreg_solution, iteration_axis=True, weight_map=weight) 
 
     fidelity_loss = params["alpha"]*fidelity
     reg_loss = params["lambda"]*regularization

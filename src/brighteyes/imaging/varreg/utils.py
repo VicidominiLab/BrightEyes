@@ -287,9 +287,10 @@ def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False)
     if normalize_entries is True:
         img = img / torch.sum(img, dim=axis_to_sum, keepdim=True)
         img_ref = img_ref / torch.sum(img_ref, dim=axis_to_sum, keepdim=True)
-
-    arg = img / (img_ref + eps)
-    fidelity = img * torch.log( arg + eps )
+    
+    arg = img_ref / (img + eps)
+    fidelity = img_ref * torch.log( arg + eps )
+    
     if full_KL:
         fidelity = fidelity + img_ref - img
 
