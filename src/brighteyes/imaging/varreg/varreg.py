@@ -252,7 +252,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_iter=500, lr=1e-3, careful: bool = True,
+def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map = 1, num_iter=500, lr=1e-3, careful: bool = True,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
                       full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: str = False):
     """
@@ -349,7 +349,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf_fft, full_KL=full_KL)
 
-        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=W, regularizer=regularizer)
+        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=weight_map, regularizer=regularizer)
         loss = loss_fidelity + loss_reg
 
         # Store loss values

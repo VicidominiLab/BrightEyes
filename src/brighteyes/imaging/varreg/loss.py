@@ -7,7 +7,7 @@ from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 from .utils import partial_convolution_rfft, centered_pad
 
 
-def forward(otf, obj):
+def forward_model(otf, obj):
     """
     Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
     The dimension K is optional.
@@ -66,14 +66,14 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
     str_final = str_obj
     axis_to_sum = tuple(range(1, obj_set.ndim))
 
-    if psf.dtype == torch.float32 or psf.dtype == torch.float64:
+    if psf.is_floating_point():
         sz = dataset.shape[:num_axis_to_conv]
-        psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-        psf_fft = rfftn(psf_pad, dim=tuple(range(num_axis_to_conv)))  # FFT of the PSF
-    elif psf.dtype == torch.complex64 or psf.dtype == torch.complex128:
+        psf_pad = centered_pad(psf, target_shape=sz) # Centered padding of PSF to match dataset shape
+        psf_fft = rfftn(psf_pad, dim=tuple(range(num_axis_to_conv))) # FFT of the PSF
+    elif torch.is_complex(psf):
         psf_fft = psf
     else:
-        raise ValueError("Unsupported PSF data type.")
+        raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
 
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
 
