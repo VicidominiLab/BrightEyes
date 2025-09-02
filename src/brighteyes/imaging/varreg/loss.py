@@ -50,8 +50,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
     if eps is None:
         eps = 1e-2
 
-    if psf is isinstance(psf, np.ndarray):
-        psf = torch.from_numpy(psf)
+    psf = torch.as_tensor(psf)
 
     alphabet = string.ascii_lowercase
     n_dim = obj_set.ndim      # 3 or 4
@@ -72,7 +71,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
         psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         psf_fft = rfftn(psf_pad, dim=tuple(range(num_axis_to_conv)))  # FFT of the PSF
     elif psf.dtype == torch.complex64 or psf.dtype == torch.complex128:
-        psf_fft = psf.clone()
+        psf_fft = psf
     else:
         raise ValueError("Unsupported PSF data type.")
 
