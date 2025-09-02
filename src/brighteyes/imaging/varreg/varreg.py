@@ -252,7 +252,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=
         raise ValueError("rec_to_save must be 'last' or 'all'.")
 
 
-def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_iter=500, lr=1e-3,
+def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_iter=500, lr=1e-3, careful: bool = True,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
                       full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: str = False):
     """
@@ -340,7 +340,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
 
     plateau_scheduler  = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=20)
 
-    scheduler = WarmupWithPlateau(optimizer, plateau_scheduler, warmup_steps=200)
+    scheduler = WarmupWithPlateau(optimizer, plateau_scheduler, warmup_steps=200, careful=careful)
     
     # ---- Minimizer ----
     for m in range(num_iter):
@@ -385,11 +385,12 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
 
 
 class WarmupWithPlateau(torch.optim.lr_scheduler._LRScheduler):
-    def __init__(self, optimizer, plateau_scheduler, warmup_steps=100, last_epoch=-1):
+    def __init__(self, optimizer, plateau_scheduler, warmup_steps=100, last_epoch=-1, careful=False):
         self.plateau_scheduler = plateau_scheduler
         self.warmup_steps = warmup_steps
         self.warmup_active = True
         self.prev_loss = None
+        self.careful = careful
         self.base_lrs = [group['lr'] for group in optimizer.param_groups]  # store initial LR
         super().__init__(optimizer, last_epoch)
 
@@ -408,7 +409,7 @@ class WarmupWithPlateau(torch.optim.lr_scheduler._LRScheduler):
                 loss = loss.item()
 
             # Stop warmup if loss increases
-            if self.prev_loss is not None and loss > self.prev_loss:
+            if self.prev_loss is not None and loss > self.prev_loss and self.careful is True:
                 self.warmup_active = False
 
             self.prev_loss = loss
