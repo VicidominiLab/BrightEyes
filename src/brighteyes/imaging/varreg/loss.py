@@ -4,11 +4,36 @@ import numpy as np
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
-from .utils import calculate_weight_map
-
 from .utils import partial_convolution_rfft, centered_pad
 
-def fidelity_loss(dataset, obj_set, psf, eps=None,full_KL=False):
+
+def forward(otf, obj):
+    """
+    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
+    The dimension K is optional.
+
+    Parameters:
+        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
+        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
+
+    Returns:
+        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
+    """
+
+    conv_dims = 2 # to generalize to 3D later
+
+    alphabet = string.ascii_lowercase
+
+    str_psf = alphabet[:otf.ndim]
+    str_obj = alphabet[:obj.ndim]
+    axis_str = alphabet[:conv_dims]
+
+    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
+
+    return dset
+
+
+def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
     """
     Compute the fidelity loss between data and the forward value from predicted solution.
 
@@ -65,7 +90,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None,full_KL=False):
     return fidelity.sum(axis=axis_to_sum)  # Sum over all but the first dimension (num_iter if present)
 
 
-def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regularizer: str = 'l2', W=1,
+def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1,
                         iteration_axis: bool = False):
     """
     Compute the variance regularization term for a set of objects.
@@ -94,6 +119,6 @@ def regularization_loss(obj_set: torch.tensor, dset: torch.tensor = None, regula
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
-    residuals = residuals * W
+    residuals = residuals * weight_map
 
     return residuals.sum(axis=axis_to_sum)

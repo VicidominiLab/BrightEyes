@@ -196,9 +196,9 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
     return obj_all
 
 
-def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=50, tol=None, method='sgm',
+def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu', rec_to_save='last'):
-        
+
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
@@ -207,7 +207,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=
         psf (ndarray): PSF kernel of shape Mx x My x K x Ch.
         lambda_value (float): Variance regularization parameter.
         alpha_value (float): Fidelity term regularization parameter.
-        W (float): Regularization weight a scalar or tensor of shape Nx x Ny.
+        weight_map (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
         tol (float): Convergence tolerance.
         method (str): Update method ('osl', 'abs', or 'sgm').
@@ -243,7 +243,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, W=1, max_iter=
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, W, tol, method, device, regularizer, initialization, normalize, rec_to_save)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, weight_map, tol, method, device, regularizer, initialization, normalize, rec_to_save)
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':
@@ -349,7 +349,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, W = 1, num_
         # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf_fft, full_KL=full_KL)
 
-        loss_reg = lambda_value * regularization_loss(obj_set, dset=dset, W=W, regularizer=regularizer)
+        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=W, regularizer=regularizer)
         loss = loss_fidelity + loss_reg
 
         # Store loss values
