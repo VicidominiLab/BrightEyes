@@ -65,6 +65,8 @@ def gaussian_fit(image):
         (x shift, y shift, fitted parameters, fitted Gaussian) if successful, else None
     """
 
+    image = image / image.max()  # Normalize
+
     h, w = image.shape
     y, x = np.mgrid[0:h, 0:w]
 
@@ -79,7 +81,7 @@ def gaussian_fit(image):
     # Parameter bounds
     bounds = (
         [0,        0,     0,     0.5,    0],  # lower bounds
-        [np.inf,   w,     h,     w,      np.inf]    # upper bounds
+        [image.max(),   w,     h,     w,      image.min()]    # upper bounds
     )
 
     result = least_squares(
