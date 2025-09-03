@@ -1,6 +1,6 @@
 import torch
 import string
-import numpy as np
+import einops
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
@@ -33,7 +33,7 @@ def forward_model(otf, obj):
     return dset
 
 
-def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
+def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False):
     """
     Compute the fidelity loss between data and the forward value from predicted solution.
 
@@ -85,12 +85,19 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
     idx = ~torch.isfinite(fidelity)
     fidelity[ idx ] = 0
 
+    if torch.is_tensor(weight_map):
+        letters = ["x", "y", "z"][: weight_map.ndim]
+        lhs = " ".join(letters)
+        ein_str = f"b {lhs} ... , {lhs} -> b"
+        fidelity = einops.einsum(fidelity, weight_map, ein_str)
+    else:
+        fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present)
 
-    return fidelity.sum(axis=axis_to_sum)  # Sum over all but the first dimension (num_iter if present)
+    return fidelity
 
 
 def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1,
-                        iteration_axis: bool = False):
+                        iteration_axis: bool = False, eps: float = None):
     """
     Compute the variance regularization term for a set of objects.
 
@@ -101,6 +108,9 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     Returns:
     float: Variance regularization value.
     """
+
+    if eps is None:
+        eps = 1e-2
 
     if iteration_axis:
         axis_to_sum = tuple(range(1, obj_set.ndim))
@@ -114,7 +124,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     elif regularizer.lower() == 'l1':
         residuals = torch.abs(obj_set - obj_mean)
     elif regularizer.lower() == 'kl':
-        residuals = obj_mean * torch.log( obj_mean / obj_set )
+        residuals = obj_mean * torch.log( (obj_mean + eps) / (obj_set + eps) )
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
