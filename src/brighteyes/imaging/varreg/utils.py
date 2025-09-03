@@ -2,6 +2,8 @@ import torch
 import einops
 import numpy as np
 
+from scipy.ndimage import gaussian_filter
+
 from torch.nn import functional
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 from torch import real, einsum
@@ -130,12 +132,13 @@ def calculate_snr(dset):
     return snr
 
 
-def calculate_weight_map(dset):
+def calculate_weight_map(dset, smooth_sigma: float = 0):
     """
     Calculate a weight map based on the SNR of the dataset.
 
     Parameters:
         dset (ndarray): Input dataset of shape Nx x Ny x K.
+        smooth_sigma (float): Standard deviation for Gaussian smoothing. Default is 0 (no smoothing).
 
     Returns:
         Tensor: Weight map of shape Nx x Ny.
@@ -149,6 +152,10 @@ def calculate_weight_map(dset):
 
     max_weight = torch.max(weight_map[torch.isfinite(weight_map)])
     weight_map = torch.clip(weight_map, 0, max_weight)
+
+    if smooth_sigma > 0:
+        weight_map_np = gaussian_filter(weight_map.numpy(), sigma=smooth_sigma)
+        weight_map = torch.tensor(weight_map_np, dtype=torch.float32)
 
     weight_map = einops.repeat(weight_map, 'm n -> m n k', k=dset.shape[-1])
 
