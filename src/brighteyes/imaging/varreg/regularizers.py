@@ -14,6 +14,8 @@ def grad_l2(obj_set):
 
 def grad_l1(obj_set):
 
+    eps = torch.finfo(torch.float32).eps
+
     obj_mean = compute_centroid(obj_set, 'l1')
 
     denominator  = torch.sqrt( (obj_set - obj_mean)**2 + eps**2 )
@@ -25,6 +27,8 @@ def grad_l1(obj_set):
 
 
 def grad_kl(obj_set):
+
+    eps = torch.finfo(torch.float32).eps
 
     obj_mean = compute_centroid(obj_set, 'kl')
 

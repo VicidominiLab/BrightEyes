@@ -132,6 +132,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
 
     return residuals.sum(axis=axis_to_sum)
 
+
 def compute_centroid(obj_set: torch.tensor, regularizer: str = 'l2'):
     """
     Compute the centroid of a set of objects based on the specified regularization.
