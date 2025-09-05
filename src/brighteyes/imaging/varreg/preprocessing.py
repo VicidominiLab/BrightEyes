@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 import math
 
 def divisors(n):
@@ -47,8 +49,6 @@ def rebin(dset, nbin, length, channel: int = -1):
 
     return dataset
 
-import torch
-import numpy as np
 
 def binomial_split(x, n_splits=2, p=0.5, device=None):
     """
