@@ -50,7 +50,7 @@ def rebin(dset, nbin, length, channel: int = -1):
     return dataset
 
 
-def binomial_split(x, n_splits=2, p=0.5, device=None):
+def binomial_split(x: torch.tensor, n_splits: int = 2, p: float = 0.5, device: str = None):
     """
     Binomial split into `n_splits` parts (must be a power of 2).
 
@@ -64,7 +64,7 @@ def binomial_split(x, n_splits=2, p=0.5, device=None):
         torch.Tensor: Tensor of shape (*x.shape, n_splits) with integer splits.
     """
     # ---- Check input validity ----
-    # n_splits must be a power of 2 (e.g. 2, 4, 8, 16...)
+    # n_splits must be a power of 2
     if n_splits < 1 or (n_splits & (n_splits - 1)) != 0:
         raise ValueError("n_splits must be a positive power of 2")
 
