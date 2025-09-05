@@ -18,6 +18,7 @@ from .loss import fidelity_loss, regularization_loss
 
 from .regularizers import grad_l2, grad_l1, grad_kl
 
+from .preprocessing import binomial_split
 
 def forward(otf, obj):
     """
@@ -122,7 +123,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
 
 
 def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
-            normalize, rec_to_save):
+            normalize, rec_to_save, binomial):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -150,6 +151,10 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
         raise ValueError("If rec_to_save is 'last', tol must be None.")
 
     eps = torch.finfo(torch.float32).eps
+
+    if binomial is True:
+        img = dset.sum(dim=-1)
+        n_rep = dset.shape[-1]
 
     # Axis to sum for flux conservation
     axis_to_sum = tuple(range(dset.ndim - 1))
@@ -198,12 +203,14 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
                 obj_all = obj_all[:m + 1]
                 break
 
+        if binomial is True:
+            dset = binomial_split(img, n_splits=n_rep, p=0.5, device=device)
     return obj_all
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu',
-                            rec_to_save='last'):
+                            rec_to_save='last', binomial:bool = False):
 
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
@@ -250,7 +257,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
     obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
-                      regularizer, initialization, normalize, rec_to_save)
+                      regularizer, initialization, normalize, rec_to_save, binomial)
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':
@@ -261,7 +268,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
 
 def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map = 1, num_iter=500, lr=1e-3, careful: bool = True,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
-                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: bool = False):
+                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: bool = False,
+                      binomial: bool = False):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
@@ -298,6 +306,9 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map 
         n_rep = 1
     else:
         n_rep = dset.shape[-1]
+
+    if binomial is True:
+        img = dset.sum(dim=-1)
 
     num_axis_to_conv = 2
 
@@ -387,6 +398,9 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map 
             print(f"Iter {m+1}/{num_iter} | Loss: {loss.item():.6f} "
                   f"| Fidelity: {loss_fidelity.item():.9f} | Reg: {loss_reg.item():.9f}"
                   f" | LR: {optimizer.param_groups[0]['lr']:.6f}")
+
+        if binomial is True:
+            dset = binomial_split(img, n_splits=n_rep, p=0.5, device=device)
 
     return obj_all.detach(), losses
 
