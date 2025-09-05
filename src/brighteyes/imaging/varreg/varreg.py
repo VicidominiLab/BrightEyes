@@ -1,3 +1,5 @@
+from itertools import cycle
+
 import torch
 import string
 import numpy as np
@@ -82,6 +84,9 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
 
         denom = 1 + 2 * lam * weight * (obj - obj_mean)
         obj_update = update_k / (denom + eps)
+
+        obj_update.clamp_(min=1e-8)
+
         obj_new = obj * obj_update
 
     # === Metodo ABS ===
@@ -116,8 +121,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
     return obj_new
 
 
-def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization, normalize, rec_to_save):
-
+def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
+            normalize, rec_to_save):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -197,7 +202,8 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, max_iter=50, tol=None, method='sgm',
-                            regularizer='l2', initialization='flat', normalize=False, process='gpu', rec_to_save='last'):
+                            regularizer='l2', initialization='flat', normalize=False, process='gpu',
+                            rec_to_save='last'):
 
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
@@ -243,7 +249,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
     psf_fft = rfftn(psf_norm, dim=(-2, -1))
     psf_m_fft = rfftn(psf_m, dim=(-2, -1))
 
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, weight_map, tol, method, device, regularizer, initialization, normalize, rec_to_save)
+    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
+                      regularizer, initialization, normalize, rec_to_save)
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':
@@ -254,7 +261,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
 
 def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map = 1, num_iter=500, lr=1e-3, careful: bool = True,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
-                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: str = False):
+                      full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: bool = False):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
