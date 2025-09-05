@@ -117,17 +117,41 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     else:
         axis_to_sum = tuple(range(0, obj_set.ndim))
 
-    obj_mean = obj_set.mean(dim=-1, keepdim=True)
+    centroid = compute_centroid(obj_set, regularizer)
 
     if regularizer.lower() == 'l2':
-        residuals = (obj_set - obj_mean)**2
+        residuals = (obj_set - centroid)**2
     elif regularizer.lower() == 'l1':
-        residuals = torch.abs(obj_set - obj_mean)
+        residuals = torch.abs(obj_set - centroid)
     elif regularizer.lower() == 'kl':
-        residuals = obj_mean * torch.log( (obj_mean + eps) / (obj_set + eps) )
+        residuals = centroid * torch.log( (centroid + eps) / (obj_set + eps) )
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
     residuals = residuals * weight_map
 
     return residuals.sum(axis=axis_to_sum)
+
+def compute_centroid(obj_set: torch.tensor, regularizer: str = 'l2'):
+    """
+    Compute the centroid of a set of objects based on the specified regularization.
+
+    Parameters:
+    obj_set (Tensor): Input tensor of shape Nx x Ny x K.
+    regularizer (str): Type of regularization ('l1', 'l2', 'kl').
+
+    Returns:
+    Tensor: Computed centroid.
+    """
+
+    if regularizer.lower() == 'l2':
+        centroid = obj_set.mean(dim=-1, keepdim=True)
+    elif regularizer.lower() == 'l1':
+        centroid = obj_set.median(dim=-1, keepdim=True)
+    elif regularizer.lower() == 'kl':
+        eps = 1e-2
+        centroid = torch.exp( torch.log(obj_set + eps).mean(dim=-1, keepdim=True) ) / torch.e # Geometric mean scaled
+    else:
+        raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
+
+    return centroid
