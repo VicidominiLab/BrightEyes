@@ -97,7 +97,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
 
 
 def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1,
-                        iteration_axis: bool = False, eps: float = None):
+                        iteration_axis: bool = False, eps: float = None, fourier: bool = False):
     """
     Compute the variance regularization term for a set of objects.
 
@@ -112,6 +112,11 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     if eps is None:
         eps = 1e-2
 
+    if fourier is True:
+        ft_dim = (1, 2) if iteration_axis is True else (0, 1) # to generalize to 3D later
+        obj_set = fftn(obj_set, norm = "forward", dim=ft_dim)
+        # obj_set = fftshift(obj_set, dim=ft_dim) # useful for visualization but not for computation
+
     if iteration_axis:
         axis_to_sum = tuple(range(1, obj_set.ndim))
     else:
@@ -120,7 +125,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     centroid = compute_centroid(obj_set, regularizer)
 
     if regularizer.lower() == 'l2':
-        residuals = (obj_set - centroid)**2
+        residuals = torch.abs(obj_set - centroid)**2
     elif regularizer.lower() == 'l1':
         residuals = torch.abs(obj_set - centroid)
     elif regularizer.lower() == 'kl':

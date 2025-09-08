@@ -269,7 +269,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
 def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map = 1, num_iter=500, lr=1e-3, careful: bool = True,
                       regularizer: str ='l2', initialization: str = 'flat', process: str = 'gpu',
                       full_KL: bool =False, rec_to_save: str = 'last', verbose: bool =True, sum_rep: bool = False,
-                      binomial: bool = False):
+                      binomial: bool = False, fourier: bool = False):
     """
     Ottimizza obj_set minimizzando fidelity_loss + reg_weight * regularization_loss con Adam.
 
@@ -367,7 +367,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map 
         # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf_fft, weight_map=weight_map, full_KL=full_KL)
 
-        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=1, regularizer=regularizer)
+        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=1, regularizer=regularizer, fourier=fourier)
         loss = loss_fidelity + loss_reg
 
         # Store loss values
