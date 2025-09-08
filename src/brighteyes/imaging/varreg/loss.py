@@ -141,7 +141,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
         mtf[mtf < 1e-2] = 1e-2
         weight = 1/mtf
         #print(weight.shape, residuals.shape)
-        #residuals = residuals * weight
+        residuals = residuals * weight
 
     return residuals.sum(axis=axis_to_sum)
 
