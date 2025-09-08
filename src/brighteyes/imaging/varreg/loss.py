@@ -96,7 +96,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     return fidelity
 
 
-def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1,
+def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1, otf = None,
                         iteration_axis: bool = False, eps: float = None, fourier: bool = False):
     """
     Compute the variance regularization term for a set of objects.
@@ -114,7 +114,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
 
     if fourier is True:
         ft_dim = (1, 2) if iteration_axis is True else (0, 1) # to generalize to 3D later
-        obj_set = fftn(obj_set, norm = "forward", dim=ft_dim)
+        obj_set = rfftn(obj_set, norm = "forward", dim=ft_dim)
         # obj_set = fftshift(obj_set, dim=ft_dim) # useful for visualization but not for computation
 
     if iteration_axis:
@@ -134,6 +134,14 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
     residuals = residuals * weight_map
+
+    if fourier is True and otf is not None:
+        mtf = torch.abs(otf)
+        mtf = mtf / mtf.max()
+        mtf[mtf < 1e-2] = 1e-2
+        weight = 1/mtf
+        #print(weight.shape, residuals.shape)
+        #residuals = residuals * weight
 
     return residuals.sum(axis=axis_to_sum)
 

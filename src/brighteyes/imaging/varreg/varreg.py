@@ -367,7 +367,7 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value = 1, weight_map 
         # Compute loss values
         loss_fidelity =  alpha_value * fidelity_loss(dset, obj_set, psf_fft, weight_map=weight_map, full_KL=full_KL)
 
-        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=1, regularizer=regularizer, fourier=fourier)
+        loss_reg = lambda_value * regularization_loss(obj_set, weight_map=1, regularizer=regularizer, fourier=fourier, otf=psf_fft)
         loss = loss_fidelity + loss_reg
 
         # Store loss values
