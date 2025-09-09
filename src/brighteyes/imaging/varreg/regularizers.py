@@ -1,8 +1,10 @@
 import torch
 
+from .loss import compute_centroid
+
 def grad_l2(obj_set):
 
-    obj_mean = obj_set.mean(dim=-1, keepdim=True)
+    obj_mean = compute_centroid(obj_set, 'l2')
 
     u = 2 * obj_mean
     v = 2 * obj_set
@@ -12,8 +14,9 @@ def grad_l2(obj_set):
 
 def grad_l1(obj_set):
 
-    obj_mean = obj_set.mean(dim=-1, keepdim=True)
     eps = torch.finfo(torch.float32).eps
+
+    obj_mean = compute_centroid(obj_set, 'l1')
 
     denominator  = torch.sqrt( (obj_set - obj_mean)**2 + eps**2 )
 
@@ -25,8 +28,9 @@ def grad_l1(obj_set):
 
 def grad_kl(obj_set):
 
-    obj_mean = obj_set.mean(dim=-1, keepdim=True)
     eps = torch.finfo(torch.float32).eps
+
+    obj_mean = compute_centroid(obj_set, 'kl')
 
     u = obj_mean / (obj_set + eps)
     v = 1

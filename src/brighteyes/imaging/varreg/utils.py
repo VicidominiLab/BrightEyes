@@ -2,6 +2,8 @@ import torch
 import einops
 import numpy as np
 
+from scipy.ndimage import gaussian_filter
+
 from torch.nn import functional
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 from torch import real, einsum
@@ -108,12 +110,13 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     return padded_arr
 
 
-def calculate_snr(dset):
+def calculate_snr(dset, smooth_sigma: float = 0):
     """
     Calculate pixel-wise the Signal-to-Noise Ratio (SNR) of a dataset.
 
     Parameters:
         dset (ndarray): Input dataset of shape Nx x Ny x K.
+        smooth_sigma (float): Standard deviation for Gaussian smoothing. Default is 0 (no smoothing).
 
     Returns:
         float: SNR value.
@@ -127,15 +130,21 @@ def calculate_snr(dset):
 
     snr = torch.where(signal == 0, 0, signal / noise)
 
+    if smooth_sigma > 0:
+        offset = 1e-1
+        snr = gaussian_filter(snr.numpy(), sigma=smooth_sigma)
+        snr = torch.tensor(snr, dtype=torch.float32) + offset
+
     return snr
 
 
-def calculate_weight_map(dset):
+def calculate_weight_map(dset, smooth_sigma: float = 0):
     """
     Calculate a weight map based on the SNR of the dataset.
 
     Parameters:
         dset (ndarray): Input dataset of shape Nx x Ny x K.
+        smooth_sigma (float): Standard deviation for Gaussian smoothing. Default is 0 (no smoothing).
 
     Returns:
         Tensor: Weight map of shape Nx x Ny.
@@ -144,7 +153,8 @@ def calculate_weight_map(dset):
     if not isinstance(dset, torch.Tensor):
         dset = torch.tensor(dset, dtype=torch.float32)
 
-    snr = calculate_snr(dset)
+    snr = calculate_snr(dset, smooth_sigma)
+
     weight_map = 1 / snr
 
     max_weight = torch.max(weight_map[torch.isfinite(weight_map)])

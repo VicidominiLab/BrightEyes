@@ -1,6 +1,6 @@
 import torch
 import string
-import numpy as np
+import einops
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
@@ -33,7 +33,7 @@ def forward_model(otf, obj):
     return dset
 
 
-def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
+def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False):
     """
     Compute the fidelity loss between data and the forward value from predicted solution.
 
@@ -85,12 +85,19 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, full_KL=False):
     idx = ~torch.isfinite(fidelity)
     fidelity[ idx ] = 0
 
+    if torch.is_tensor(weight_map):
+        letters = ["x", "y", "z"][: weight_map.ndim]
+        lhs = " ".join(letters)
+        ein_str = f"b {lhs} ... , {lhs} -> b"
+        fidelity = einops.einsum(fidelity, weight_map, ein_str)
+    else:
+        fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present)
 
-    return fidelity.sum(axis=axis_to_sum)  # Sum over all but the first dimension (num_iter if present)
+    return fidelity
 
 
-def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1,
-                        iteration_axis: bool = False):
+def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1, otf = None,
+                        iteration_axis: bool = False, eps: float = None, fourier: bool = False):
     """
     Compute the variance regularization term for a set of objects.
 
@@ -102,22 +109,63 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     float: Variance regularization value.
     """
 
+    if eps is None:
+        eps = 1e-2
+
+    if fourier is True:
+        ft_dim = (1, 2) if iteration_axis is True else (0, 1) # to generalize to 3D later
+        obj_set = rfftn(obj_set, norm = "forward", dim=ft_dim)
+        # obj_set = fftshift(obj_set, dim=ft_dim) # useful for visualization but not for computation
+
     if iteration_axis:
         axis_to_sum = tuple(range(1, obj_set.ndim))
     else:
         axis_to_sum = tuple(range(0, obj_set.ndim))
 
-    obj_mean = obj_set.mean(dim=-1, keepdim=True)
+    centroid = compute_centroid(obj_set, regularizer)
 
     if regularizer.lower() == 'l2':
-        residuals = (obj_set - obj_mean)**2
+        residuals = torch.abs(obj_set - centroid)**2
     elif regularizer.lower() == 'l1':
-        residuals = torch.abs(obj_set - obj_mean)
+        residuals = torch.abs(obj_set - centroid)
     elif regularizer.lower() == 'kl':
-        residuals = obj_mean * torch.log( obj_mean / obj_set )
+        residuals = centroid * torch.log( (centroid + eps) / (obj_set + eps) )
     else:
         raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
     residuals = residuals * weight_map
 
+    if fourier is True and otf is not None:
+        mtf = torch.abs(otf)
+        mtf = mtf / mtf.max()
+        mtf[mtf < 1e-2] = 1e-2
+        weight = 1/mtf
+        #print(weight.shape, residuals.shape)
+        residuals = residuals * weight
+
     return residuals.sum(axis=axis_to_sum)
+
+
+def compute_centroid(obj_set: torch.tensor, regularizer: str = 'l2'):
+    """
+    Compute the centroid of a set of objects based on the specified regularization.
+
+    Parameters:
+    obj_set (Tensor): Input tensor of shape Nx x Ny x K.
+    regularizer (str): Type of regularization ('l1', 'l2', 'kl').
+
+    Returns:
+    Tensor: Computed centroid.
+    """
+
+    if regularizer.lower() == 'l2':
+        centroid = obj_set.mean(dim=-1, keepdim=True)
+    elif regularizer.lower() == 'l1':
+        centroid = obj_set.median(dim=-1, keepdim=True)
+    elif regularizer.lower() == 'kl':
+        eps = 1e-2
+        centroid = torch.exp( torch.log(obj_set + eps).mean(dim=-1, keepdim=True) ) / torch.e # Geometric mean scaled
+    else:
+        raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
+
+    return centroid
