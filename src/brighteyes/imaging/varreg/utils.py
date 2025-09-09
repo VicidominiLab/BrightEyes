@@ -297,3 +297,29 @@ def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False)
     kl_div = torch.sum(fidelity, dim=axis_to_sum)
 
     return torch.squeeze(kl_div).numpy()
+
+def forward_fill_nan(tensor):
+    
+    tensor = torch.tensor(tensor)
+    
+    # mask True dove ci sono NaN
+    mask = torch.isnan(tensor)
+    
+    # Sostituisco i NaN con 0 temporaneamente
+    tensor = torch.where(mask, torch.zeros_like(tensor), tensor)
+
+    # Creiamo un indicatore cumulativo dei valori non-NaN
+    # Questo ci permette di propagare l'ultimo valore valido
+    # step 1: indice booleano per i valori validi
+    valid = (~mask).float()
+
+    # step 2: cumulative sum per contare quante volte abbiamo valori validi
+    cumsum_valid = valid.cumsum(dim=0)
+
+    # step 3: somma cumulativa dei valori
+    cumsum_tensor = tensor.cumsum(dim=0)
+
+    # step 4: calcolo della media cumulativa * numero di valori validi → ultimo valore valido
+    filled = torch.where(cumsum_valid > 0, cumsum_tensor / cumsum_valid, torch.zeros_like(tensor))
+
+    return filled
