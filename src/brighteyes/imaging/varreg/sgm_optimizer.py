@@ -15,6 +15,8 @@ from .regularizers import grad_l2, grad_l1, grad_kl
 
 from .preprocessing import binomial_split
 
+from . import initializers as init
+
 
 def forward(otf, obj):
     """
@@ -118,7 +120,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
     return obj_new
 
 
-def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
+def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
             normalize, rec_to_save, binomial):
     """
     Performs a single iteration update for the reconstruction process.
@@ -148,6 +150,14 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
 
     eps = torch.finfo(torch.float32).eps
 
+    # Normalize PSF
+    psf_norm = psf / psf.sum()
+    psf_m = torch.flip(psf_norm, dims=[-2, -1])
+
+    # Precompute FFTs
+    psf_fft = rfftn(psf_norm, dim=(-2, -1))
+    psf_m_fft = rfftn(psf_m, dim=(-2, -1))
+
     if binomial is True:
         img = dset.sum(dim=-1)
         n_rep = dset.shape[-1]
@@ -165,15 +175,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
 
     obj_all = torch.empty(size).to(device)
 
-    if initialization == 'flat':
-        obj_all[0] = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
-    elif initialization == 'data':
-        axis_to_conv = tuple(range(2))
-        obj_all[0] = torch.tensor(
-            gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes=axis_to_conv)).to(device)
-        obj_all[0] = obj_all[0] * flux / obj_all[0].sum()
-    else:
-        raise ValueError("Initialization must be 'flat' or 'data'.")
+    obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
 
     idx = 0
     # Reconstruction loop
@@ -204,7 +206,7 @@ def iterate(dset, psf_fft, psf_m_fft, max_iter, lam, alpha, weight, tol, method,
     return obj_all
 
 
-def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, max_iter=50, tol=None, method='sgm',
+def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu',
                             rec_to_save='last', binomial: bool = False):
     """
@@ -243,15 +245,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value, weight_map=1, 
 
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
 
-    # Normalize PSF
-    psf_norm = psf_pad / psf_pad.sum()
-    psf_m = torch.flip(psf_norm, dims=[-2, -1])
-
-    # Precompute FFTs
-    psf_fft = rfftn(psf_norm, dim=(-2, -1))
-    psf_m_fft = rfftn(psf_m, dim=(-2, -1))
-
-    obj_all = iterate(dset, psf_fft, psf_m_fft, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
+    obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
                       regularizer, initialization, normalize, rec_to_save, binomial)
     if rec_to_save == 'last':
         return obj_all[-1]

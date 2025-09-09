@@ -13,8 +13,9 @@ from torch import real, einsum
 from .utils import centered_pad
 from .loss import fidelity_loss, regularization_loss
 
-
 from .preprocessing import binomial_split
+
+from . import initializers as init
 
 
 def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value=1, weight_map=1, num_iter=500, lr=1e-3,
@@ -64,6 +65,8 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value=1, weight_map=1,
 
     num_axis_to_conv = 2
 
+    init_obj = init.initialize(dset, psf, method=initialization, device=None)
+
     # Repeat the psf for each repetition
     psf = psf.unsqueeze(-1).repeat(*([1] * psf.ndim), n_rep)
 
@@ -83,18 +86,8 @@ def adam_optimize_obj(dset, psf, lambda_value=0.01, alpha_value=1, weight_map=1,
         size = [num_iter + 1] + size
     obj_all = torch.empty(size).to(device)
 
-    if initialization == 'flat':
-        initiz = torch.ones(dset.shape).to(device) * flux / np.prod(dset.shape[:-1])
-    elif initialization == 'data':
-        axis_to_conv = tuple(range(2))
-        initiz = torch.tensor(
-            gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes=axis_to_conv)).to(device)
-        initiz = initiz * flux / initiz.sum()
-    else:
-        raise ValueError("Initialization must be 'flat' or 'data'.")
-
-    obj_all[0] = initiz
-    obj_set = initiz
+    obj_all[0] = init_obj
+    obj_set = init_obj
     obj_set.requires_grad = True
 
     # Dictionary with losses
