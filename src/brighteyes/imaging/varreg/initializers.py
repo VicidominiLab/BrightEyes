@@ -1,3 +1,5 @@
+from statistics import correlation
+
 import numpy as np
 import torch
 
@@ -5,6 +7,7 @@ from scipy.ndimage import gaussian_filter
 
 from scipy.signal import convolve
 
+from .utils import centered_pad, partial_convolution_rfft
 
 def flat(shape, flux, device):
 
@@ -26,54 +29,63 @@ def data(dset, flux, device):
     return init
 
 
-def rl_deconvolution(dset, psf, max_iter=5, epsilon=None):
+def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, epsilon: float = None):
     """
-    Richardson-Lucy deconvolution, performed using FFT
+    Richardson-Lucy deconvolution using FFT implementation.
 
     Parameters
     ----------
-    h : np.array (Nx x Ny)
-        PSF of the system
-    i : np.array(Mx x My)
-        Image
-    max_iter : float
-        Number of iterations
+    dset : torch.Tensor (Hx x Wy x N)
+        Input dataset (stack of images along the last axis).
+    psf : torch.Tensor (Hx x Wy)
+        PSF of the system.
+    max_iter : int
+        Number of iterations.
     epsilon : float
-        Minimum value of the denominator.
-        Used to avoid division by zero (default = float.eps)
-    reg : float
-        Regularization parameter (Tikhonov)
+        Minimum value of the denominator (default = torch.finfo(dset.dtype).eps).
 
     Returns
     -------
-    img_deconv : np.array(Mx x My)
-        Deconvolved image
-
+    img_deconv : torch.Tensor (Hx x Wy x N)
+        Deconvolved images.
     """
+    device = dset.device
+    dtype = torch.float32
 
-    n_rep = dset.shape[-1]
-    i = dset.numpy().sum(-1)
-    h = psf.numpy()
+    # Collapse stack into a single image (sum over last axis)
+    image = dset.sum(dim=-1)
+
+    # Pad and normalize PSF
+    psf = centered_pad(psf, target_shape=image.shape)
+    h = psf / psf.sum()
+
+    # Fourier transforms of PSF and its flipped version
+    otf = torch.fft.rfftn(h)
+    otf_conj = torch.conj(otf)
+
+    # Initialize object estimate
+    obj = torch.ones_like(image, dtype=dtype, device=device)
 
     if epsilon is None:
-        epsilon = np.finfo(float).eps
+        epsilon = torch.finfo(dtype).eps
 
-    h = h / np.sum(h)  # PSF normalization
-    hT = np.flip(h)
-    obj = np.ones(i.shape)  # Initialization
+    for _ in range(max_iter):
+        # Convolution: obj * h
 
-    k = 0
-    while k < max_iter:
+        conv = partial_convolution_rfft(otf, obj, dim1='ab', dim2='ab', axis='ab', fourier=(1, 0))
 
-        conv = convolve(obj, h, mode='same')
-        A = np.where(conv < epsilon, 0, i / conv)
-        B = convolve(A, hT, mode='same')
-        C = obj
-        obj = B * C
+        # Avoid division by zero
+        ratio = image / torch.clamp(conv, min=epsilon)
 
-        k += 1
+        # Back-projection: ratio * hT
+        correction = partial_convolution_rfft(otf_conj, ratio, dim1='ab', dim2='ab', axis='ab', fourier=(1, 0))
+        # Update estimate
+        obj = obj * correction
 
-    return torch.tensor(obj).unsqueeze(-1).repeat(1, 1, n_rep) / n_rep
+    # Expand back into dataset shape (repeat along last axis)
+    n_rep = dset.shape[-1]
+
+    return obj.unsqueeze(-1).repeat(1, 1, n_rep) / n_rep
 
 
 def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: int = 10):
