@@ -1,79 +1,105 @@
 import torch
-import torch.nn.functional as F
 
 from. utils import median_filter
 
 class Birfi:
 
     def __init__(self, data):
-        self.data = torch.squeeze(data)
-        self.t0 = None
-        self.t1 = None
+        data = torch.as_tensor(data)
+        if data.dim() == 1:
+            data = data.unsqueeze(1)
+        elif data.dim() > 2:
+            raise ValueError("data must be 1D or 2D tensor")
+
+        self.t0 = None   # shape (channel,)
+        self.t1 = None   # shape (channel,)
+        self.params = None  # dict with A, k, C
+
 
     def find_t0_t1(self, median_window: int = 5):
-        # Derivative
-        derivative = torch.diff(self.data)
-        derivative = median_filter(derivative, median_window)
+        """
+        Find t0, t1 for each channel separately.
+        """
+        T, C = self.data.shape
+        t0s, t1s = [], []
+        for c in range(C):
+            d = torch.diff(self.data[:, c])
+            d = median_filter(d, median_window)
 
-        # Global minimum index
-        t0 = torch.argmin(derivative).item()
+            t0 = torch.argmin(d).item()
+            post = d[t0+1:]
+            nonneg = torch.where(post >= 0)[0]
+            if len(nonneg) > 0:
+                t1 = t0 + 1 + nonneg[0].item()
+            else:
+                t1 = T - 1
+            t0s.append(t0)
+            t1s.append(t1)
 
-        # Search for first non-negative derivative after t0
-        post = derivative[t0+1:]
-        nonneg = torch.where(post >= 0)[0]
+        self.t0 = torch.tensor(t0s)
+        self.t1 = torch.tensor(t1s)
+        return self.t0, self.t1
 
-        if len(nonneg) > 0:
-            t1 = (t0 + 1 + nonneg[0].item())
-        else:
-            t1 = len(self.data) - 1  # last index
-
-        # Store
-        self.t0, self.t1 = t0, t1
-        return t0, t1
 
     def fit_exponential(self, lr=1e-2, steps=1000):
+        """
+        Fit exponential decays for all channels.
+        Shared k, per-channel A and C,
+        each channel restricted to [t0_c, t1_c].
+        """
         if self.t0 is None or self.t1 is None:
             raise RuntimeError("Run find_t0_t1 first.")
 
-        y = self.data[self.t0:self.t1 + 1]
-        x = torch.arange(len(y), device=y.device, dtype=y.dtype)
+        T, C = self.data.shape
+        device, dtype = self.data.device, self.data.dtype
 
-        # Parameters to optimize: A, k, C
-        A = torch.tensor(y.max() - y.min(), device=y.device, dtype=y.dtype, requires_grad=True)
-        k = torch.tensor(0.1, device=y.device, dtype=y.dtype, requires_grad=True)
-        C = torch.tensor(y.min(), device=y.device, dtype=y.dtype, requires_grad=True)
+        # Parameters: per-channel A, C ; shared k
+        A = torch.tensor(self.data.max(dim=0).values - self.data.min(dim=0).values,
+                         device=device, dtype=dtype, requires_grad=True)
+        Cparam = torch.tensor(self.data.min(dim=0).values,
+                              device=device, dtype=dtype, requires_grad=True)
+        k = torch.tensor(0.1, device=device, dtype=dtype, requires_grad=True)
 
-        opt = torch.optim.Adam([A, k, C], lr=lr)
+        opt = torch.optim.Adam([A, Cparam, k], lr=lr)
 
         for _ in range(steps):
             opt.zero_grad()
-            y_pred = A * torch.exp(-k * x) + C
-            loss = torch.mean((y - y_pred) ** 2)
+            loss = 0.0
+            for c in range(C):
+                y = self.data[self.t0[c]:self.t1[c]+1, c]
+                x = torch.arange(len(y), device=device, dtype=dtype)
+                y_pred = A[c] * torch.exp(-k * x) + Cparam[c]
+                loss = loss + torch.mean((y - y_pred) ** 2)
+            loss = loss / C
             loss.backward()
             opt.step()
 
         self.params = {
-            "A": A.detach().item(),
-            "k": k.detach().item(),
-            "C": C.detach().item()
+            "A": A.detach(),
+            "C": Cparam.detach(),
+            "k": k.detach().item()
         }
         return self.params
 
 
     def generate_truncated_exponential(self):
+        """
+        Generate exponential decay curves for each channel,
+        truncated at t0_c and aligned so peak matches.
+        """
+
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
 
-        A, k, C = self.params["A"], self.params["k"], self.params["C"]
+        A, C, k = self.params["A"], self.params["C"], self.params["k"]
+        T, Cdim = self.data.shape
+        device, dtype = self.data.device, self.data.dtype
+        x = torch.arange(T, device=device, dtype=dtype).unsqueeze(1)  # (T, 1)
 
-        # Peak index of real data
-        peak_idx = torch.argmax(self.data).item()
+        exp_curves = torch.empty_like(self.data)
+        for c in range(Cdim):
+            peak_idx = torch.argmax(self.data[:, c]).item()
+            shifted_x = x - peak_idx
+            exp_curves[:, c] = A[c] * torch.exp(-k * torch.clamp(shifted_x, min=0)) + C[c]
 
-        # Time axis for full signal
-        x = torch.arange(len(self.data), device=self.data.device, dtype=self.data.dtype)
-
-        # Shift exponential so that its max is at peak_idx
-        shifted_x = x - peak_idx
-        exp_curve = A * torch.exp(-k * torch.clamp(shifted_x, min=0)) + C
-
-        return exp_curve
+        return exp_curves
