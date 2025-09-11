@@ -1,4 +1,6 @@
 import torch
+import torch.nn.functional as F
+from scipy.signal import fftconvolve
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +45,7 @@ class Birfi:
         return self.t0, self.t1
 
 
-    def fit_exponential(self, lr=1e-2, steps=1000):
+    def fit_exponential(self, offset = 0, lr=1e-2, steps=1000):
         if self.t0 is None or self.t1 is None:
             raise RuntimeError("Run find_t0_t1 first.")
 
@@ -60,7 +62,7 @@ class Birfi:
             opt.zero_grad()
             loss = 0.0
             for c in range(self.C):
-                y = self.data[self.t0[c]:self.t1[c]+1, c]
+                y = self.data[self.t0[c]+offset:self.t1[c]+1, c]
                 x = torch.arange(len(y), device=device, dtype=dtype)
                 y_pred = A[c] * torch.exp(-k * x) + Cparam[c]
                 loss = loss + torch.mean((y - y_pred) ** 2)
@@ -85,32 +87,47 @@ class Birfi:
         self.data_fit = exp_curves
         return exp_curves
 
-
     def plot_raw_and_fit(self):
-        if self.data_fit is None:
-            raise RuntimeError("Generate the fit first using generate_truncated_exponential().")
+        """
+        Plot raw data (points) and fitted exponential (line only in [t0, t1])
+        for each channel in an adaptive grid.
+        """
+        if self.params is None or not hasattr(self, "data_fit"):
+            raise RuntimeError("Run fit_exponential() and generate_truncated_exponential() first.")
 
-        num_channels = self.C
+        num_channels = self.data.shape[1]
         ncols = math.ceil(math.sqrt(num_channels))
         nrows = math.ceil(num_channels / ncols)
-        fig, ax = plt.subplots(nrows, ncols, figsize=(3*ncols, 2.5*nrows), sharex=True, sharey=True)
+
+        fig, ax = plt.subplots(nrows, ncols, figsize=(3 * ncols, 2.5 * nrows), sharex=True, sharey=True)
         ax = np.array(ax).reshape(-1)
 
-        time_np = self.time.cpu().numpy() if isinstance(self.time, torch.Tensor) else self.time
+        time = self.time.numpy()
 
         for n in range(num_channels):
-            ax[n].plot(time_np, self.data[:, n].cpu().numpy(), 'o', markersize=3, color='C0', label='Raw')
-            ax[n].plot(time_np, self.data_fit[:, n].cpu().numpy(), '-', color='C1', label='Fit')
-            ax[n].text(0.5, 0.8, f'channel {n}', transform=ax[n].transAxes, fontsize=8)
-            ax[n].set_xlabel('time (ns)')
-            ax[n].set_ylabel('Intensity')
+            # Raw data as points
+            ax[n].plot(time, self.data[:, n].numpy(), 'o', markersize=3, color='k', label='Raw')
 
+            # Fit curve only in [t0, t1]
+            t0, t1 = int(self.t0[n]), int(self.t1[n])
+            ax[n].plot(time[t0:t1 + 1], self.data_fit[t0:t1 + 1, n].numpy(), '-', color='r', label='Fit')
+
+            # Title = channel index
+            ax[n].set_title(f'Channel {n}', fontsize=9)
+
+            # Labels only on edges
+            if n % ncols == 0:
+                ax[n].set_ylabel('Intensity')
+            if n // ncols == nrows - 1:
+                ax[n].set_xlabel('Time (ns)')
+
+        # Hide empty subplots
         for n in range(num_channels, len(ax)):
             ax[n].axis('off')
 
-        fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(1.05, 0.99))
+        # Shared legend
+        fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(0.95, 0.95))
         fig.tight_layout()
-        plt.show()
 
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
         """
