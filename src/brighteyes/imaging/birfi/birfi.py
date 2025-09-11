@@ -1,5 +1,9 @@
 import torch
 
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+
 from. utils import median_filter
 
 class Birfi:
@@ -85,9 +89,8 @@ class Birfi:
     def generate_truncated_exponential(self):
         """
         Generate exponential decay curves for each channel,
-        truncated at t0_c and aligned so peak matches.
+        truncated at t0_c (zero before t0_c) and aligned with the peak.
         """
-
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
 
@@ -96,10 +99,51 @@ class Birfi:
         device, dtype = self.data.device, self.data.dtype
         x = torch.arange(T, device=device, dtype=dtype).unsqueeze(1)  # (T, 1)
 
-        exp_curves = torch.empty_like(self.data)
+        exp_curves = torch.zeros_like(self.data)
         for c in range(Cdim):
-            peak_idx = torch.argmax(self.data[:, c]).item()
-            shifted_x = x - peak_idx
-            exp_curves[:, c] = A[c] * torch.exp(-k * torch.clamp(shifted_x, min=0)) + C[c]
+            # Create shifted exponential starting at t0[c]
+            start = self.t0[c].item()
+            x_local = torch.arange(T - start, device=device, dtype=dtype)
+            exp_local = A[c] * torch.exp(-k * x_local) + C[c]
+            exp_curves[start:, c] = exp_local  # zero before t0
 
         return exp_curves
+
+
+    def plot_raw_and_fit(self, time=None):
+        """
+        Plot raw data and fitted exponential for each channel in an adaptive grid.
+        Raw data: points, Fit: continuous line.
+        """
+
+        if self.params is None or not hasattr(self, 'data_fit'):
+            raise RuntimeError("Fit the data first and generate fit_curve for all channels.")
+
+        if time is None:
+            time = np.arange(self.data.shape[0])
+
+        num_channels = self.data.shape[1]
+        ncols = math.ceil(math.sqrt(num_channels))
+        nrows = math.ceil(num_channels / ncols)
+
+        fig, ax = plt.subplots(nrows, ncols, figsize=(3*ncols, 2.5*nrows), sharex=True, sharey=True)
+        ax = np.array(ax).reshape(-1)  # flatten for easy indexing
+
+        for n in range(num_channels):
+            # Plot raw as points
+            ax[n].plot(time, self.data[:, n], 'o', markersize=3, color='C0', label='Raw')
+            # Plot fit as line
+            ax[n].plot(time, self.data_fit[:, n], '-', color='C1', label='Fit')
+
+            ax[n].text(0.5, 0.8, f'channel {n}', transform=ax[n].transAxes, fontsize=8)
+            ax[n].set_xlabel('time (ns)')
+            ax[n].set_ylabel('Intensity')
+
+        # Turn off empty subplots
+        for n in range(num_channels, len(ax)):
+            ax[n].axis('off')
+
+        # Single legend
+        fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(1.05, 0.99))
+        fig.tight_layout()
+        plt.show()
