@@ -88,6 +88,7 @@ class Birfi:
         self.data_fit = exp_curves
         return exp_curves
 
+
     def plot_raw_and_fit(self):
         """
         Plot raw data (points) and fitted exponential (line only in [t0, t1])
@@ -130,44 +131,51 @@ class Birfi:
         fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(0.95, 0.95))
         fig.tight_layout()
 
+
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
-        using the fitted truncated exponential as the PSF.
+        using a truncated exponential (starting at zero, no offset) as PSF.
+
         Returns:
             irf: torch.Tensor of shape (time, channel)
         """
-        if self.data_fit is None:
-            raise RuntimeError("Run generate_truncated_exponential() first.")
+        if self.params is None:
+            raise RuntimeError("Run fit_exponential() first.")
 
+        A, C, k = self.params["A"], self.params["C"], self.params["k"]
         irf = torch.zeros_like(self.data)
 
         for c in range(self.C):
-            y = self.data[:, c].clone()
-            psf = self.data_fit[:, c].clone()
-            psf = psf / psf.sum()  # normalize PSF
+            y = self.data[:, c].cpu().numpy().astype(np.float64) - C[c].item()
+            y = np.clip(y, 0, None)
 
-            # Initialize estimate with uniform or small positive values
-            x_est = torch.ones_like(y)
+            # --- PSF: truncated exponential starting at 0 ---
+            #x = np.arange(self.T, dtype=np.float64)
+            #psf = np.exp(-k * x) * A[c].item()
 
-            psf_flip = torch.flip(psf, dims=[0])
+            psf = self.data_fit[:, c].cpu().numpy().astype(np.float64) - C[c].item()
+            psf = np.clip(psf, 0, None)
+            psf /= psf.sum()  # normalize PSF
+
+            # Initialize estimate
+            x_est = np.ones_like(y)
 
             for _ in range(iterations):
-                # Convolve current estimate with PSF
-                conv = F.conv1d(x_est.view(1, 1, -1), psf.view(1, 1, -1), padding=0).view(-1)
-                conv = torch.clamp(conv, min=eps)
+                conv = fftconvolve(x_est, psf, mode="same")
+                conv = np.clip(conv, eps, None)  # avoid div by 0
                 relative_blur = y / conv
-                # Convolve relative_blur with flipped PSF
-                correction = F.conv1d(relative_blur.view(1, 1, -1), psf_flip.view(1, 1, -1), padding=0).view(-1)
-                x_est = x_est * correction
-                x_est = torch.clamp(x_est, min=0.0)
+                correction = fftconvolve(relative_blur, psf[::-1], mode="same")
+                x_est *= correction
+                x_est = np.clip(x_est, 0, None)  # enforce positivity
 
-            irf[:, c] = x_est
+            irf[:, c] = torch.from_numpy(x_est.astype(np.float32)).to(self.data.device)
 
         self.irf = irf
+        return self.irf
 
 
-    def run(self, lr=1e-2, steps=1000, rl_iterations=50):
+    def run(self, lr=1e-2, steps=1000, rl_iterations=200):
         """
         Complete pipeline to generate IRF:
         1. Find t0, t1 per channel
@@ -183,3 +191,57 @@ class Birfi:
         self.fit_exponential(lr=lr, steps=steps)
         self.generate_truncated_exponential()
         self.richardson_lucy_deconvolution(iterations=rl_iterations)
+
+
+    def plot_forward_model(self):
+        """
+        Convolve estimated IRFs with fitted truncated exponential
+        and plot them against the input data, per channel.
+        """
+
+        if self.irf is None:
+            raise RuntimeError("Run richardson_lucy_deconvolution() first.")
+        if self.data_fit is None:
+            raise RuntimeError("Run generate_truncated_exponential() first.")
+
+        from scipy.signal import fftconvolve
+
+        num_channels = self.C
+        ncols = math.ceil(math.sqrt(num_channels))
+        nrows = math.ceil(num_channels / ncols)
+
+        fig, ax = plt.subplots(nrows, ncols, figsize=(3 * ncols, 2.5 * nrows))#, sharex=True, sharey=True)
+        ax = np.array(ax).reshape(-1)
+
+        time = self.time.cpu().numpy()
+
+        for c in range(num_channels):
+            y_true = self.data[:, c].cpu().numpy()
+            irf = self.irf[:, c].cpu().numpy()
+            psf = self.data_fit[:, c].cpu().numpy()
+            psf /= psf.sum() + 1e-12
+
+            # Forward convolution (same length as data)
+            y_recon = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
+
+            # Plot measured data (points)
+            ax[c].plot(time, y_true, "o", markersize=3, color="k", label="Measured")
+
+            # Plot forward model (line)
+            ax[c].plot(time, y_recon, "-", color="g", label="IRF ⊗ Exp")
+
+            ax[c].set_title(f"Channel {c}", fontsize=9)
+            if c % ncols == 0:
+                ax[c].set_ylabel("Intensity")
+            if c // ncols == nrows - 1:
+                ax[c].set_xlabel("Time (ns)")
+
+        # Hide unused subplots
+        for c in range(num_channels, len(ax)):
+            ax[c].axis("off")
+
+        # Shared legend
+        handles, labels = ax[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="upper right", bbox_to_anchor=(0.95, 0.95))
+        fig.tight_layout()
+        plt.show()
