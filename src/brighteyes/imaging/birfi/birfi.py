@@ -18,6 +18,7 @@ class Birfi:
             raise ValueError("data must be 1D or 2D tensor")
 
         self.dt = dt
+        self.time = torch.arange(self.data.shape[0]) * dt
 
         self.t0 = None   # shape (channel,)
         self.t1 = None   # shape (channel,)
