@@ -8,12 +8,16 @@ from. utils import median_filter
 
 class Birfi:
 
-    def __init__(self, data):
+    def __init__(self, data: torch.tensor, dt: float = 1.0):
         data = torch.as_tensor(data)
         if data.dim() == 1:
-            data = data.unsqueeze(1)
+            self.data = data.unsqueeze(1).clone()
+        elif data.dim() == 2:
+            self.data = data.clone()
         elif data.dim() > 2:
             raise ValueError("data must be 1D or 2D tensor")
+
+        self.dt = dt
 
         self.t0 = None   # shape (channel,)
         self.t1 = None   # shape (channel,)
