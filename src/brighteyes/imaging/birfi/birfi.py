@@ -26,7 +26,8 @@ class Birfi:
         self.t0 = None   # shape (channel,)
         self.t1 = None   # shape (channel,)
         self.params = None  # dict with A, k, C
-        self.data_fit = None
+        self.data_fit = None # shape (time, channel)
+        self.irf = None  # shape (time, channel)
 
 
     def find_t0_t1(self, median_window: int = 5):
@@ -163,7 +164,8 @@ class Birfi:
 
             irf[:, c] = x_est
 
-        return irf
+        self.irf = irf
+
 
     def run(self, lr=1e-2, steps=1000, rl_iterations=50):
         """
@@ -176,8 +178,8 @@ class Birfi:
         Returns:
             irf: torch.Tensor of shape (time, channel)
         """
+
         self.find_t0_t1()
         self.fit_exponential(lr=lr, steps=steps)
         self.generate_truncated_exponential()
-        irf = self.richardson_lucy_deconvolution(iterations=rl_iterations)
-        return irf
+        self.richardson_lucy_deconvolution(iterations=rl_iterations)
