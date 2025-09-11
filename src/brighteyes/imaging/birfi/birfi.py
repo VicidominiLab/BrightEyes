@@ -111,3 +111,56 @@ class Birfi:
         fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(1.05, 0.99))
         fig.tight_layout()
         plt.show()
+
+    def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
+        """
+        Perform Richardson-Lucy deconvolution on each channel of self.data
+        using the fitted truncated exponential as the PSF.
+        Returns:
+            irf: torch.Tensor of shape (time, channel)
+        """
+        if self.data_fit is None:
+            raise RuntimeError("Run generate_truncated_exponential() first.")
+
+        irf = torch.zeros_like(self.data)
+
+        for c in range(self.C):
+            y = self.data[:, c].clone()
+            psf = self.data_fit[:, c].clone()
+            psf = psf / psf.sum()  # normalize PSF
+
+            # Initialize estimate with uniform or small positive values
+            x_est = torch.ones_like(y)
+
+            psf_flip = torch.flip(psf, dims=[0])
+
+            for _ in range(iterations):
+                # Convolve current estimate with PSF
+                conv = F.conv1d(x_est.view(1, 1, -1), psf.view(1, 1, -1), padding=0).view(-1)
+                conv = torch.clamp(conv, min=eps)
+                relative_blur = y / conv
+                # Convolve relative_blur with flipped PSF
+                correction = F.conv1d(relative_blur.view(1, 1, -1), psf_flip.view(1, 1, -1), padding=0).view(-1)
+                x_est = x_est * correction
+                x_est = torch.clamp(x_est, min=0.0)
+
+            irf[:, c] = x_est
+
+        return irf
+
+    def run(self, lr=1e-2, steps=1000, rl_iterations=50):
+        """
+        Complete pipeline to generate IRF:
+        1. Find t0, t1 per channel
+        2. Fit truncated exponential
+        3. Generate truncated exponential
+        4. Perform Richardson-Lucy deconvolution
+
+        Returns:
+            irf: torch.Tensor of shape (time, channel)
+        """
+        self.find_t0_t1()
+        self.fit_exponential(lr=lr, steps=steps)
+        self.generate_truncated_exponential()
+        irf = self.richardson_lucy_deconvolution(iterations=rl_iterations)
+        return irf
