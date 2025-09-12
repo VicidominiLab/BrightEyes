@@ -51,11 +51,9 @@ class Birfi:
 
         device, dtype = self.data.device, self.data.dtype
         # Parameters: per-channel A, C ; shared k
-        A = torch.tensor(self.data.max(dim=0).values - self.data.min(dim=0).values,
-                         device=device, dtype=dtype, requires_grad=True)
+        A = (self.data.max(dim=0).values - self.data.min(dim=0).values).clone().detach().requires_grad_(True)
 
-        Cparam = torch.tensor(self.data.min(dim=0).values,
-                              device=device, dtype=dtype, requires_grad=True)
+        Cparam = self.data.min(dim=0).values.clone().detach().requires_grad_(True)
 
         k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True)
 
@@ -216,6 +214,7 @@ class Birfi:
         for c in range(self.C):
             irf = self.irf[:, c].cpu().numpy()
             forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
+            forward[:, c] += self.params["C"][c].item()
 
         # First, plot raw data as scatter
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')

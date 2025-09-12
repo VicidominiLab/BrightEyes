@@ -20,9 +20,10 @@ bkg_level = 0.30        # background strength
 
 time = torch.arange(T, dtype=torch.float32) * dt
 
-#%% --- Simulate narrow Gaussian IRFs ---
+#%% --- Simulate multi-Gaussian IRFs ---
 
 torch.manual_seed(0)  # reproducibility
+
 irfs = torch.zeros(T, C)
 for c in range(C):
     peak_idx = torch.randint(80, 120, (1,)).item()   # random peak location
@@ -68,7 +69,7 @@ _ = plot_dataset(time.numpy(), data)
 #%% --- Initialize Birfi and run pipeline ---
 
 b = Birfi(data, dt=dt)
-b.run(lr=5e-2, steps=2000, rl_iterations=500)
+b.run(lr=5e-2, steps=2000, rl_iterations=50)
 
 retrieved_irf  = b.irf
 
