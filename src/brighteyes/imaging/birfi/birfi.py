@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-from. utils import median_filter
+from. utils import median_filter, generate_truncated_exponential
 
 class Birfi:
 
@@ -76,15 +76,25 @@ class Birfi:
 
 
     def generate_truncated_exponential(self):
+        """
+        Generate truncated exponential fits for all channels using fitted parameters.
+        Stores result in self.data_fit.
+        """
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
-        A, C, k = self.params["A"], self.params["C"], self.params["k"]
+
         exp_curves = torch.zeros_like(self.data)
+        k = self.params["k"]
+
         for c in range(self.C):
-            start = self.t0[c].item()
-            x_local = torch.arange(self.T - start, device=self.data.device, dtype=self.data.dtype)
-            exp_local = A[c] * torch.exp(-k * x_local) + C[c]
-            exp_curves[start:, c] = exp_local
+            params = {
+                "A": self.params["A"][c],
+                "C": self.params["C"][c],
+                "k": k,
+                "t0": int(self.t0[c]),
+            }
+            exp_curves[:, c] = generate_truncated_exponential(self.time, params)
+
         self.data_fit = exp_curves
         return exp_curves
 
