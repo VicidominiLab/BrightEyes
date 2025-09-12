@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def pad_tensor(x: torch.Tensor, pad_left: int, pad_right: int, dim: int, mode: str = "reflect"):
@@ -110,3 +111,43 @@ def generate_truncated_exponential(t, params):
     )
 
     return y
+
+def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey = True, figsize = None,
+                 xlabel = 'Time (ns)', ylabel = 'Intensity'):
+
+    """
+    Plot all channels of a 2D dataset.
+
+    Args:
+        dset (torch.Tensor or np.ndarray): 2D array of shape (T, C) where T is number of time points and C is number of channels.
+        color (str, optional): Line color. Default is 'C0'.
+        linestyle (str, optional): Line style. Default is 'solid'.
+        sharex (bool, optional): Whether to share x-axis among subplots. Default is True.
+        sharey (bool, optional): Whether to share y-axis among subplots. Default is True.
+        figsize (tuple, optional): Figure size as (width, height). Default is None, which lets matplotlib choose.
+    Returns:
+    """
+
+    if np.ndim(y) != 2:
+        raise ValueError("y must be a 2D array")
+
+    T, C = y.shape
+    nrows = int(np.ceil(np.sqrt(C)))
+    ncols = int(np.ceil(C / nrows))
+
+    fig, ax = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows))
+    ax = np.array(ax).reshape(-1)
+
+    for c in range(C):
+        ax[c].plot(x, y[:, c], '-', color='C0')
+        ax[c].set_title(f"Channel {c}")
+        if c % ncols == 0:
+            ax[c].set_ylabel(ylabel)
+        if c // ncols == nrows - 1:
+            ax[c].set_xlabel(xlabel)
+
+    for c in range(C, len(ax)):
+        ax[c].axis('off')
+
+    fig.tight_layout()
+    plt.show()

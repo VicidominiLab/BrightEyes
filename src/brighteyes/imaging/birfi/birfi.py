@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from scipy.signal import fftconvolve
 
 import matplotlib.pyplot as plt
@@ -216,8 +215,6 @@ class Birfi:
             raise RuntimeError("Run richardson_lucy_deconvolution() first.")
         if self.data_fit is None:
             raise RuntimeError("Run generate_truncated_exponential() first.")
-
-        from scipy.signal import fftconvolve
 
         num_channels = self.C
         ncols = math.ceil(math.sqrt(num_channels))
