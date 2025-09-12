@@ -113,8 +113,8 @@ def generate_truncated_exponential(t, params):
     return y
 
 
-def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey = True, figsize = None,
-                 xlabel = 'Time (ns)', ylabel = 'Intensity', fig = None, ax = None):
+def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex = True, sharey = True, figsize = None,
+                 xlabel = 'Time (ns)', ylabel = 'Intensity',fig = None, ax = None):
     """
     Plot all channels of a 2D dataset in a single figure.
 
@@ -123,6 +123,7 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey 
         y (np.ndarray): 2D array of shape (T, C) where T is number of samples and C is number of channels.
         color (str, optional): Line color. Default is 'C0'.
         linestyle (str, optional): Line style. Default is 'solid'.
+        marker (str, optional): Marker style. Default is None (no markers).
         sharex (bool, optional): Whether to share x-axis among subplots. Default is True.
         sharey (bool, optional): Whether to share y-axis among subplots. Default is True.
         figsize (tuple, optional): Figure size as (width, height). Default is None, which lets matplotlib choose.
@@ -150,7 +151,7 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey 
     ax = np.array(ax).reshape(-1)
 
     for c in range(C):
-        ax[c].plot(x, y[:, c], color=color, linestyle=linestyle)
+        ax[c].plot(x, y[:, c], color=color, linestyle=linestyle, marker=marker)
         ax[c].set_title(f"Channel {c}")
         if c % ncols == 0:
             ax[c].set_ylabel(ylabel)

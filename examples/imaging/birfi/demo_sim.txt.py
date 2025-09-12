@@ -23,7 +23,7 @@ time = torch.arange(T, dtype=torch.float32) * dt
 torch.manual_seed(0)  # reproducibility
 irfs = torch.zeros(T, C)
 for c in range(C):
-    peak_idx = torch.randint(10, 50, (1,)).item()   # random peak location
+    peak_idx = torch.randint(80, 120, (1,)).item()   # random peak location
     sigma = 3
     t = torch.arange(T)
     irf = torch.exp(-0.5 * ((t - peak_idx)/sigma)**2)
@@ -35,12 +35,12 @@ for c in range(C):
 
 data = np.zeros((T, C))
 for c in range(C):
-    peak_idx =  0 #T//2
+    peak_idx =  T//2
     x_exp = np.zeros(T)
     x_local = np.arange(T - peak_idx)
     x_exp[peak_idx:] = np.exp(-true_k * x_local)  # truncated exponential
     # Convolve using fftconvolve
-    conv = fftconvolve(irfs[:, c], x_exp, mode='full')[:T]  # take first T points
+    conv = fftconvolve(irfs[:, c], x_exp, mode='same')  # take first T points
     data[:, c] = conv
     data[:, c] += noise_level * np.random.randn(T)          # add noise
 

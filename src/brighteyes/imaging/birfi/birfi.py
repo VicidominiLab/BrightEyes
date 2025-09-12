@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-from. utils import median_filter, generate_truncated_exponential
+from. utils import median_filter, generate_truncated_exponential, plot_dataset
 
 class Birfi:
 
@@ -101,49 +101,6 @@ class Birfi:
         return exp_curves
 
 
-    def plot_raw_and_fit(self):
-        """
-        Plot raw data (points) and fitted exponential (line only in [t0, t1])
-        for each channel in an adaptive grid.
-        """
-        if self.params is None or not hasattr(self, "data_fit"):
-            raise RuntimeError("Run fit_exponential() and generate_truncated_exponential() first.")
-
-        num_channels = self.data.shape[1]
-        ncols = math.ceil(math.sqrt(num_channels))
-        nrows = math.ceil(num_channels / ncols)
-
-        fig, ax = plt.subplots(nrows, ncols, figsize=(3 * ncols, 2.5 * nrows), sharex=True, sharey=True)
-        ax = np.array(ax).reshape(-1)
-
-        time = self.time.numpy()
-
-        for n in range(num_channels):
-            # Raw data as points
-            ax[n].plot(time, self.data[:, n].numpy(), 'o', markersize=3, color='k', label='Raw')
-
-            # Fit curve only in [t0, t1]
-            t0, t1 = int(self.t0[n]), int(self.t1[n])
-            ax[n].plot(time[t0+1:t1 + 1], self.data_fit[t0+1:t1 + 1, n].numpy(), '-', color='r', label='Fit')
-
-            # Title = channel index
-            ax[n].set_title(f'Channel {n}', fontsize=9)
-
-            # Labels only on edges
-            if n % ncols == 0:
-                ax[n].set_ylabel('Intensity')
-            if n // ncols == nrows - 1:
-                ax[n].set_xlabel('Time (ns)')
-
-        # Hide empty subplots
-        for n in range(num_channels, len(ax)):
-            ax[n].axis('off')
-
-        # Shared legend
-        fig.legend(['Raw', 'Fit'], loc='upper right', bbox_to_anchor=(0.95, 0.95))
-        fig.tight_layout()
-
-
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
@@ -205,6 +162,29 @@ class Birfi:
         self.richardson_lucy_deconvolution(iterations=rl_iterations)
 
 
+    def plot_raw_and_fit(self):
+        """
+        Plot raw data (points) and fitted exponential (line only in [t0, t1])
+        for each channel.
+        """
+
+        if self.params is None or not hasattr(self, "data_fit"):
+            raise RuntimeError("Run fit_exponential() and generate_truncated_exponential() first.")
+
+        time = self.time.cpu().numpy()
+        raw = self.data.cpu().numpy()
+        fit = self.data_fit.cpu().numpy()
+
+        # First, plot raw data as scatter (points)
+        fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
+        for c in range(self.C):
+            ax[c].plot(time[int(self.t0[c]):int(self.t1[c]) + 1],
+                       fit[int(self.t0[c]):int(self.t1[c]) + 1, c],
+                       color="r", linestyle="-")
+
+        fig.legend(["Raw", "Fit"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
+
+
     def plot_forward_model(self):
         """
         Convolve estimated IRFs with fitted truncated exponential
@@ -216,42 +196,20 @@ class Birfi:
         if self.data_fit is None:
             raise RuntimeError("Run generate_truncated_exponential() first.")
 
-        num_channels = self.C
-        ncols = math.ceil(math.sqrt(num_channels))
-        nrows = math.ceil(num_channels / ncols)
-
-        fig, ax = plt.subplots(nrows, ncols, figsize=(3 * ncols, 2.5 * nrows))#, sharex=True, sharey=True)
-        ax = np.array(ax).reshape(-1)
-
         time = self.time.cpu().numpy()
+        raw = self.data.cpu().numpy()
+        forward = np.zeros_like(raw)
 
-        for c in range(num_channels):
-            y_true = self.data[:, c].cpu().numpy()
+        for c in range(self.C):
             irf = self.irf[:, c].cpu().numpy()
             psf = self.data_fit[:, c].cpu().numpy()
             psf /= psf.sum() + 1e-12
+            forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
 
-            # Forward convolution (same length as data)
-            y_recon = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
+        # First, plot raw data as scatter
+        fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
+        # Then add forward model as line
+        for c in range(self.C):
+            ax[c].plot(time, forward[:, c], color="g", linestyle="-")
 
-            # Plot measured data (points)
-            ax[c].plot(time, y_true, "o", markersize=3, color="k", label="Measured")
-
-            # Plot forward model (line)
-            ax[c].plot(time, y_recon, "-", color="g", label="IRF ⊗ Exp")
-
-            ax[c].set_title(f"Channel {c}", fontsize=9)
-            if c % ncols == 0:
-                ax[c].set_ylabel("Intensity")
-            if c // ncols == nrows - 1:
-                ax[c].set_xlabel("Time (ns)")
-
-        # Hide unused subplots
-        for c in range(num_channels, len(ax)):
-            ax[c].axis("off")
-
-        # Shared legend
-        handles, labels = ax[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="upper right", bbox_to_anchor=(0.95, 0.95))
-        fig.tight_layout()
-        plt.show()
+        fig.legend(["Measured", "IRF ⊗ Exp"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
