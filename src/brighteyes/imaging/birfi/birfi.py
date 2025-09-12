@@ -26,6 +26,7 @@ class Birfi:
         self.t1 = None   # shape (channel,)
         self.params = None  # dict with A, k, C
         self.data_fit = None # shape (time, channel)
+        self.kernel = None  # shape (time, channel)
         self.irf = None  # shape (time, channel)
 
 
@@ -42,7 +43,6 @@ class Birfi:
             t1s.append(t1)
         self.t0 = torch.tensor(t0s)
         self.t1 = torch.tensor(t1s)
-        return self.t0, self.t1
 
 
     def fit_exponential(self, offset = 0, lr=1e-2, steps=1000):
@@ -75,10 +75,9 @@ class Birfi:
             opt.step()
 
         self.params = {"A": A.detach(), "C": Cparam.detach(), "k": k.detach().item()}
-        return self.params
 
 
-    def generate_truncated_exponential(self):
+    def generate_data_fit(self):
         """
         Generate truncated exponential fits for all channels using fitted parameters.
         Stores result in self.data_fit.
@@ -98,7 +97,30 @@ class Birfi:
             exp_curves[:, c] = generate_truncated_exponential(self.time, params)
 
         self.data_fit = exp_curves
-        return exp_curves
+
+
+    def generate_kernel(self):
+        """
+        Generate exponential decays to be used for deconvolution.
+        Stores result in self.kernel.
+        """
+        if self.params is None:
+            raise RuntimeError("Run fit_exponential first.")
+
+        exp_curves = torch.zeros_like(self.data)
+
+        for c in range(self.C):
+            params = {
+                "A": 1,
+                "C": 0,
+                "k": self.params["k"],
+                "t0": 0,
+            }
+            exp_curves[:, c] = generate_truncated_exponential(self.time, params)
+            exp_curves[:, c] = torch.clamp(exp_curves[:, c], min=0) # enforce positivity
+            exp_curves[:, c] /= exp_curves[:, c].sum()  # normalize kernel
+
+        self.kernel = exp_curves
 
 
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
@@ -123,9 +145,12 @@ class Birfi:
             #x = np.arange(self.T, dtype=np.float64)
             #psf = np.exp(-k * x) * A[c].item()
 
-            psf = self.data_fit[:, c].cpu().numpy().astype(np.float64) - C[c].item()
-            psf = np.clip(psf, 0, None)
-            psf /= psf.sum()  # normalize PSF
+            #psf = self.data_fit[:, c].cpu().numpy().astype(np.float64) - C[c].item()
+
+            psf = self.kernel[:, c].cpu().numpy().astype(np.float64)
+
+            #psf = np.clip(psf, 0, None)
+            #psf /= psf.sum()  # normalize PSF
 
             # Initialize estimate
             x_est = np.ones_like(y)
@@ -141,7 +166,6 @@ class Birfi:
             irf[:, c] = torch.from_numpy(x_est.astype(np.float32)).to(self.data.device)
 
         self.irf = irf
-        return self.irf
 
 
     def run(self, lr=1e-2, steps=1000, rl_iterations=200):
@@ -158,7 +182,8 @@ class Birfi:
 
         self.find_t0_t1()
         self.fit_exponential(lr=lr, steps=steps)
-        self.generate_truncated_exponential()
+        self.generate_data_fit()
+        self.generate_kernel()
         self.richardson_lucy_deconvolution(iterations=rl_iterations)
 
 
@@ -169,7 +194,7 @@ class Birfi:
         """
 
         if self.params is None or not hasattr(self, "data_fit"):
-            raise RuntimeError("Run fit_exponential() and generate_truncated_exponential() first.")
+            raise RuntimeError("Run fit_exponential() and generate_data_fit() first.")
 
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
@@ -193,8 +218,8 @@ class Birfi:
 
         if self.irf is None:
             raise RuntimeError("Run richardson_lucy_deconvolution() first.")
-        if self.data_fit is None:
-            raise RuntimeError("Run generate_truncated_exponential() first.")
+        if self.kernel is None:
+            raise RuntimeError("Run generate_kernel() first.")
 
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
@@ -202,7 +227,7 @@ class Birfi:
 
         for c in range(self.C):
             irf = self.irf[:, c].cpu().numpy()
-            psf = self.data_fit[:, c].cpu().numpy()
+            psf = self.kernel[:, c].cpu().numpy()
             psf /= psf.sum() + 1e-12
             forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
 
