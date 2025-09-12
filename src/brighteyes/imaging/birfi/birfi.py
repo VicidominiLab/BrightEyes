@@ -222,7 +222,7 @@ class Birfi:
         # First, plot raw data as scatter
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
         # Then add forward model as line
-        for c in range(self.C):
-            ax[c].plot(time, forward[:, c], color="g", linestyle="-")
+        fig, ax = plot_dataset(time, forward, color="g", linestyle="-", fig =fig, ax=ax)
+
 
         fig.legend(["Measured", "IRF ⊗ Exp"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
