@@ -113,19 +113,25 @@ def generate_truncated_exponential(t, params):
     return y
 
 def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey = True, figsize = None,
-                 xlabel = 'Time (ns)', ylabel = 'Intensity'):
+                 xlabel = 'Time (ns)', ylabel = 'Intensity', fig = None, ax = None):
 
     """
-    Plot all channels of a 2D dataset.
+    Plot all channels of a 2D dataset in a single figure.
 
     Args:
-        dset (torch.Tensor or np.ndarray): 2D array of shape (T, C) where T is number of time points and C is number of channels.
+        x (np.ndarray): 1D array of shape (T,) where T is number of samples.
+        y (np.ndarray): 2D array of shape (T, C) where T is number of samples and C is number of channels.
         color (str, optional): Line color. Default is 'C0'.
         linestyle (str, optional): Line style. Default is 'solid'.
         sharex (bool, optional): Whether to share x-axis among subplots. Default is True.
         sharey (bool, optional): Whether to share y-axis among subplots. Default is True.
         figsize (tuple, optional): Figure size as (width, height). Default is None, which lets matplotlib choose.
+        xlabel (str, optional): Label for x-axis. Default is 'Time (ns)'.
+        ylabel (str, optional): Label for y-axis. Default is 'Intensity'.
+        fig, ax (optional): Matplotlib figure and axes to plot on. If None, a new figure is created.
+
     Returns:
+        fig, ax: Matplotlib figure and axes array.
     """
 
     if np.ndim(y) != 2:
@@ -135,11 +141,16 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey 
     nrows = int(np.ceil(np.sqrt(C)))
     ncols = int(np.ceil(C / nrows))
 
-    fig, ax = plt.subplots(nrows, ncols, figsize=(4 * ncols, 3 * nrows))
+    if figsize is None:
+        figsize = (4 * ncols, 3 * nrows)
+
+    if fig is None or ax is None:
+        fig, ax = plt.subplots(nrows, ncols, sharex=sharex, sharey=sharey, figsize=figsize)
+
     ax = np.array(ax).reshape(-1)
 
     for c in range(C):
-        ax[c].plot(x, y[:, c], '-', color='C0')
+        ax[c].plot(x, y[:, c], '-', color=color, linestyle=linestyle)
         ax[c].set_title(f"Channel {c}")
         if c % ncols == 0:
             ax[c].set_ylabel(ylabel)
@@ -151,3 +162,5 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey 
 
     fig.tight_layout()
     plt.show()
+
+    return fig, ax
