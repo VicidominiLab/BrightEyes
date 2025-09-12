@@ -107,18 +107,16 @@ class Birfi:
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
 
-        exp_curves = torch.zeros_like(self.data)
+        params = {
+            "A": 1,
+            "C": 0,
+            "k": self.params["k"],
+            "t0": 0,
+        }
 
-        for c in range(self.C):
-            params = {
-                "A": 1,
-                "C": 0,
-                "k": self.params["k"],
-                "t0": 0,
-            }
-            exp_curves[:, c] = generate_truncated_exponential(self.time, params)
-            exp_curves[:, c] = torch.clamp(exp_curves[:, c], min=0) # enforce positivity
-            exp_curves[:, c] /= exp_curves[:, c].sum()  # normalize kernel
+        exp_curve = generate_truncated_exponential(self.time, params)
+        exp_curves = torch.clamp(exp_curve, min=0) # enforce positivity
+        exp_curve /= exp_curve.sum()  # normalize kernel
 
         self.kernel = exp_curves
 
@@ -136,21 +134,11 @@ class Birfi:
 
         A, C, k = self.params["A"], self.params["C"], self.params["k"]
         irf = torch.zeros_like(self.data)
+        psf = self.kernel.cpu().numpy().astype(np.float64)
 
         for c in range(self.C):
             y = self.data[:, c].cpu().numpy().astype(np.float64) - C[c].item()
             y = np.clip(y, 0, None)
-
-            # --- PSF: truncated exponential starting at 0 ---
-            #x = np.arange(self.T, dtype=np.float64)
-            #psf = np.exp(-k * x) * A[c].item()
-
-            #psf = self.data_fit[:, c].cpu().numpy().astype(np.float64) - C[c].item()
-
-            psf = self.kernel[:, c].cpu().numpy().astype(np.float64)
-
-            #psf = np.clip(psf, 0, None)
-            #psf /= psf.sum()  # normalize PSF
 
             # Initialize estimate
             x_est = np.ones_like(y)
@@ -225,9 +213,10 @@ class Birfi:
         raw = self.data.cpu().numpy()
         forward = np.zeros_like(raw)
 
+        psf = self.kernel.cpu().numpy()
+
         for c in range(self.C):
             irf = self.irf[:, c].cpu().numpy()
-            psf = self.kernel[:, c].cpu().numpy()
             forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
 
         # First, plot raw data as scatter

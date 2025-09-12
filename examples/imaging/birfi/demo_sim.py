@@ -59,7 +59,7 @@ _ = plot_dataset(time.numpy(), data)
 #%% --- Initialize Birfi and run pipeline ---
 
 b = Birfi(data, dt=dt)
-b.run(lr=5e-2, steps=2000, rl_iterations=1000)
+b.run(lr=5e-2, steps=2000, rl_iterations=50)
 
 retrieved_irf  = b.irf
 
