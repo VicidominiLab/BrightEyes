@@ -55,7 +55,7 @@ class Birfi:
 
         Cparam = self.data.min(dim=0).values.clone().detach().requires_grad_(True)
 
-        k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True)
+        k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True) # TODO: do a better initial guess using the time difference between the peak and 1/e
 
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
 
