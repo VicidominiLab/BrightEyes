@@ -114,7 +114,7 @@ def generate_truncated_exponential(t, params):
 
 
 def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex = True, sharey = True, figsize = None,
-                 xlabel = 'Time (ns)', ylabel = 'Intensity',fig = None, ax = None):
+                 xlabel = 'Time (ns)', ylabel = 'Intensity', fig = None, ax = None):
     """
     Plot all channels of a 2D dataset in a single figure.
 
@@ -129,7 +129,8 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex 
         figsize (tuple, optional): Figure size as (width, height). Default is None, which lets matplotlib choose.
         xlabel (str, optional): Label for x-axis. Default is 'Time (ns)'.
         ylabel (str, optional): Label for y-axis. Default is 'Intensity'.
-        fig, ax (optional): Matplotlib figure and axes to plot on. If None, a new figure is created.
+        fig (optional): Matplotlib figure to plot on. If None, a new figure is created.
+        ax (optional): Matplotlib axes array to plot on. If None, a new figure is created.
 
     Returns:
         fig, ax: Matplotlib figure and axes array.
