@@ -228,7 +228,6 @@ class Birfi:
         for c in range(self.C):
             irf = self.irf[:, c].cpu().numpy()
             psf = self.kernel[:, c].cpu().numpy()
-            psf /= psf.sum() + 1e-12
             forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
 
         # First, plot raw data as scatter
