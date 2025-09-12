@@ -28,6 +28,8 @@ for c in range(C):
     sigma = 3
     t = torch.arange(T)
     irf = torch.exp(-0.5 * ((t - peak_idx)/sigma)**2)
+    peak_idx_2 = peak_idx + torch.randint(-10, 10, (1,)).item()   # random peak location
+    irf +=0.7 * torch.exp(-0.5 * ((t - peak_idx_2)/sigma)**2)
     irf /= irf.sum()  # normalize
     irfs[:, c] = irf
 
