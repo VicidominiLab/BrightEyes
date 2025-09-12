@@ -1,7 +1,6 @@
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-import torch.nn.functional as F
 from scipy.signal import fftconvolve
 
 from birfi.birfi import Birfi
@@ -36,7 +35,7 @@ for c in range(C):
 
 data = np.zeros((T, C))
 for c in range(C):
-    peak_idx =  10 #T//2
+    peak_idx =  0 #T//2
     x_exp = np.zeros(T)
     x_local = np.arange(T - peak_idx)
     x_exp[peak_idx:] = np.exp(-true_k * x_local)  # truncated exponential

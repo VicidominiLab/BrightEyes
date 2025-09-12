@@ -54,18 +54,22 @@ class Birfi:
         # Parameters: per-channel A, C ; shared k
         A = torch.tensor(self.data.max(dim=0).values - self.data.min(dim=0).values,
                          device=device, dtype=dtype, requires_grad=True)
+
         Cparam = torch.tensor(self.data.min(dim=0).values,
                               device=device, dtype=dtype, requires_grad=True)
-        k = torch.tensor(0.1, device=device, dtype=dtype, requires_grad=True)
+
+        k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True)
+
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
+
 
         for _ in range(steps):
             opt.zero_grad()
             loss = 0.0
             for c in range(self.C):
                 y = self.data[self.t0[c]+offset:self.t1[c]+1, c]
-                x = torch.arange(len(y), device=device, dtype=dtype)
-                y_pred = A[c] * torch.exp(-k * x) + Cparam[c]
+                x = torch.arange(len(y), device=device, dtype=dtype) * self.dt
+                y_pred = A[c] * torch.exp(-k * x ) + Cparam[c]
                 loss = loss + torch.mean((y - y_pred) ** 2)
             loss = loss / self.C
             loss.backward()
@@ -84,14 +88,13 @@ class Birfi:
             raise RuntimeError("Run fit_exponential first.")
 
         exp_curves = torch.zeros_like(self.data)
-        k = self.params["k"]
 
         for c in range(self.C):
             params = {
                 "A": self.params["A"][c],
                 "C": self.params["C"][c],
-                "k": k,
-                "t0": int(self.t0[c]),
+                "k": self.params["k"],
+                "t0": int(self.t0[c])*self.dt,
             }
             exp_curves[:, c] = generate_truncated_exponential(self.time, params)
 
@@ -122,7 +125,7 @@ class Birfi:
 
             # Fit curve only in [t0, t1]
             t0, t1 = int(self.t0[n]), int(self.t1[n])
-            ax[n].plot(time[t0:t1 + 1], self.data_fit[t0:t1 + 1, n].numpy(), '-', color='r', label='Fit')
+            ax[n].plot(time[t0+1:t1 + 1], self.data_fit[t0+1:t1 + 1, n].numpy(), '-', color='r', label='Fit')
 
             # Title = channel index
             ax[n].set_title(f'Channel {n}', fontsize=9)

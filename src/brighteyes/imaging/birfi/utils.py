@@ -102,6 +102,11 @@ def generate_truncated_exponential(t, params):
     A, k, C, t0 = params["A"], params["k"], params["C"], params["t0"]
 
     t = torch.as_tensor(t)
-    y = torch.where(t >= t0, A * np.exp(-(t - t0) * k ) + C, C)
+
+    y = torch.where(
+        t >= t0,
+        A * torch.exp(-(t - t0) * k) + C,
+        torch.ones_like(t) * C
+    )
 
     return y
