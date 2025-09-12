@@ -111,7 +111,7 @@ class Birfi:
             "A": 1,
             "C": 0,
             "k": self.params["k"],
-            "t0": 0,
+            "t0": 0,  #(self.T // 2) * self.dt,
         }
 
         exp_curve = generate_truncated_exponential(self.time, params)
@@ -190,10 +190,8 @@ class Birfi:
 
         # First, plot raw data as scatter (points)
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
-        for c in range(self.C):
-            ax[c].plot(time[int(self.t0[c]):int(self.t1[c]) + 1],
-                       fit[int(self.t0[c]):int(self.t1[c]) + 1, c],
-                       color="r", linestyle="-")
+        fig, ax = plot_dataset(time, fit, color="r", linestyle="-", fig = fig, ax=ax)
+
 
         fig.legend(["Raw", "Fit"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
 

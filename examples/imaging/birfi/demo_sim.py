@@ -16,6 +16,7 @@ C = 9                 # number of channels
 dt = 0.01              # time step
 true_k = 0.1           # shared decay rate
 noise_level = 0.00     # additive noise
+bkg_level = 0.30        # background strength
 
 time = torch.arange(T, dtype=torch.float32) * dt
 
@@ -48,6 +49,7 @@ for c in range(C):
     # Convolve using fftconvolve
     conv = fftconvolve(irfs[:, c], x_exp, mode='same')  # take first T points
     data[:, c] = conv
+    data[:, c] += bkg_level*torch.rand((1,)).item()
     data[:, c] += noise_level * np.random.randn(T)          # add noise
 
 data = torch.tensor(data)
@@ -104,6 +106,10 @@ for c in range(C, len(ax)):
 fig.tight_layout()
 plt.show()
 
+#%%
+
+plt.figure();
+plt.plot(b.kernel)
 
 #%%
 
