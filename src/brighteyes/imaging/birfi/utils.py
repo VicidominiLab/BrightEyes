@@ -112,9 +112,9 @@ def generate_truncated_exponential(t, params):
 
     return y
 
+
 def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey = True, figsize = None,
                  xlabel = 'Time (ns)', ylabel = 'Intensity', fig = None, ax = None):
-
     """
     Plot all channels of a 2D dataset in a single figure.
 
@@ -150,7 +150,7 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', sharex = True, sharey 
     ax = np.array(ax).reshape(-1)
 
     for c in range(C):
-        ax[c].plot(x, y[:, c], '-', color=color, linestyle=linestyle)
+        ax[c].plot(x, y[:, c], color=color, linestyle=linestyle)
         ax[c].set_title(f"Channel {c}")
         if c % ncols == 0:
             ax[c].set_ylabel(ylabel)
