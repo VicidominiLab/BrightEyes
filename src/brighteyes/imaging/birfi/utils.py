@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 def median_filter(x: torch.Tensor, kernel_size: int) -> torch.Tensor:
     """
@@ -27,3 +28,25 @@ def median_filter(x: torch.Tensor, kernel_size: int) -> torch.Tensor:
 
     # Take median across window dimension
     return unfolded.median(dim=-1).values
+
+
+def generate_truncated_exponential(t, params):
+    """
+    Generate truncated exponential curve from fit parameters.
+
+    Model: y = A * exp(-(t - t0) * k) + C, for t >= t0.
+           y = C, for t < t0.
+
+    Args:
+        t (array-like): 1D array of time points.
+        params (dict): Dictionary with keys {"A", "k", "C", "t0"}.
+
+    Returns:
+        np.ndarray: Model values for each x.
+    """
+    A, k, C, t0 = params["A"], params["k"], params["C"], params["t0"]
+
+    t = torch.as_tensor(t)
+    y = torch.where(t >= t0, A * np.exp(-(t - t0) * k ) + C, C)
+
+    return y
