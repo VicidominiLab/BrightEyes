@@ -38,14 +38,21 @@ for c in range(C):
 
 _ = plot_dataset(time.numpy(), irfs)
 
-#%% --- Generate truncated exponential decays starting from IRF peak ---
+#%% --- Generate truncated exponential decays ---
 
+peak_idx =  T//2
+x_exp = np.zeros(T)
+x_local = np.arange(T - peak_idx)
+x_exp[peak_idx:] = np.exp(-true_k * x_local)  # truncated exponential
+
+#%%
+
+plt.figure()
+plt.plot(time, x_exp)
+
+#%%
 data = np.zeros((T, C))
 for c in range(C):
-    peak_idx =  T//2
-    x_exp = np.zeros(T)
-    x_local = np.arange(T - peak_idx)
-    x_exp[peak_idx:] = np.exp(-true_k * x_local)  # truncated exponential
     # Convolve using fftconvolve
     conv = fftconvolve(irfs[:, c], x_exp, mode='same')  # take first T points
     data[:, c] = conv
@@ -54,39 +61,20 @@ for c in range(C):
 
 data = torch.tensor(data)
 
-
 #%%
 
 _ = plot_dataset(time.numpy(), data)
 
-
 #%% --- Initialize Birfi and run pipeline ---
 
 b = Birfi(data, dt=dt)
-b.run(lr=5e-2, steps=2000, rl_iterations=50)
+b.run(lr=5e-2, steps=2000, rl_iterations=500)
 
 retrieved_irf  = b.irf
 
 #%%
 
 b.plot_raw_and_fit()
-
-#%% --- Plot example channels ---
-
-fig, ax = plt.subplots(3,3, figsize=(12,10))
-ax = np.array(ax).reshape(-1)
-
-for c in range(C):
-    ax[c].plot(time.numpy(), b.data_fit[:, c].numpy(), '-', color='C0')
-    ax[c].set_title(f'Channel {c}')
-    ax[c].set_xlabel('Time')
-    ax[c].set_ylabel('Intensity')
-
-for c in range(C, len(ax)):
-    ax[c].axis('off')
-
-fig.tight_layout()
-plt.show()
 
 #%% --- Plot example channels ---
 
