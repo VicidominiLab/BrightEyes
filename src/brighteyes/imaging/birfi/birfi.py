@@ -6,7 +6,7 @@ from. utils import median_filter, generate_truncated_exponential, plot_dataset, 
 class Birfi:
 
     def __init__(self, data: torch.Tensor, dt: float = 1.0):
-        data = torch.as_tensor(data)
+        data = torch.as_tensor(data, dtype=torch.float32)
         if data.dim() == 1:
             self.data = data.unsqueeze(1).clone()
         elif data.dim() == 2:
