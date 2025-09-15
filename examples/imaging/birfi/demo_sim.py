@@ -16,8 +16,8 @@ T = 200                # number of time points
 C = 9                 # number of channels
 dt = 0.01              # time step
 true_k = 0.1           # shared decay rate
-noise_level = 0.001     # additive noise
-bkg_level = 0.00        # background strength
+noise_level = 0.01     # additive noise
+bkg_level = 0.10        # background strength
 
 time = torch.arange(T, dtype=torch.float32) * dt
 

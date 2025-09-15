@@ -115,7 +115,7 @@ class Birfi:
         self.kernel = exp_curve
 
 
-    def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
+    def richardson_lucy_deconvolution(self, iterations=50, eps=1e-4):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
         using a truncated exponential (starting at zero, no offset) as a kernel.
@@ -207,6 +207,7 @@ class Birfi:
         raw = self.data.cpu().numpy()
 
         forward = partial_convolution(self.irf, self.kernel, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,0) )
+        forward += self.params['C'].unsqueeze(0)
 
         # First, plot raw data as scatter
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
