@@ -55,13 +55,13 @@ plt.plot(time, exp_decay)
 
 #%%
 
-data = partial_convolution(exp_decay, irfs, dim1 = 'x', dim2 = 'xc', axis = 'x', fourier = (0,0))
+data = partial_convolution(exp_decay, irfs, dim1 = 'x', dim2 = 'xc', axis = 'x', fourier = (0,0)) # convolve exponential with IRFs
 data += bkg_level*torch.rand((1,C,)) # add background
 data += noise_level * torch.rand((T,C)) # add noise
     
 #%%
 
-plot_dataset(time, data)
+_ = plot_dataset(time, data)
 
 #%% --- Initialize Birfi and run pipeline ---
 
