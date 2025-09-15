@@ -109,10 +109,10 @@ class Birfi:
         }
 
         exp_curve = generate_truncated_exponential(self.time, params)
-        exp_curves = torch.clamp(exp_curve, min=0) # enforce positivity
+        exp_curve = torch.clamp(exp_curve, min=0) # enforce positivity
         exp_curve /= exp_curve.sum()  # normalize kernel
 
-        self.kernel = exp_curves
+        self.kernel = exp_curve
 
 
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
@@ -127,7 +127,7 @@ class Birfi:
             raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
 
         # initialize output tensor
-        x_est = torch.zeros_like(self.data) # shape (time, channel)
+        x_est = torch.ones_like(self.data) # shape (time, channel)
 
         # load deconvolution kernel
         kernel = self.kernel.clone()  # shape (time,)
