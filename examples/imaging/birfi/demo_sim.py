@@ -16,7 +16,7 @@ T = 200                # number of time points
 C = 9                 # number of channels
 dt = 0.01              # time step
 true_k = 0.1           # shared decay rate
-noise_level = 0.00     # additive noise
+noise_level = 0.001     # additive noise
 bkg_level = 0.00        # background strength
 
 time = torch.arange(T, dtype=torch.float32) * dt
@@ -46,7 +46,7 @@ _ = plot_dataset(time.numpy(), irfs)
 params = {'A' : 1,
           'k' : true_k/dt,
           'C' : bkg_level,
-          't0': dt*(T//4),
+          't0': 0, #dt*(T//4),
     }
 
 exp_decay = generate_truncated_exponential(time, params)
@@ -67,7 +67,7 @@ _ = plot_dataset(time, data)
 #%% --- Initialize Birfi and run pipeline ---
 
 b = Birfi(data, dt=dt)
-retrieved_irf = b.run(lr=5e-2, steps=2000, rl_iterations=200)
+retrieved_irf = b.run(lr=5e-2, steps=2000, rl_iterations=50)
 
 #%%
 
