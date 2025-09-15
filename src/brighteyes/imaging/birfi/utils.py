@@ -164,7 +164,6 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex 
         ax[c].axis('off')
 
     fig.tight_layout()
-    plt.show()
 
     return fig, ax
 

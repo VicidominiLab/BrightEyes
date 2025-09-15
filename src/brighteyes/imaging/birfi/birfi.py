@@ -1,6 +1,5 @@
 import torch
-from torch.fft import fftn, ifftn, ifftshift
-import numpy as np
+from torch.fft import fftn
 
 from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution
 
