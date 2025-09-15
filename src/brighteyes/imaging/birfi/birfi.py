@@ -137,7 +137,7 @@ class Birfi:
         kernel_t = fftn(kernel_t, dim=0)  # FT of time-reversed kernel, shape (time,)
 
         # Subtract offset
-        y = torch.tensor(self.data, dtype = torch.float32) - self.params['C'].unsqueeze(0)
+        y = self.data.detach().clone().to(dtype=torch.float32) - self.params['C'].unsqueeze(0)
         y = torch.clamp(y, min=0)
 
         # RL deconvolution
