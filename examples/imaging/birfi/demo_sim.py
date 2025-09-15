@@ -4,7 +4,7 @@ import numpy as np
 from scipy.signal import fftconvolve
 
 from birfi.birfi import Birfi
-from birfi.utils import plot_dataset
+from birfi.utils import plot_dataset, partial_convolution, generate_truncated_exponential
 
 #%%
 
@@ -25,12 +25,13 @@ time = torch.arange(T, dtype=torch.float32) * dt
 torch.manual_seed(0)  # reproducibility
 
 irfs = torch.zeros(T, C)
+
 for c in range(C):
-    peak_idx = torch.randint(80, 120, (1,)).item()   # random peak location
-    sigma = 3
+    peak_idx_1 = torch.randint(T//2 - 10, T//2 + 10, (1,)).item()   # random peak location
+    sigma = 4
     t = torch.arange(T)
-    irf = torch.exp(-0.5 * ((t - peak_idx)/sigma)**2)
-    peak_idx_2 = peak_idx + torch.randint(-10, 10, (1,)).item()   # random peak location
+    irf = torch.exp(-0.5 * ((t - peak_idx_1)/sigma)**2)
+    peak_idx_2 = torch.randint(T//2 - 8, T//2 + 8, (1,)).item()   # random peak location
     irf +=0.7 * torch.exp(-0.5 * ((t - peak_idx_2)/sigma)**2)
     irf /= irf.sum()  # normalize
     irfs[:, c] = irf
@@ -41,30 +42,26 @@ _ = plot_dataset(time.numpy(), irfs)
 
 #%% --- Generate truncated exponential decays ---
 
-peak_idx =  T//2
-x_exp = np.zeros(T)
-x_local = np.arange(T - peak_idx)
-x_exp[peak_idx:] = np.exp(-true_k * x_local)  # truncated exponential
+params = {'A' : 1,
+          'k' : true_k/dt,
+          'C' : bkg_level,
+          't0': 0,
+    }
 
-#%%
+exp_decay = generate_truncated_exponential(time, params)
 
 plt.figure()
-plt.plot(time, x_exp)
-
-#%%
-data = np.zeros((T, C))
-for c in range(C):
-    # Convolve using fftconvolve
-    conv = fftconvolve(irfs[:, c], x_exp, mode='same')  # take first T points
-    data[:, c] = conv
-    data[:, c] += bkg_level*torch.rand((1,)).item()
-    data[:, c] += noise_level * np.random.randn(T)          # add noise
-
-data = torch.tensor(data)
+plt.plot(time, exp_decay)
 
 #%%
 
-_ = plot_dataset(time.numpy(), data)
+data = partial_convolution(exp_decay, irfs, dim1 = 'x', dim2 = 'xc', axis = 'x', fourier = (0,0))
+data += bkg_level*torch.rand((1,C,)) # add background
+data += noise_level * torch.rand((T,C)) # add noise
+    
+#%%
+
+plot_dataset(time, data)
 
 #%% --- Initialize Birfi and run pipeline ---
 
