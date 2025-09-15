@@ -1,9 +1,6 @@
 import torch
-from scipy.signal import fftconvolve
-
-import matplotlib.pyplot as plt
+from torch.fft import fftn, ifftn, ifftshift
 import numpy as np
-import math
 
 from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution
 
@@ -26,7 +23,7 @@ class Birfi:
         self.t1 = None   # shape (channel,)
         self.params = None  # dict with A, k, C
         self.data_fit = None # shape (time, channel)
-        self.kernel = None  # shape (time, channel)
+        self.kernel = None  # shape (time,)
         self.irf = None  # shape (time, channel)
 
 
@@ -121,7 +118,7 @@ class Birfi:
     def richardson_lucy_deconvolution(self, iterations=50, eps=1e-8):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
-        using a truncated exponential (starting at zero, no offset) as PSF.
+        using a truncated exponential (starting at zero, no offset) as a kernel.
 
         Returns:
             irf: torch.Tensor of shape (time, channel)
@@ -129,28 +126,30 @@ class Birfi:
         if self.kernel is None:
             raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
 
-        A, C, k = self.params["A"], self.params["C"], self.params["k"]
-        irf = torch.zeros_like(self.data)
-        psf = self.kernel.cpu().numpy().astype(np.float64)
+        # initialize output tensor
+        x_est = torch.zeros_like(self.data) # shape (time, channel)
 
-        for c in range(self.C):
-            y = self.data[:, c].cpu().numpy().astype(np.float64) - C[c].item()
-            y = np.clip(y, 0, None)
+        # load deconvolution kernel
+        kernel = self.kernel.clone()  # shape (time,)
+        kernel_t = self.kernel.clone().flip(0)  # time-reversed kernel, shape (time,)
 
-            # Initialize estimate
-            x_est = np.ones_like(y)
+        kernel = fftn(kernel, dim = 0) # FT of kernel, shape (time,)
+        kernel_t = fftn(kernel_t, dim=0)  # FT of time-reversed kernel, shape (time,)
 
-            for _ in range(iterations):
-                conv = fftconvolve(x_est, psf, mode="same")
-                conv = np.clip(conv, eps, None)  # avoid div by 0
-                relative_blur = y / conv
-                correction = fftconvolve(relative_blur, psf[::-1], mode="same")
-                x_est *= correction
-                x_est = np.clip(x_est, 0, None)  # enforce positivity
+        # Subtract offset
+        y = torch.tensor(self.data, dtype = torch.float32) - self.params['C'].unsqueeze(0)
+        y = torch.clamp(y, min=0)
 
-            irf[:, c] = torch.from_numpy(x_est.astype(np.float32)).to(self.data.device)
+        # RL deconvolution
+        for _ in range(iterations):
+            conv = partial_convolution(x_est, kernel, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,1) )
+            conv = torch.clamp(conv, min=eps)  # avoid div by 0
+            relative_blur = y / conv
+            correction = partial_convolution(relative_blur, kernel_t, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,1) )
+            x_est = x_est * correction
+            x_est = torch.clamp(x_est, min=0)  # enforce positivity
 
-        self.irf = irf
+        self.irf = x_est
 
 
     def run(self, lr=1e-2, steps=1000, rl_iterations=200):
@@ -170,6 +169,8 @@ class Birfi:
         self.generate_data_fit()
         self.generate_kernel()
         self.richardson_lucy_deconvolution(iterations=rl_iterations)
+
+        return self.irf
 
 
     def plot_raw_and_fit(self):
@@ -204,14 +205,8 @@ class Birfi:
 
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
-        forward = np.zeros_like(raw)
 
-        psf = self.kernel.cpu().numpy()
-
-        for c in range(self.C):
-            irf = self.irf[:, c].cpu().numpy()
-            forward[:, c] = fftconvolve(irf, psf, mode="same")[: self.T] + self.params["C"][c].item()
-            forward[:, c] += self.params["C"][c].item()
+        forward = partial_convolution(self.irf, self.kernel, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,0) )
 
         # First, plot raw data as scatter
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
