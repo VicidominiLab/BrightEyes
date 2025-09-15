@@ -73,6 +73,11 @@ def median_filter(x: torch.Tensor, window_size=3, dims=None, mode="reflect"):
     elif len(window_size) != len(dims):
         raise ValueError("window_size must be scalar or match len(dims)")
 
+    # check for odd values
+    for w in window_size:
+        if w % 2 == 0:
+            raise ValueError(f"All window sizes must be odd, got {w}")
+
     out = x
     for d, w in zip(dims, window_size):
         pad_left = (w - 1) // 2

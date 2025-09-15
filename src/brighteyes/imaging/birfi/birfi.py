@@ -27,6 +27,7 @@ class Birfi:
 
 
     def find_t0_t1(self, median_window: int = 5):
+        # TODO: make this function more robust to noise
         t0s, t1s = [], []
         for c in range(self.C):
             d = torch.diff(self.data[:, c])
@@ -114,7 +115,7 @@ class Birfi:
         self.kernel = exp_curve
 
 
-    def richardson_lucy_deconvolution(self, iterations=30, eps=1e-4):
+    def richardson_lucy_deconvolution(self, iterations=30, eps=1e-4, regularization = 3):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
         using a truncated exponential (starting at zero, no offset) as a kernel.
@@ -147,11 +148,13 @@ class Birfi:
             correction = partial_convolution(relative_blur, kernel_t, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,1) )
             x_est = x_est * correction
             x_est = torch.clamp(x_est, min=0)  # enforce positivity
+            if regularization > 1:
+                x_est = median_filter(x_est, window_size=regularization, dims=[0], mode='replicate')  # temporal median filter
 
         self.irf = x_est
 
 
-    def run(self, lr=1e-2, steps=1000, rl_iterations=30):
+    def run(self, lr=1e-2, steps=1000, rl_iterations=30, regularization=3):
         """
         Complete pipeline to generate IRF:
         1. Find t0, t1 per channel
@@ -167,7 +170,7 @@ class Birfi:
         self.fit_exponential(lr=lr, steps=steps)
         self.generate_data_fit()
         self.generate_kernel()
-        self.richardson_lucy_deconvolution(iterations=rl_iterations)
+        self.richardson_lucy_deconvolution(iterations=rl_iterations, regularization=regularization)
 
         return self.irf
 
