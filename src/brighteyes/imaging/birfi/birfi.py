@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-from. utils import median_filter, generate_truncated_exponential, plot_dataset
+from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution
 
 class Birfi:
 
@@ -58,7 +58,6 @@ class Birfi:
         k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True) # TODO: do a better initial guess using the time difference between the peak and 1/e
 
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
-
 
         for _ in range(steps):
             opt.zero_grad()
@@ -127,8 +126,8 @@ class Birfi:
         Returns:
             irf: torch.Tensor of shape (time, channel)
         """
-        if self.params is None:
-            raise RuntimeError("Run fit_exponential() first.")
+        if self.kernel is None:
+            raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
 
         A, C, k = self.params["A"], self.params["C"], self.params["k"]
         irf = torch.zeros_like(self.data)
@@ -179,8 +178,8 @@ class Birfi:
         for each channel.
         """
 
-        if self.params is None or not hasattr(self, "data_fit"):
-            raise RuntimeError("Run fit_exponential() and generate_data_fit() first.")
+        if self.data_fit is None:
+            raise RuntimeError("Run generate_data_fit() first.")
 
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
@@ -202,8 +201,6 @@ class Birfi:
 
         if self.irf is None:
             raise RuntimeError("Run richardson_lucy_deconvolution() first.")
-        if self.kernel is None:
-            raise RuntimeError("Run generate_kernel() first.")
 
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
