@@ -114,7 +114,7 @@ class Birfi:
         self.kernel = exp_curve
 
 
-    def richardson_lucy_deconvolution(self, iterations=50, eps=1e-4):
+    def richardson_lucy_deconvolution(self, iterations=30, eps=1e-4):
         """
         Perform Richardson-Lucy deconvolution on each channel of self.data
         using a truncated exponential (starting at zero, no offset) as a kernel.
@@ -151,7 +151,7 @@ class Birfi:
         self.irf = x_est
 
 
-    def run(self, lr=1e-2, steps=1000, rl_iterations=200):
+    def run(self, lr=1e-2, steps=1000, rl_iterations=30):
         """
         Complete pipeline to generate IRF:
         1. Find t0, t1 per channel
