@@ -1,5 +1,6 @@
 import torch
 from torch.fft import fftn
+from scipy.signal import savgol_filter
 
 from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution, estimate_lifetime
 
@@ -25,21 +26,42 @@ class Birfi:
         self.kernel = None  # shape (time,)
         self.irf = None  # shape (time, channel)
 
+    from scipy.signal import savgol_filter
+    import torch
 
-    def find_t0_t1(self, median_window: int = 5):
-        # TODO: make this function more robust to noise
+    def find_t0_t1(self, window_length: int = 11, polyorder: int = 2):
+        """
+        Find t0 and t1 for each channel using Savitzky-Golay (SG) derivative.
+
+        Args:
+            window_length (int): Length of the SG filter window (must be odd).
+            polyorder (int): Polynomial order for SG filter.
+        """
+
+        if window_length % 2 == 0:
+            raise ValueError("window_length must be odd.")
+
         t0s, t1s = [], []
+
         for c in range(self.C):
-            d = torch.diff(self.data[:, c])
-            d = median_filter(d, median_window)
-            t0 = torch.argmin(d).item()
-            post = d[t0+1:]
-            nonneg = torch.where(post >= 0)[0]
-            t1 = t0 + 1 + nonneg[0].item() if len(nonneg) > 0 else self.T - 1
+            y = self.data[:, c].cpu().numpy()  # convert to numpy for SG filter
+            dy = savgol_filter(y, window_length=window_length, polyorder=polyorder, deriv=1, delta=self.dt)
+
+            dy = torch.tensor(dy, dtype=self.data.dtype, device=self.data.device)
+
+            # t0: global minimum of derivative
+            t0 = int(torch.argmin(dy))
+
+            # t1: first non-negative derivative after t0
+            post = dy[t0 + 1:]
+            nonneg_idx = torch.where(post >= 0)[0]
+            t1 = t0 + 1 + int(nonneg_idx[0]) if len(nonneg_idx) > 0 else self.T - 1
+
             t0s.append(t0)
             t1s.append(t1)
-        self.t0 = torch.tensor(t0s)
-        self.t1 = torch.tensor(t1s)
+
+        self.t0 = torch.tensor(t0s, device=self.data.device)
+        self.t1 = torch.tensor(t1s, device=self.data.device)
 
 
     def fit_exponential(self, offset = 0, lr=1e-2, steps=1000):
