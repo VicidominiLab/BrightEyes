@@ -1,7 +1,7 @@
 import torch
 from torch.fft import fftn
 
-from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution
+from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution, estimate_lifetime
 
 class Birfi:
 
@@ -52,7 +52,10 @@ class Birfi:
 
         Cparam = self.data.min(dim=0).values.clone().detach().requires_grad_(True)
 
-        k = torch.tensor(0.1 / self.dt, device=device, dtype=dtype, requires_grad=True) # TODO: do a better initial guess using the time difference between the peak and 1/e
+        cc = self.C // 2 # central channel index
+        tau = estimate_lifetime(self.time, self.data[..., cc], self.t0[cc], self.t1[cc])
+        print(tau)
+        k = (1.0 / tau).clone().detach().requires_grad_(True)
 
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
 

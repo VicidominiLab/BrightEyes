@@ -198,3 +198,28 @@ def partial_convolution(volume: torch.tensor, kernel: torch.tensor, dim1: str = 
     conv = torch.real(conv)  # Clipping to zero the residual imaginary part
 
     return conv
+
+
+def estimate_lifetime(x: torch.Tensor, y: torch.Tensor, t0: int, t1: int) -> float:
+    """
+    Estimate initial decay rate k from centroid of baseline-subtracted signal.
+
+    Args:
+        x (torch.Tensor): 1D tensor of time points (same length as y).
+        y (torch.Tensor): 1D tensor of signal values.
+
+    Returns:
+        float: Initial estimate for k (positive).
+    """
+
+    x = torch.as_tensor(x[t0:t1+1], dtype= torch.float32)
+    x = x - x.min()  # shift to start at 0
+
+    # Baseline subtraction and clamping
+    y = torch.as_tensor(y[t0:t1+1], dtype= torch.float32)
+    y_clamped = torch.clamp(y - y.min(), min=0.0) # subtract baseline and clamp to zero
+
+    # Centroid-based lifetime estimation
+    tau = torch.sum(x * y_clamped) / torch.sum(y_clamped)
+
+    return tau
