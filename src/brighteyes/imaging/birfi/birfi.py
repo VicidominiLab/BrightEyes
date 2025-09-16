@@ -26,10 +26,8 @@ class Birfi:
         self.kernel = None  # shape (time,)
         self.irf = None  # shape (time, channel)
 
-    from scipy.signal import savgol_filter
-    import torch
 
-    def find_t0_t1(self, window_length: int = 11, polyorder: int = 2):
+    def find_t0_t1(self, window_length: int = 11, polyorder: int = 3):
         """
         Find t0 and t1 for each channel using Savitzky-Golay (SG) derivative.
 
@@ -76,7 +74,6 @@ class Birfi:
 
         cc = self.C // 2 # central channel index
         tau = estimate_lifetime(self.time, self.data[..., cc], self.t0[cc], self.t1[cc])
-        print(tau)
         k = (1.0 / tau).clone().detach().requires_grad_(True)
 
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
@@ -215,10 +212,19 @@ class Birfi:
 
         # First, plot raw data as scatter (points)
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
-        fig, ax = plot_dataset(time, fit, color="r", linestyle="-", fig = fig, ax=ax)
+
+        # Overlay full fit curve
+        fig, ax = plot_dataset(time, fit, color="r", linestyle="-", fig=fig, ax=ax)
+
+        # Draw vertical dashed lines at t0 and t1
+        for c in range(self.C):
+            t0_val = self.time[int(self.t0[c])].item()
+            t1_val = self.time[int(self.t1[c])].item()
+            ax[c].axvline(t0_val, color='grey', linestyle='--', alpha=0.5)
+            ax[c].axvline(t1_val, color='grey', linestyle='--', alpha=0.5)
 
 
-        fig.legend(["Raw", "Fit"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
+        fig.legend(["Raw", "Fit", "Fitting interval"], loc="upper right", bbox_to_anchor=(0.98, 0.95))
 
 
     def plot_forward_model(self):
