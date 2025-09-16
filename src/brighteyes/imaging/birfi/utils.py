@@ -223,3 +223,43 @@ def estimate_lifetime(x: torch.Tensor, y: torch.Tensor, t0: int, t1: int) -> flo
     tau = torch.sum(x * y_clamped) / torch.sum(y_clamped)
 
     return tau
+
+
+def estimate_savgol_window(y: torch.Tensor, min_window: int = 5, max_window: int = None) -> int:
+    """
+    Estimate an appropriate odd window length for Savitzky-Golay smoothing.
+    Automatically adapts to signal dynamics.
+
+    Args:
+        y (torch.Tensor): 1D signal
+        min_window (int): Minimum allowed window length (default 5)
+        max_window (int): Maximum allowed window length (default len(y)//2)
+
+    Returns:
+        int: Odd window length
+    """
+    y = y.flatten().float()
+    N = len(y)
+    if max_window is None:
+        max_window = max(min_window, N // 2)
+
+    # Compute approximate slope magnitude
+    dy = torch.diff(y)
+    avg_slope = torch.mean(torch.abs(dy))
+
+    if avg_slope == 0:
+        # flat signal → use minimal window
+        window = min_window
+    else:
+        # Estimate transition length: points required for signal to change by 1 std
+        signal_range = y.max() - y.min()
+        transition_points = max(1, int(signal_range / avg_slope))
+
+        window = int(transition_points)
+
+    # Clamp window between min and max, ensure odd
+    window = max(min_window, min(max_window, window))
+    if window % 2 == 0:
+        window += 1
+
+    return window

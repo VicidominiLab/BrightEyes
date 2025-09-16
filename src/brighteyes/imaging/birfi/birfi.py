@@ -27,7 +27,7 @@ class Birfi:
         self.irf = None  # shape (time, channel)
 
 
-    def find_t0_t1(self, window_length: int = 11, polyorder: int = 3):
+    def find_t0_t1(self, window_length: int = 11, polyorder: int = 3, persistence: int = 5, threshold: float = 0.05):
         """
         Find t0 and t1 for each channel using Savitzky-Golay (SG) derivative.
 
@@ -40,6 +40,7 @@ class Birfi:
             raise ValueError("window_length must be odd.")
 
         t0s, t1s = [], []
+        y_range = self.data.max(dim=0).values - self.data.min(dim=0).values
 
         for c in range(self.C):
             y = self.data[:, c].cpu().numpy()  # convert to numpy for SG filter
@@ -50,10 +51,15 @@ class Birfi:
             # t0: global minimum of derivative
             t0 = int(torch.argmin(dy))
 
-            # t1: first non-negative derivative after t0
-            post = dy[t0 + 1:]
-            nonneg_idx = torch.where(post >= 0)[0]
-            t1 = t0 + 1 + int(nonneg_idx[0]) if len(nonneg_idx) > 0 else self.T - 1
+            # t1: first point after t0 with persistent positive derivative
+
+            t1 = len(dy) - 1  # fallback to end
+            for i in range(t0 + 1, len(dy) - persistence):
+                avg_diff = dy[i:i + persistence].mean()
+                amplitude = torch.clamp(self.data[i + persistence, c] - self.data[..., c].min(), 0).item()
+                if avg_diff > 0 and amplitude > threshold * y_range[c].item():
+                    t1 = i
+                    break
 
             t0s.append(t0)
             t1s.append(t1)
