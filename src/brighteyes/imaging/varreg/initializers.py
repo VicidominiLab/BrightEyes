@@ -5,7 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 from scipy.signal import convolve
 
-from .utils import centered_pad, partial_convolution_rfft
+from .utils import centered_pad, partial_convolution_rfft, forward
 
 def flat(shape, flux, device):
 
@@ -33,7 +33,7 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
 
     Parameters
     ----------
-    dset : torch.Tensor (Hx x Wy x N)
+    dset : torch.Tensor (Hx x Wy x Nch x K)
         Input dataset (stack of images along the last axis).
     psf : torch.Tensor (Hx x Wy)
         PSF of the system.
@@ -44,25 +44,33 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
 
     Returns
     -------
-    img_deconv : torch.Tensor (Hx x Wy x N)
+    img_deconv : torch.Tensor (Hx x Wy x K)
         Deconvolved images.
     """
     device = dset.device
     dtype = torch.float32
 
-    # Collapse stack into a single image (sum over last axis)
-    image = dset.sum(dim=-1)
+    conv_dims = 2
+
+    # Initialization
+    if dset.ndim - conv_dims == 1: #if I do not have channels
+        dset = dset.unsqueeze(-2)  # Add a channel dimension #Nx x Ny x 1 x K
+
+    # Sum dataset over repetition axis
+    image = dset.sum(dim=-1)    # Nx x Ny x 1
+    
+    axis_to_conv = tuple(range(conv_dims))
 
     # Pad and normalize PSF
     psf = centered_pad(psf, target_shape=image.shape)
     h = psf / psf.sum()
 
     # Fourier transforms of PSF and its flipped version
-    otf = torch.fft.rfftn(h)
+    otf = torch.fft.rfftn(h, dim=axis_to_conv)
     otf_conj = torch.conj(otf)
 
     # Initialize object estimate
-    obj = torch.ones_like(image, dtype=dtype, device=device)
+    obj = torch.ones_like(image.sum(-1), dtype=dtype, device=device) # Nx x Ny
 
     if epsilon is None:
         epsilon = torch.finfo(dtype).eps
@@ -70,20 +78,21 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
     for _ in range(max_iter):
         # Convolution: obj * h
 
-        conv = partial_convolution_rfft(otf, obj, dim1='ab', dim2='ab', axis='ab', fourier=(1, 0))
-
+        conv = forward(otf, obj) # Nx x Ny x 1
+        
         # Avoid division by zero
-        ratio = image / torch.clamp(conv, min=epsilon)
+        ratio = image / conv + epsilon #torch.clamp(conv, min=epsilon)
 
         # Back-projection: ratio * hT
-        correction = partial_convolution_rfft(otf_conj, ratio, dim1='ab', dim2='ab', axis='ab', fourier=(1, 0))
+        correction = forward(otf_conj, ratio).sum(-1) # Nx x Ny
         # Update estimate
         obj = obj * correction
 
     # Expand back into dataset shape (repeat along last axis)
     n_rep = dset.shape[-1]
+    size = tuple([1]*(conv_dims) + [n_rep])
 
-    return obj.unsqueeze(-1).repeat(1, 1, n_rep) / n_rep
+    return obj.unsqueeze(-1).repeat(size) / n_rep
 
 
 def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: int = 10):
@@ -91,7 +100,7 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
     Initialize the reconstruction based on the specified method.
 
     Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x K.
+        dset (ndarray): Input dataset of shape Nx x Ny x Nch x K.
         psf (ndarray): Point Spread Function of shape Px x Py.
         method (str): Initialization method ('flat', 'data', 'rl').
         device (str): Device to use ('cpu' or 'cuda'). Default is None, which uses 'cuda' if available.

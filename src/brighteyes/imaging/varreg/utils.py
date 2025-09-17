@@ -1,5 +1,6 @@
 import torch
 import einops
+import string
 import numpy as np
 
 from scipy.ndimage import gaussian_filter
@@ -77,6 +78,32 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
     return conv
 
 
+def forward(otf, obj):
+    """
+    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
+    The dimension K is optional.
+
+    Parameters:
+        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
+        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
+
+    Returns:
+        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
+    """
+
+    conv_dims = 2  # to generalize to 3D later
+
+    alphabet = string.ascii_lowercase
+
+    str_psf = alphabet[:otf.ndim]
+    str_obj = alphabet[:obj.ndim]
+    axis_str = alphabet[:conv_dims]
+
+    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
+
+    return dset
+
+
 def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     """
     Pads a tensor to match the target shape by centering the original data.
@@ -89,8 +116,10 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
         Tensor: Padded tensor of shape (Nx, Ny) with the input centered.
     """
 
-    Mx, My = arr.shape[:2]
-    Nx, Ny = target_shape
+    conv_dims = 2
+
+    Mx, My = arr.shape[:conv_dims]
+    Nx, Ny = target_shape[:conv_dims]
 
     if Nx < Mx or Ny < My:
         raise ValueError("Target shape must be larger than or equal to the input shape in both dimensions.")

@@ -1,5 +1,4 @@
 import torch
-import string
 import numpy as np
 
 from scipy.ndimage import gaussian_filter
@@ -9,40 +8,13 @@ from torch.fft import rfftn, irfftn, ifftshift
 from torch import real, einsum
 from tqdm import tqdm
 
-from .utils import partial_convolution_rfft, centered_pad
+from .utils import partial_convolution_rfft, centered_pad, forward
 
 from .regularizers import grad_l2, grad_l1, grad_kl
 
 from .preprocessing import binomial_split
 
 from . import initializers as init
-
-
-def forward(otf, obj):
-    """
-    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
-    The dimension K is optional.
-
-    Parameters:
-        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
-        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
-
-    Returns:
-        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
-    """
-
-    conv_dims = 2  # to generalize to 3D later
-
-    alphabet = string.ascii_lowercase
-
-    str_psf = alphabet[:otf.ndim]
-    str_obj = alphabet[:obj.ndim]
-    axis_str = alphabet[:conv_dims]
-
-    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
-
-    return dset
-
 
 def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: str, regularizer: str):
     """
@@ -126,9 +98,8 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     Performs a single iteration update for the reconstruction process.
 
     Parameters:
-        dset (Tensor): Input data of shape Nx x Ny x K x Ch.
-        psf_fft (Tensor): Fourier transform of the PSF of shape Nx x Ny x K x Ch.
-        psf_m_fft (Tensor): Fourier transform of the flipped PSF of shape Nx x Ny x K x Ch.
+        dset (Tensor): Input data of shape Nx x Ny x Ch x K.
+        psf (Tensor): Fourier transform of the PSF of shape Nx x Ny x Ch x K.
         max_iter (int): Maximum number of iterations.
         lam (float): Variance regularization parameter.
         alpha (float): Fidelity term regularization parameter.
@@ -149,14 +120,22 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         raise ValueError("If rec_to_save is 'last', tol must be None.")
 
     eps = torch.finfo(torch.float32).eps
+    
+    conv_dims = 2  # to generalize to 3D later
+    if dset.ndim != psf.ndim + 1:
+        raise ValueError(f"The dataset must be one dimension larger than the psf. Got dataset with {dset.ndim} dimension and psf with {psf.ndim}.")
+
+    # axis_not_to_conv = tuple(range(-(psf.ndim - conv_dims), 0))
+    # print(f'axis_not_to_conv: {axis_not_to_conv}')
+    axis_to_conv = tuple(range(conv_dims))
 
     # Normalize PSF
     psf_norm = psf / psf.sum()
-    psf_m = torch.flip(psf_norm, dims=[-2, -1])
+    #psf_m = torch.flip(psf_norm, dims=axis_to_conv)
 
     # Precompute FFTs
-    psf_fft = rfftn(psf_norm, dim=(-2, -1))
-    psf_m_fft = rfftn(psf_m, dim=(-2, -1))
+    psf_fft = rfftn(psf_norm, dim=axis_to_conv)
+    psf_m_fft = torch.conj(psf_fft)
 
     if binomial is True:
         img = dset.sum(dim=-1)
@@ -167,7 +146,13 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     # Initialization
-    size = list(dset.shape)
+    if dset.ndim - conv_dims == 1:
+        size = list(dset.shape)
+    elif dset.ndim - conv_dims == 2:
+        size = list(dset.shape[:-2] + dset.shape[-1:])
+    else:
+        raise ValueError("Dataset must have repetition and eventually channel dimensions in addition to spatial dimensions.")
+    
     if rec_to_save == 'last':
         size = [1] + size
     elif rec_to_save == 'all':
@@ -242,9 +227,9 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     axis_to_sum = 2
     sz = dset.shape[:axis_to_sum]
-
+    
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-
+    
     obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
                       regularizer, initialization, normalize, rec_to_save, binomial)
     if rec_to_save == 'last':
