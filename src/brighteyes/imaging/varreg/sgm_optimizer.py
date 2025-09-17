@@ -153,12 +153,20 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     else:
         raise ValueError("Dataset must have repetition and eventually channel dimensions in addition to spatial dimensions.")
     
+    print(f'Initialization size: {size}')
+    
     if rec_to_save == 'last':
         size = [1] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
 
     obj_all = torch.empty(size).to(device)
+    
+    print(f'Object all shape: {obj_all.shape}')
+    
+    print(f' dset shape: {dset.shape}, psf shape: {psf_norm.shape}')
+    tt = init.initialize(dset, psf_norm, method = initialization, device = None)
+    print(f'Initialized object shape: {tt.shape}')
 
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
 
@@ -230,8 +238,11 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
     
+    print(f'Dataset shape: {dset.shape}, Padded PSF shape: {psf_pad.shape}, input psf shape: {psf.shape}')
+    
     obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
                       regularizer, initialization, normalize, rec_to_save, binomial)
+    
     if rec_to_save == 'last':
         return obj_all[-1]
     elif rec_to_save == 'all':

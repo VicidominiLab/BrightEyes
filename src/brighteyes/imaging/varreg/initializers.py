@@ -18,8 +18,13 @@ def data(dset, flux, device):
 
     if not isinstance(dset, torch.Tensor):
         dset = torch.tensor(dset, dtype=torch.float32)
-
-    axis_to_conv = tuple(range(2))
+    
+    conv_dims = 2
+    axis_to_conv = tuple(range(conv_dims))
+    
+    if dset.ndim - conv_dims == 2: #if I have channels
+        dset = dset.sum(dim=-2)  # Sum over channels Nx x Ny x K
+    
     init = torch.tensor(
         gaussian_filter(dset.numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes=axis_to_conv)).to(device)
     init = init * flux / init.sum()
@@ -121,10 +126,13 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
         dset = dset.to(device)
 
     # Axis to sum for flux conservation
+    conv_dims = 2
     axis_to_sum = tuple(range(dset.ndim - 1))
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     if method == 'flat':
+        if dset.ndim - conv_dims == 2: #if I have channels
+            dset = dset.sum(dim=-2)  # Sum over channels Nx x Ny x K
         init = flat(dset.shape, flux, device)
     elif method == 'data':
         init = data(dset, flux, device)
