@@ -217,6 +217,7 @@ class Birfi:
         Raises:
             RuntimeError: If self.kernel is None.
         """
+
         if self.kernel is None:
             raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
 
