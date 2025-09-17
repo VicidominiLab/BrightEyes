@@ -25,15 +25,14 @@ def pad_tensor(x: torch.Tensor, pad_left: int, pad_right: int, dim: int, mode: s
     if pad_left == 0 and pad_right == 0:
         return x
 
-    L = x.shape[dim]
-    indices = torch.arange(L, device=x.device)
+    length = x.shape[dim]
 
     if mode == "reflect":
         left_idx = torch.arange(pad_left, 0, -1, device=x.device)
-        right_idx = torch.arange(L - 2, L - pad_right - 2, -1, device=x.device)
+        right_idx = torch.arange(length - 2, length - pad_right - 2, -1, device=x.device)
     elif mode == "replicate":
         left_idx = torch.zeros(pad_left, dtype=torch.long, device=x.device)
-        right_idx = torch.full((pad_right,), L - 1, dtype=torch.long, device=x.device)
+        right_idx = torch.full((pad_right,), length - 1, dtype=torch.long, device=x.device)
     elif mode == "constant":
         pad_shape = list(x.shape)
         pad_shape[dim] = pad_left + pad_right
