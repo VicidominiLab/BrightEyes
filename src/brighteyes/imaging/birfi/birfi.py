@@ -5,8 +5,34 @@ from scipy.signal import savgol_filter
 from. utils import median_filter, generate_truncated_exponential, plot_dataset, partial_convolution, estimate_lifetime
 
 class Birfi:
+    """
+    Estimate instrument response functions (IRFs) from time-series data using truncated exponential fitting and Richardson-Lucy deconvolution.
 
+    Attributes:
+        data (torch.Tensor): Input time-series data (shape: [num_samples, num_channels]).
+        dt (float): Time step between samples.
+        time (torch.Tensor): Time vector.
+        num_samples (int): Number of time points.
+        num_channels (int): Number of channels.
+        t0 (torch.Tensor|None): Per-channel start index of decay.
+        t1 (torch.Tensor|None): Per-channel end index of decay.
+        params (dict|None): Fitted parameters ("A", "C", "k").
+        data_fit (torch.Tensor|None): Fitted exponential curves.
+        kernel (torch.Tensor|None): Kernel for deconvolution.
+        irf (torch.Tensor|None): Deconvolved IRFs.
+    """
     def __init__(self, data: torch.Tensor, dt: float = 1.0):
+        """
+        Initialize Birfi with time-series data and time step.
+
+        Args:
+            data (torch.Tensor): 1D or 2D tensor of time-series data. If 1D, promoted to shape (num_samples, 1).
+            dt (float): Sampling interval (default: 1.0).
+
+        Raises:
+            ValueError: If data has more than 2 dimensions.
+        """
+
         data = torch.as_tensor(data, dtype=torch.float32)
         if data.dim() == 1:
             self.data = data.unsqueeze(1).clone()
@@ -18,7 +44,7 @@ class Birfi:
         self.dt = dt
         self.time = torch.arange(self.data.shape[0], device=self.data.device) * dt
 
-        self.T, self.C = self.data.shape
+        self.num_samples, self.num_channels = self.data.shape
         self.t0 = None   # shape (channel,)
         self.t1 = None   # shape (channel,)
         self.params = None  # dict with A, k, C
@@ -29,11 +55,16 @@ class Birfi:
 
     def find_t0_t1(self, window_length: int = 11, polyorder: int = 3, persistence: int = 5, threshold: float = 0.05):
         """
-        Find t0 and t1 for each channel using Savitzky-Golay (SG) derivative.
+        Estimate per-channel start (t0) and end (t1) indices of decay using Savitzky-Golay derivative filtering.
 
         Args:
-            window_length (int): Length of the SG filter window (must be odd).
-            polyorder (int): Polynomial order for SG filter.
+            window_length (int): Length of the Savitzky-Golay filter window (must be odd).
+            polyorder (int): Polynomial order for Savitzky-Golay filter.
+            persistence (int): Number of consecutive positive derivative samples for t1 detection.
+            threshold (float): Minimum amplitude threshold for t1 detection (fraction of channel range).
+
+        Side effects:
+            Sets self.t0 and self.t1 as torch.Tensors of shape (num_channels,).
         """
 
         if window_length % 2 == 0:
@@ -42,7 +73,7 @@ class Birfi:
         t0s, t1s = [], []
         y_range = self.data.max(dim=0).values - self.data.min(dim=0).values
 
-        for c in range(self.C):
+        for c in range(self.num_channels):
             y = self.data[:, c].cpu().numpy()  # convert to numpy for SG filter
             dy = savgol_filter(y, window_length=window_length, polyorder=polyorder, deriv=1, delta=self.dt)
 
@@ -69,6 +100,22 @@ class Birfi:
 
 
     def fit_exponential(self, offset = 0, lr=1e-2, steps=1000):
+        """
+        Fit per-channel truncated exponential curves to the data between t0 and t1 using gradient-based optimization.
+        The initial guess for k is estimated from the central channel's lifetime (number of samples to decay by 1/e).
+
+        Args:
+            offset (int): Shift applied to t0 when selecting data for fitting.
+            lr (float): Learning rate for Adam optimizer (default: 1e-2).
+            steps (int): Number of optimization steps (default: 1000).
+
+        Side effects:
+            Sets self.params to a dict with keys: "A", "C", "k".
+
+        Raises:
+            RuntimeError: If t0 or t1 have not been computed.
+        """
+
         if self.t0 is None or self.t1 is None:
             raise RuntimeError("Run find_t0_t1 first.")
 
@@ -78,7 +125,7 @@ class Birfi:
 
         Cparam = self.data.min(dim=0).values.clone().detach().requires_grad_(True)
 
-        cc = self.C // 2 # central channel index
+        cc = self.num_channels // 2 # central channel index
         tau = estimate_lifetime(self.time, self.data[..., cc], self.t0[cc], self.t1[cc])
         k = (1.0 / tau).clone().detach().requires_grad_(True)
 
@@ -87,12 +134,12 @@ class Birfi:
         for _ in range(steps):
             opt.zero_grad()
             loss = 0.0
-            for c in range(self.C):
+            for c in range(self.num_channels):
                 y = self.data[self.t0[c]+offset:self.t1[c]+1, c]
                 x = torch.arange(len(y), device=device, dtype=dtype) * self.dt
                 y_pred = A[c] * torch.exp(-k * x ) + Cparam[c]
                 loss = loss + torch.mean((y - y_pred) ** 2)
-            loss = loss / self.C
+            loss = loss / self.num_channels
             loss.backward()
             opt.step()
 
@@ -101,15 +148,22 @@ class Birfi:
 
     def generate_data_fit(self):
         """
-        Generate truncated exponential fits for all channels using fitted parameters.
+        Generate fitted truncated exponential curves for all channels using parameters in self.params.
         Stores result in self.data_fit.
+
+        Side effects:
+            Sets self.data_fit to tensor of shape (num_samples, num_channels).
+
+        Raises:
+            RuntimeError: If self.params is None.
         """
+
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
 
         exp_curves = torch.zeros_like(self.data)
 
-        for c in range(self.C):
+        for c in range(self.num_channels):
             params = {
                 "A": self.params["A"][c],
                 "C": self.params["C"][c],
@@ -123,8 +177,13 @@ class Birfi:
 
     def generate_kernel(self):
         """
-        Generate exponential decays to be used for deconvolution.
-        Stores result in self.kernel.
+        Build a normalized, positive kernel from a truncated exponential with unit amplitude and zero offset. Stores result in self.kernel.
+
+        Side effects:
+            Sets self.kernel to tensor of shape (num_samples,).
+
+        Raises:
+            RuntimeError: If self.params is None.
         """
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
@@ -133,7 +192,7 @@ class Birfi:
             "A": 1,
             "C": 0,
             "k": self.params["k"],
-            "t0": 0,  #(self.T // 2) * self.dt,
+            "t0": 0,
         }
 
         exp_curve = generate_truncated_exponential(self.time, params)
@@ -145,11 +204,18 @@ class Birfi:
 
     def richardson_lucy_deconvolution(self, iterations=30, eps=1e-4, regularization = 3):
         """
-        Perform Richardson-Lucy deconvolution on each channel of self.data
-        using a truncated exponential (starting at zero, no offset) as a kernel.
+        Perform Richardson-Lucy deconvolution channel-wise using FFT-based convolutions and a precomputed kernel.
 
-        Returns:
-            irf: torch.Tensor of shape (time, channel)
+        Args:
+            iterations (int): Number of RL iterations (default: 30).
+            eps (float): Small value to avoid division by zero (default: 1e-4).
+            regularization (int): Median filter window size for regularization (default: 3).
+
+        Side effects:
+            Sets self.irf to the deconvolved estimate (shape: [num_samples, num_channels]).
+
+        Raises:
+            RuntimeError: If self.kernel is None.
         """
         if self.kernel is None:
             raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
@@ -185,12 +251,12 @@ class Birfi:
     def run(self, lr=1e-2, steps=1000, rl_iterations=30, regularization=3,
             window_length=11, polyorder=3, persistence=5, threshold=0.05):
         """
-        Complete pipeline to generate IRF:
-        1. Find t0, t1 per channel
-        2. Fit truncated exponential
-        3. Generate truncated exponential
-        4. Generate deconvolution kernel
-        5. Perform Richardson-Lucy deconvolution
+        Execute the full IRF estimation pipeline:
+            1. Find t0, t1 per channel using Savitzky-Golay filtering.
+            2. Fit truncated exponential curves.
+            3. Generate fitted exponential curves.
+            4. Generate deconvolution kernel.
+            5. Perform Richardson-Lucy deconvolution.
 
         Args:
             lr (float): Learning rate for exponential fit.
@@ -203,7 +269,7 @@ class Birfi:
             threshold (float): Minimum amplitude threshold for t1.
 
         Returns:
-            irf: torch.Tensor of shape (time, channel)
+            torch.Tensor: Estimated IRFs (shape: [num_samples, num_channels]).
         """
 
         self.find_t0_t1(window_length=window_length, polyorder=polyorder, persistence=persistence, threshold=threshold)
@@ -217,8 +283,15 @@ class Birfi:
 
     def plot_raw_and_fit(self):
         """
-        Plot raw data (points) and fitted exponential (line only in [t0, t1])
-        for each channel.
+        Plot raw data points and fitted exponential curves for each channel.
+        Also draws vertical dashed lines at t0 and t1 for each channel.
+
+        Side effects:
+            Uses plot_dataset to create matplotlib figures and axes.
+            Adds a legend labeling 'Raw', 'Fit', and 'Fitting interval'.
+
+        Raises:
+            RuntimeError: If self.data_fit is None.
         """
 
         if self.data_fit is None:
@@ -235,7 +308,7 @@ class Birfi:
         fig, ax = plot_dataset(time, fit, color="r", linestyle="-", fig=fig, ax=ax)
 
         # Draw vertical dashed lines at t0 and t1
-        for c in range(self.C):
+        for c in range(self.num_channels):
             t0_val = self.time[int(self.t0[c])].item()
             t1_val = self.time[int(self.t1[c])].item()
             ax[c].axvline(t0_val, color='grey', linestyle='--', alpha=0.5)
@@ -247,8 +320,14 @@ class Birfi:
 
     def plot_forward_model(self):
         """
-        Convolve estimated IRFs with fitted truncated exponential
-        and plot them against the input data, per channel.
+        Convolve estimated IRFs with the fitted exponential kernel and plot the forward model against the measured data for each channel.
+
+        Side effects:
+            Uses partial_convolution and plot_dataset to produce a matplotlib figure.
+            Adds a legend labeling 'Measured' and 'IRF ⊗ Exp'.
+
+        Raises:
+            RuntimeError: If self.irf is None.
         """
 
         if self.irf is None:

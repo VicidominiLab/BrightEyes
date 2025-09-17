@@ -9,16 +9,19 @@ def pad_tensor(x: torch.Tensor, pad_left: int, pad_right: int, dim: int, mode: s
     Pad a tensor along one dimension.
 
     Args:
-        x (torch.Tensor): Input tensor
-        pad_left (int): Padding size before data
-        pad_right (int): Padding size after data
-        dim (int): Dimension along which to pad
-        mode (str, optional): Padding mode. One of {"reflect", "replicate", "constant"}.
-                              Default = "reflect"
+        x (torch.Tensor): Input tensor to pad.
+        pad_left (int): Number of elements to pad before the data along the specified dimension.
+        pad_right (int): Number of elements to pad after the data along the specified dimension.
+        dim (int): Dimension along which to pad.
+        mode (str, optional): Padding mode. One of {"reflect", "replicate", "constant"}. Default is "reflect".
 
     Returns:
-        torch.Tensor: Padded tensor
+        torch.Tensor: Padded tensor with the same dtype and device as input.
+
+    Raises:
+        ValueError: If an unsupported padding mode is specified.
     """
+
     if pad_left == 0 and pad_right == 0:
         return x
 
@@ -53,18 +56,18 @@ def median_filter(x: torch.Tensor, window_size=3, dims=None, mode="reflect"):
     Apply an N-dimensional median filter over user-specified dimensions.
 
     Args:
-        x (torch.Tensor): Input tensor (any shape).
-        window_size (int or list/tuple of ints, optional): Window size(s).
-            - If int, same size is used for all selected dims.
-            - If list/tuple, must have length equal to len(dims).
-            Default: 3
-        dims (list/tuple of ints, optional): Dimensions to filter along.
-            If None, all dimensions are filtered.
-        mode (str, optional): Padding mode. One of {"reflect", "replicate", "constant"}.
+        x (torch.Tensor): Input tensor of any shape.
+        window_size (int or list/tuple of ints, optional): Window size(s) for the filter. If int, same size for all dims. If list/tuple, must match len(dims). Default is 3.
+        dims (list/tuple of ints, optional): Dimensions to filter along. If None, all dimensions are filtered. Default is None.
+        mode (str, optional): Padding mode. One of {"reflect", "replicate", "constant"}. Default is "reflect".
 
     Returns:
-        torch.Tensor: Median-filtered tensor (same shape as x).
+        torch.Tensor: Median-filtered tensor of the same shape as x.
+
+    Raises:
+        ValueError: If window_size is not odd or does not match dims length.
     """
+
     if dims is None:
         dims = list(range(x.ndim))
 
@@ -94,18 +97,20 @@ def median_filter(x: torch.Tensor, window_size=3, dims=None, mode="reflect"):
 
 def generate_truncated_exponential(t, params):
     """
-    Generate truncated exponential curve from fit parameters.
+    Generate a truncated exponential curve from fit parameters.
 
-    Model: y = A * exp(-(t - t0) * k) + C, for t >= t0.
-           y = C, for t < t0.
+    Model:
+        y = A * exp(-(t - t0) * k) + C, for t >= t0
+        y = C, for t < t0
 
     Args:
-        t (array-like): 1D array of time points.
+        t (array-like or torch.Tensor): 1D array of time points.
         params (dict): Dictionary with keys {"A", "k", "C", "t0"}.
 
     Returns:
-        np.ndarray: Model values for each x.
+        torch.Tensor: Model values for each time point in t.
     """
+
     A, k, C, t0 = params["A"], params["k"], params["C"], params["t0"]
 
     t = torch.as_tensor(t)
@@ -122,24 +127,27 @@ def generate_truncated_exponential(t, params):
 def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex = True, sharey = True, figsize = None,
                  xlabel = 'Time (ns)', ylabel = 'Intensity', fig = None, ax = None):
     """
-    Plot all channels of a 2D dataset in a single figure.
+    Plot all channels of a 2D dataset in a single figure with subplots for each channel.
 
     Args:
-        x (np.ndarray): 1D array of shape (T,) where T is number of samples.
-        y (np.ndarray): 2D array of shape (T, C) where T is number of samples and C is number of channels.
+        x (np.ndarray or torch.Tensor): 1D array of shape (num_samples,) representing time or x-axis values.
+        y (np.ndarray or torch.Tensor): 2D array of shape (num_samples, num_channels) representing data to plot.
         color (str, optional): Line color. Default is 'C0'.
         linestyle (str, optional): Line style. Default is 'solid'.
         marker (str, optional): Marker style. Default is None (no markers).
         sharex (bool, optional): Whether to share x-axis among subplots. Default is True.
         sharey (bool, optional): Whether to share y-axis among subplots. Default is True.
-        figsize (tuple, optional): Figure size as (width, height). Default is None, which lets matplotlib choose.
+        figsize (tuple, optional): Figure size as (width, height). Default is None.
         xlabel (str, optional): Label for x-axis. Default is 'Time (ns)'.
         ylabel (str, optional): Label for y-axis. Default is 'Intensity'.
-        fig (optional): Matplotlib figure to plot on. If None, a new figure is created.
-        ax (optional): Matplotlib axes array to plot on. If None, a new figure is created.
+        fig (matplotlib.figure.Figure, optional): Figure to plot on. If None, a new figure is created.
+        ax (np.ndarray of matplotlib.axes.Axes, optional): Axes to plot on. If None, new axes are created.
 
     Returns:
-        fig, ax: Matplotlib figure and axes array.
+        tuple: (fig, ax) where fig is the matplotlib figure and ax is the array of axes.
+
+    Raises:
+        ValueError: If y is not a 2D array.
     """
 
     if np.ndim(y) != 2:
@@ -175,6 +183,21 @@ def plot_dataset(x, y, color = 'C0', linestyle = 'solid', marker = None, sharex 
 
 def partial_convolution(volume: torch.tensor, kernel: torch.tensor, dim1: str = 'ijk', dim2: str = 'jkl',
                         axis: str = 'jk', fourier: tuple = (False, False)):
+    """
+    Perform partial convolution of two tensors along specified axes using FFTs and einsum notation.
+
+    Args:
+        volume (torch.Tensor): Input tensor to be convolved.
+        kernel (torch.Tensor): Kernel tensor for convolution.
+        dim1 (str): Label string for volume dimensions (e.g., 'ijk').
+        dim2 (str): Label string for kernel dimensions (e.g., 'jkl').
+        axis (str): String of axis labels to convolve over (e.g., 'jk').
+        fourier (tuple): Tuple of bools indicating if volume/kernel are already in Fourier space (default: (False, False)).
+
+    Returns:
+        torch.Tensor: Result of partial convolution.
+    """
+
     dim3 = dim1 + dim2
     dim3 = ''.join(sorted(set(dim3), key=dim3.index))
 
@@ -202,14 +225,16 @@ def partial_convolution(volume: torch.tensor, kernel: torch.tensor, dim1: str = 
 
 def estimate_lifetime(x: torch.Tensor, y: torch.Tensor, t0: int, t1: int) -> float:
     """
-    Estimate initial decay rate k from centroid of baseline-subtracted signal.
+    Estimate the decay lifetime (tau) from the centroid of the baseline-subtracted signal between t0 and t1.
 
     Args:
         x (torch.Tensor): 1D tensor of time points (same length as y).
         y (torch.Tensor): 1D tensor of signal values.
+        t0 (int): Start index for decay region.
+        t1 (int): End index for decay region.
 
     Returns:
-        float: Initial estimate for k (positive).
+        float: Estimated lifetime tau.
     """
 
     x = torch.as_tensor(x[t0:t1+1], dtype= torch.float32)
@@ -223,43 +248,3 @@ def estimate_lifetime(x: torch.Tensor, y: torch.Tensor, t0: int, t1: int) -> flo
     tau = torch.sum(x * y_clamped) / torch.sum(y_clamped)
 
     return tau
-
-
-def estimate_savgol_window(y: torch.Tensor, min_window: int = 5, max_window: int = None) -> int:
-    """
-    Estimate an appropriate odd window length for Savitzky-Golay smoothing.
-    Automatically adapts to signal dynamics.
-
-    Args:
-        y (torch.Tensor): 1D signal
-        min_window (int): Minimum allowed window length (default 5)
-        max_window (int): Maximum allowed window length (default len(y)//2)
-
-    Returns:
-        int: Odd window length
-    """
-    y = y.flatten().float()
-    N = len(y)
-    if max_window is None:
-        max_window = max(min_window, N // 2)
-
-    # Compute approximate slope magnitude
-    dy = torch.diff(y)
-    avg_slope = torch.mean(torch.abs(dy))
-
-    if avg_slope == 0:
-        # flat signal → use minimal window
-        window = min_window
-    else:
-        # Estimate transition length: points required for signal to change by 1 std
-        signal_range = y.max() - y.min()
-        transition_points = max(1, int(signal_range / avg_slope))
-
-        window = int(transition_points)
-
-    # Clamp window between min and max, ensure odd
-    window = max(min_window, min(max_window, window))
-    if window % 2 == 0:
-        window += 1
-
-    return window
