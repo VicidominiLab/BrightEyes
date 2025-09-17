@@ -182,19 +182,31 @@ class Birfi:
         self.irf = x_est
 
 
-    def run(self, lr=1e-2, steps=1000, rl_iterations=30, regularization=3):
+    def run(self, lr=1e-2, steps=1000, rl_iterations=30, regularization=3,
+            window_length=11, polyorder=3, persistence=5, threshold=0.05):
         """
         Complete pipeline to generate IRF:
         1. Find t0, t1 per channel
         2. Fit truncated exponential
         3. Generate truncated exponential
-        4. Perform Richardson-Lucy deconvolution
+        4. Generate deconvolution kernel
+        5. Perform Richardson-Lucy deconvolution
+
+        Args:
+            lr (float): Learning rate for exponential fit.
+            steps (int): Number of optimization steps for exponential fit.
+            rl_iterations (int): Number of RL deconvolution iterations.
+            regularization (int): Median filter size for RL deconvolution.
+            window_length (int): Length of Savitzky-Golay filter window (odd).
+            polyorder (int): Polynomial order for SG filter.
+            persistence (int): Number of consecutive positive derivative samples for t1.
+            threshold (float): Minimum amplitude threshold for t1.
 
         Returns:
             irf: torch.Tensor of shape (time, channel)
         """
 
-        self.find_t0_t1()
+        self.find_t0_t1(window_length=window_length, polyorder=polyorder, persistence=persistence, threshold=threshold)
         self.fit_exponential(lr=lr, steps=steps)
         self.generate_data_fit()
         self.generate_kernel()
