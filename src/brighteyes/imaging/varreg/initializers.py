@@ -55,6 +55,7 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
     # Initialization
     if dset.ndim - conv_dims == 1: #if I do not have channels
         dset = dset.unsqueeze(-2)  # Add a channel dimension #Nx x Ny x 1 x K
+        psf = psf.unsqueeze(-1)  # Add a channel dimension #Mx x My x 1
 
     # Sum dataset over repetition axis
     image = dset.sum(dim=-1)    # Nx x Ny x 1
