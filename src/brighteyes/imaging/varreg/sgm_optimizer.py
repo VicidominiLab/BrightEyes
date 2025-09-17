@@ -45,8 +45,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
 
     del img_estimate_k
 
-    update_k = alpha * forward(psf_m_fft, fraction)
-
+    update_k = alpha * forward(psf_m_fft, fraction).sum(-2)  # Sum over channels
     del fraction
 
     # === Metodo OSL ===
@@ -99,7 +98,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
     Parameters:
         dset (Tensor): Input data of shape Nx x Ny x Ch x K.
-        psf (Tensor): Fourier transform of the PSF of shape Nx x Ny x Ch x K.
+        psf (Tensor): Fourier transform of the PSF of shape Nx x Ny x Ch.
         max_iter (int): Maximum number of iterations.
         lam (float): Variance regularization parameter.
         alpha (float): Fidelity term regularization parameter.
@@ -131,7 +130,6 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
     # Normalize PSF
     psf_norm = psf / psf.sum()
-    #psf_m = torch.flip(psf_norm, dims=axis_to_conv)
 
     # Precompute FFTs
     psf_fft = rfftn(psf_norm, dim=axis_to_conv)
@@ -147,14 +145,14 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
     # Initialization
     if dset.ndim - conv_dims == 1:
+        print('No channels')
         size = list(dset.shape)
     elif dset.ndim - conv_dims == 2:
+        print('With channels')
         size = list(dset.shape[:-2] + dset.shape[-1:])
     else:
         raise ValueError("Dataset must have repetition and eventually channel dimensions in addition to spatial dimensions.")
-    
-    print(f'Initialization size: {size}')
-    
+        
     if rec_to_save == 'last':
         size = [1] + size
     elif rec_to_save == 'all':
@@ -162,12 +160,6 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
     obj_all = torch.empty(size).to(device)
     
-    print(f'Object all shape: {obj_all.shape}')
-    
-    print(f' dset shape: {dset.shape}, psf shape: {psf_norm.shape}')
-    tt = init.initialize(dset, psf_norm, method = initialization, device = None)
-    print(f'Initialized object shape: {tt.shape}')
-
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
 
     idx = 0
@@ -233,13 +225,16 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
 
-    axis_to_sum = 2
-    sz = dset.shape[:axis_to_sum]
+    conv_dims = 2
+    
+    if dset.ndim - conv_dims == 1: #if I do not have channels
+        dset = dset.unsqueeze(-2)  # Add a channel dimension #Nx x Ny x 1 x K
+        psf = psf.unsqueeze(-1)  # Add a channel dimension #Mx x My x 1
+    
+    sz = dset.shape[:conv_dims]
     
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-    
-    print(f'Dataset shape: {dset.shape}, Padded PSF shape: {psf_pad.shape}, input psf shape: {psf.shape}')
-    
+        
     obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
                       regularizer, initialization, normalize, rec_to_save, binomial)
     

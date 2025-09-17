@@ -96,9 +96,13 @@ def forward(otf, obj):
     alphabet = string.ascii_lowercase
 
     str_psf = alphabet[:otf.ndim]
-    str_obj = alphabet[:obj.ndim]
     axis_str = alphabet[:conv_dims]
-
+    
+    if obj.ndim == otf.ndim and obj.shape[-1] != otf.shape[-1]:  # If 
+        str_obj = alphabet[:conv_dims] + alphabet[otf.ndim + 1]
+    else:
+        str_obj = alphabet[:obj.ndim]
+    
     dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
 
     return dset
