@@ -21,7 +21,7 @@ class Birfi:
         kernel (torch.Tensor|None): Kernel for deconvolution.
         irf (torch.Tensor|None): Deconvolved IRFs.
     """
-    def __init__(self, data: torch.Tensor, dt: float = 1.0):
+    def __init__(self, data: torch.Tensor, dt: float = 1.0, device = None):
         """
         Initialize Birfi with time-series data and time step.
 
@@ -33,16 +33,22 @@ class Birfi:
             ValueError: If data has more than 2 dimensions.
         """
 
+        if device is None:
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+
         data = torch.as_tensor(data, dtype=torch.float32)
         if data.dim() == 1:
-            self.data = data.unsqueeze(1).clone()
+            self.data = data.unsqueeze(1).clone().to(self.device)
         elif data.dim() == 2:
-            self.data = data.clone()
+            self.data = data.clone().to(self.device)
         elif data.dim() > 2:
             raise ValueError("data must be 1D or 2D tensor")
 
+
         self.dt = dt
-        self.time = torch.arange(self.data.shape[0], device=self.data.device) * dt
+        self.time = torch.arange(self.data.shape[0], device=self.device) * dt
 
         self.num_samples, self.num_channels = self.data.shape
         self.t0 = None   # shape (channel,)
@@ -74,16 +80,15 @@ class Birfi:
         y_range = self.data.max(dim=0).values - self.data.min(dim=0).values
 
         for c in range(self.num_channels):
-            y = self.data[:, c].cpu().numpy()  # convert to numpy for SG filter
+            # Move data to CPU for scipy (savgol_filter), then back to device
+            y = self.data[:, c].detach().cpu().numpy()
             dy = savgol_filter(y, window_length=window_length, polyorder=polyorder, deriv=1, delta=self.dt)
-
-            dy = torch.tensor(dy, dtype=self.data.dtype, device=self.data.device)
+            dy = torch.tensor(dy, dtype=self.data.dtype, device=self.device)
 
             # t0: global minimum of derivative
             t0 = int(torch.argmin(dy))
 
             # t1: first point after t0 with persistent positive derivative
-
             t1 = len(dy) - 1  # fallback to end
             for i in range(t0 + 1, len(dy) - persistence):
                 avg_diff = dy[i:i + persistence].mean()
@@ -95,14 +100,13 @@ class Birfi:
             t0s.append(t0)
             t1s.append(t1)
 
-        self.t0 = torch.tensor(t0s, device=self.data.device)
-        self.t1 = torch.tensor(t1s, device=self.data.device)
+        self.t0 = torch.tensor(t0s, device=self.device)
+        self.t1 = torch.tensor(t1s, device=self.device)
 
 
     def fit_exponential(self, offset = 0, lr=1e-2, steps=1000):
         """
         Fit per-channel truncated exponential curves to the data between t0 and t1 using gradient-based optimization.
-        The initial guess for k is estimated from the central channel's lifetime (number of samples to decay by 1/e).
 
         Args:
             offset (int): Shift applied to t0 when selecting data for fitting.
@@ -119,15 +123,13 @@ class Birfi:
         if self.t0 is None or self.t1 is None:
             raise RuntimeError("Run find_t0_t1 first.")
 
-        device, dtype = self.data.device, self.data.dtype
-        # Parameters: per-channel A, C ; shared k
-        A = (self.data.max(dim=0).values - self.data.min(dim=0).values).clone().detach().requires_grad_(True)
+        device, dtype = self.device, self.data.dtype
+        A = (self.data.max(dim=0).values - self.data.min(dim=0).values).clone().detach().to(device).requires_grad_(True)
+        Cparam = self.data.min(dim=0).values.clone().detach().to(device).requires_grad_(True)
 
-        Cparam = self.data.min(dim=0).values.clone().detach().requires_grad_(True)
-
-        cc = self.num_channels // 2 # central channel index
+        cc = self.num_channels // 2  # central channel index
         tau = estimate_lifetime(self.time, self.data[..., cc], self.t0[cc], self.t1[cc])
-        k = (1.0 / tau).clone().detach().requires_grad_(True)
+        k = (1.0 / tau).clone().detach().to(device).requires_grad_(True)
 
         opt = torch.optim.Adam([A, Cparam, k], lr=lr)
 
@@ -137,7 +139,7 @@ class Birfi:
             for c in range(self.num_channels):
                 y = self.data[self.t0[c]+offset:self.t1[c]+1, c]
                 x = torch.arange(len(y), device=device, dtype=dtype) * self.dt
-                y_pred = A[c] * torch.exp(-k * x ) + Cparam[c]
+                y_pred = A[c] * torch.exp(-k * x) + Cparam[c]
                 loss = loss + torch.mean((y - y_pred) ** 2)
             loss = loss / self.num_channels
             loss.backward()
@@ -149,7 +151,6 @@ class Birfi:
     def generate_data_fit(self):
         """
         Generate fitted truncated exponential curves for all channels using parameters in self.params.
-        Stores result in self.data_fit.
 
         Side effects:
             Sets self.data_fit to tensor of shape (num_samples, num_channels).
@@ -161,7 +162,7 @@ class Birfi:
         if self.params is None:
             raise RuntimeError("Run fit_exponential first.")
 
-        exp_curves = torch.zeros_like(self.data)
+        exp_curves = torch.zeros_like(self.data, device=self.device)
 
         for c in range(self.num_channels):
             params = {
@@ -170,14 +171,14 @@ class Birfi:
                 "k": self.params["k"],
                 "t0": int(self.t0[c])*self.dt,
             }
-            exp_curves[:, c] = generate_truncated_exponential(self.time, params)
+            exp_curves[:, c] = generate_truncated_exponential(self.time, params).to(self.device)
 
         self.data_fit = exp_curves
 
 
     def generate_kernel(self):
         """
-        Build a normalized, positive kernel from a truncated exponential with unit amplitude and zero offset. Stores result in self.kernel.
+        Build a normalized, positive kernel from a truncated exponential with unit amplitude and zero offset.
 
         Side effects:
             Sets self.kernel to tensor of shape (num_samples,).
@@ -195,10 +196,9 @@ class Birfi:
             "t0": 0,
         }
 
-        exp_curve = generate_truncated_exponential(self.time, params)
-        exp_curve = torch.clamp(exp_curve, min=0) # enforce positivity
+        exp_curve = generate_truncated_exponential(self.time, params).to(self.device)
+        exp_curve = torch.clamp(exp_curve, min=0)  # enforce positivity
         exp_curve /= exp_curve.sum()  # normalize kernel
-
         self.kernel = exp_curve
 
 
@@ -222,25 +222,25 @@ class Birfi:
             raise RuntimeError("Run generate_kernel() first or provide a convolution kernel manually.")
 
         # initialize output tensor
-        x_est = torch.ones_like(self.data) # shape (time, channel)
+        x_est = torch.ones_like(self.data, device=self.device) # shape (time, channel)
 
         # load deconvolution kernel
-        kernel = self.kernel.clone()  # shape (time,)
-        kernel_t = self.kernel.clone().flip(0)  # time-reversed kernel, shape (time,)
+        kernel = self.kernel.clone().to(self.device)  # shape (time,)
+        kernel_t = self.kernel.clone().flip(0).to(self.device)  # time-reversed kernel, shape (time,)
 
-        kernel = fftn(kernel, dim = 0) # FT of kernel, shape (time,)
+        kernel = fftn(kernel, dim=0) # FT of kernel, shape (time,)
         kernel_t = fftn(kernel_t, dim=0)  # FT of time-reversed kernel, shape (time,)
 
         # Subtract offset
-        y = self.data.detach().clone().to(dtype=torch.float32) - self.params['C'].unsqueeze(0)
+        y = self.data.detach().clone().to(dtype=torch.float32, device=self.device) - self.params['C'].unsqueeze(0).to(self.device)
         y = torch.clamp(y, min=0)
 
         # RL deconvolution
         for _ in range(iterations):
-            conv = partial_convolution(x_est, kernel, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,1) )
+            conv = partial_convolution(x_est, kernel, dim1='xc', dim2='x', axis='x', fourier=(0,1))
             conv = torch.clamp(conv, min=eps)  # avoid div by 0
             relative_blur = y / conv
-            correction = partial_convolution(relative_blur, kernel_t, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,1) )
+            correction = partial_convolution(relative_blur, kernel_t, dim1='xc', dim2='x', axis='x', fourier=(0,1))
             x_est = x_est * correction
             x_est = torch.clamp(x_est, min=0)  # enforce positivity
             if regularization > 1:
@@ -298,6 +298,7 @@ class Birfi:
         if self.data_fit is None:
             raise RuntimeError("Run generate_data_fit() first.")
 
+        # Move tensors to CPU for plotting
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
         fit = self.data_fit.cpu().numpy()
@@ -337,13 +338,13 @@ class Birfi:
         time = self.time.cpu().numpy()
         raw = self.data.cpu().numpy()
 
-        forward = partial_convolution(self.irf, self.kernel, dim1 = 'xc', dim2 = 'x', axis= 'x', fourier = (0,0) )
-        forward += self.params['C'].unsqueeze(0)
+        forward = partial_convolution(self.irf, self.kernel, dim1='xc', dim2='x', axis='x', fourier=(0,0))
+        forward += self.params['C'].unsqueeze(0).to(forward.device)  # Add offset on same device
+        forward = forward.cpu().numpy()  # Move to CPU only for plotting
 
         # First, plot raw data as scatter
         fig, ax = plot_dataset(time, raw, color="k", linestyle="none", marker='.')
         # Then add forward model as line
-        fig, ax = plot_dataset(time, forward, color="g", linestyle="-", fig =fig, ax=ax)
-
+        fig, ax = plot_dataset(time, forward, color="g", linestyle="-", fig=fig, ax=ax)
 
         fig.legend(["Measured", "IRF ⊗ Exp"], loc="upper right", bbox_to_anchor=(0.95, 0.95))
