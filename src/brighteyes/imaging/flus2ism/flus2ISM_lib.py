@@ -608,7 +608,7 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
 
 
 
-def batch_reconstruction_flus2ism(dset: np.ndarray, psf_irf: np.ndarray, batch_size: list, overlap: int, stop='fixed',
+def batch_reconstruction_flus2ism_pulse_inter(dset: np.ndarray, psf_irf: np.ndarray, batch_size: list, overlap: int, stop='fixed',
                          max_iter: int = 100, threshold: float = 1e-3, rep_to_save: str = 'last',
                          initialization: str = 'flat', process: str = 'gpu'):
     """
