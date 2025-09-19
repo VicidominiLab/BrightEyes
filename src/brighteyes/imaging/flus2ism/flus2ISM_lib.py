@@ -604,3 +604,67 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
         torch.cuda.empty_cache()
 
     return obj, counts, diff, k
+
+
+
+
+def batch_reconstruction_flus2ism(dset: np.ndarray, psf_irf: np.ndarray, batch_size: list, overlap: int, stop='fixed',
+                         max_iter: int = 100, threshold: float = 1e-3, rep_to_save: str = 'last',
+                         initialization: str = 'flat', process: str = 'gpu'):
+    """
+
+    Parameters
+    ----------
+    dset : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    psf_irf : np.ndarray
+        Point spread function ( Nz x Ntau x Np x Nx x Ny x Nt x Nch ). 
+   
+    -------
+    O : np.ndarray ( Nz x Ntau x Nx x Ny ) if rep_to_save is equal to 'last'
+        reconstructed object.
+    """
+
+    wx, wy = batch_size
+    reconstruction = np.zeros((psf_irf.shape[0],) + (psf_irf.shape[1],) + dset.shape[:-2])
+
+    nx = dset.shape[0] // (wx - overlap) + int(dset.shape[0] % (wx - overlap) > 0)
+    ny = dset.shape[1] // (wy - overlap) + int(dset.shape[1] % (wy - overlap) > 0)
+
+    k_iter = 1
+    n_batch = nx * ny
+
+    rx = np.mod(dset.shape[0], wx - overlap)
+    ry = np.mod(dset.shape[1], wy - overlap)
+    thx = psf_irf.shape[3]
+    thy = psf_irf.shape[4]
+
+    if np.logical_and(rx > 0, rx < thx) or np.logical_and(ry > 0, ry < thy):
+        raise Exception('The PSF is bigger than the last batch size.')
+    
+    for i in range(nx):
+        for j in range(ny):
+            print(f'Batch {k_iter}/{n_batch}')
+
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+            overlap_x = overlap if i > 0 else 0
+            overlap_y = overlap if j > 0 else 0
+
+            indx = np.s_[i * (wx - overlap_x): (i + 1) * wx - i * overlap_x]
+            indy = np.s_[j * (wy - overlap_y): (j + 1) * wy - j * overlap_y]
+
+            crop_dset = dset[indx, indy]
+
+            recon, *_ = flus2ism_pulseinterl(dset=crop_dset, psf=psf_irf, stop=stop,
+                                                      max_iter=max_iter, threshold=threshold,
+                                                      rep_to_save=rep_to_save,
+                                                      initialization=initialization, process=process)
+
+            indx = np.s_[i * (wx - overlap_x) + overlap_x // 2: (i + 1) * wx - i * overlap_x]
+            indy = np.s_[j * (wy - overlap_y) + overlap_y // 2: (j + 1) * wy - j * overlap_y]
+
+            reconstruction[:,:, indx, indy] = recon[:,:, overlap_x // 2:, overlap_y // 2:]
+            k_iter += 1
+
+    return reconstruction
