@@ -471,7 +471,7 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     data = torch.from_numpy(dset * 1.).to(device)
     h = torch.from_numpy(psf * 1.).to(device)
 
-
+   
     oddeven_check_x = data.shape[0] % 2
     oddeven_check_y = data.shape[1] % 2
     check_x = False
@@ -484,7 +484,7 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     if oddeven_check_y == 0:
         check_y = True
         data_check = data_check[:, 1:]
-
+        
     Nz = h.shape[0]
     Ntau = h.shape[1]
     Np = h.shape[2]
@@ -492,8 +492,23 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     shape_data = data_check.shape
     Nx = shape_data[0]
     Ny = shape_data[1]
+    
+    crop_pad_x = int((shape_data[0] - h.shape[3]) / 2)
+    crop_pad_y = int((shape_data[1] - h.shape[4]) / 2)
+ 
+    if crop_pad_x > 0 or crop_pad_y > 0:
+        pad_array = np.zeros(2 * h.ndim, dtype='int')
+        pad_array[6:8] = crop_pad_x
+        pad_array[8:10] = crop_pad_y
+        pad_array = tuple(np.flip(pad_array))
+ 
+        h = torchpad.pad(h, pad_array, 'constant')
+       
+    elif crop_pad_x < 0 or crop_pad_y < 0:
+        raise Exception('The PSF is bigger than the image. Warning.')
+        
     O = torch.ones((Nz,Ntau,Nx,Ny)).to(device)
-
+    
 
     flip_ax = list(np.arange(3, len(data_check.shape)+1))
     
@@ -547,7 +562,7 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     
     # FFT transform on the spatial dimensions of the 2 given PSFs
     
-    
+   
     h_fft = fftn(h, dim=flip_ax)
     del h
     ht_fft = fftn(ht, dim=flip_ax)
@@ -571,25 +586,26 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
         k += 1
         pbar.update(1)
     pbar.close()
-    #
+    
     if check_x:
         if rep_to_save == 'last':
             pad_arr = np.zeros(2 * len(O.shape), dtype='int')
-            pad_arr[-4] = 1
+            pad_arr[-5] = 1
             O = torchpad.pad(O, tuple(pad_arr), 'constant')
         else:
             pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
-            pad_arr[-6] = 1
+            pad_arr[-7] = 1
             O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
     if check_y:
         if rep_to_save == 'last':
             pad_arr = np.zeros(2 * len(O.shape), dtype='int')
-            pad_arr[-6] = 1
+            pad_arr[-7] = 1
             O = torchpad.pad(O, tuple(pad_arr), 'constant')
         else:
             pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
-            pad_arr[-8] = 1
+            pad_arr[-9] = 1
             O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
+
 
     if isinstance(rep_to_save, str) and rep_to_save == 'last':
         obj = O.detach().cpu().numpy()
@@ -602,6 +618,7 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     if torch.cuda.is_available():
         gc.collect()
         torch.cuda.empty_cache()
+        
 
     return obj, counts, diff, k
 
@@ -635,9 +652,11 @@ def batch_reconstruction_flus2ism_pulse_inter(dset: np.ndarray, psf_irf: np.ndar
     n_batch = nx * ny
 
     rx = np.mod(dset.shape[0], wx - overlap)
+    print(rx)
     ry = np.mod(dset.shape[1], wy - overlap)
     thx = psf_irf.shape[3]
     thy = psf_irf.shape[4]
+    
 
     if np.logical_and(rx > 0, rx < thx) or np.logical_and(ry > 0, ry < thy):
         raise Exception('The PSF is bigger than the last batch size.')
@@ -650,18 +669,27 @@ def batch_reconstruction_flus2ism_pulse_inter(dset: np.ndarray, psf_irf: np.ndar
 
             overlap_x = overlap if i > 0 else 0
             overlap_y = overlap if j > 0 else 0
+            
+        
+
 
             indx = np.s_[i * (wx - overlap_x): (i + 1) * wx - i * overlap_x]
+            
             indy = np.s_[j * (wy - overlap_y): (j + 1) * wy - j * overlap_y]
+            
 
             crop_dset = dset[indx, indy]
+            
+
 
             recon, *_ = flus2ism_pulseinterl(dset=crop_dset, psf=psf_irf, stop=stop,
                                                       max_iter=max_iter, threshold=threshold,
                                                       rep_to_save=rep_to_save,
                                                       initialization=initialization, process=process)
+            
 
             indx = np.s_[i * (wx - overlap_x) + overlap_x // 2: (i + 1) * wx - i * overlap_x]
+            
             indy = np.s_[j * (wy - overlap_y) + overlap_y // 2: (j + 1) * wy - j * overlap_y]
 
             reconstruction[:,:, indx, indy] = recon[:,:, overlap_x // 2:, overlap_y // 2:]
