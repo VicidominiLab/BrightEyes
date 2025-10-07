@@ -331,6 +331,24 @@ def flus2ism(dset, psf, stop='fixed', max_iter: int = 100,
     Nx = shape_data[0]
     Ny = shape_data[1]
     O = torch.ones((Nz,Ntau,Nx,Ny)).to(device)
+    
+    crop_pad_x = int((shape_data[0] - h.shape[2]) / 2)
+    crop_pad_y = int((shape_data[1] - h.shape[3]) / 2)
+ 
+    if crop_pad_x > 0 or crop_pad_y > 0:
+        pad_array = np.zeros(2 * h.ndim, dtype='int')
+        pad_array[4:6] = crop_pad_x
+        pad_array[6:8] = crop_pad_y
+        pad_array = tuple(np.flip(pad_array))
+ 
+        h = torchpad.pad(h, pad_array, 'constant')
+        
+       
+    elif crop_pad_x < 0 or crop_pad_y < 0:
+        raise Exception('The PSF is bigger than the image. Warning.')
+        
+    print(h.shape)
+
 
 
     flip_ax = list(np.arange(2, len(data_check.shape)))
@@ -412,20 +430,20 @@ def flus2ism(dset, psf, stop='fixed', max_iter: int = 100,
     if check_x:
         if rep_to_save == 'last':
             pad_arr = np.zeros(2 * len(O.shape), dtype='int')
-            pad_arr[-4] = 1
+            pad_arr[-5] = 1
             O = torchpad.pad(O, tuple(pad_arr), 'constant')
         else:
             pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
-            pad_arr[-6] = 1
+            pad_arr[-7] = 1
             O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
     if check_y:
         if rep_to_save == 'last':
             pad_arr = np.zeros(2 * len(O.shape), dtype='int')
-            pad_arr[-6] = 1
+            pad_arr[-7] = 1
             O = torchpad.pad(O, tuple(pad_arr), 'constant')
         else:
             pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
-            pad_arr[-8] = 1
+            pad_arr[-9] = 1
             O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
 
     if isinstance(rep_to_save, str) and rep_to_save == 'last':
@@ -439,6 +457,9 @@ def flus2ism(dset, psf, stop='fixed', max_iter: int = 100,
     if torch.cuda.is_available():
         gc.collect()
         torch.cuda.empty_cache()
+    
+    
+    print(obj.shape)
 
     return obj, counts, diff, k
 
@@ -652,7 +673,6 @@ def batch_reconstruction_flus2ism_pulse_inter(dset: np.ndarray, psf_irf: np.ndar
     n_batch = nx * ny
 
     rx = np.mod(dset.shape[0], wx - overlap)
-    print(rx)
     ry = np.mod(dset.shape[1], wy - overlap)
     thx = psf_irf.shape[3]
     thy = psf_irf.shape[4]
