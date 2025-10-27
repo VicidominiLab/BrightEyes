@@ -77,12 +77,12 @@ def binomial_split(x: torch.tensor, n_splits: int = 2, p: float = 0.5, device: s
         device = x.device if x.device.type != 'cpu' else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     x = x.to(device)
 
+    # Convert to float for torch.binomial
+    x = x.to(torch.float32)
+
     # Ensure input is non-negative
     if not torch.all(x >= 0):
         raise ValueError("x must be non-negative")
-
-    # Convert to float for torch.binomial
-    x = x.to(torch.float32)
 
     # Original shape
     shape = x.shape

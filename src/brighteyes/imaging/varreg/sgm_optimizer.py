@@ -145,10 +145,8 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
     # Initialization
     if dset.ndim - conv_dims == 1:
-        print('No channels')
         size = list(dset.shape)
     elif dset.ndim - conv_dims == 2:
-        print('With channels')
         size = list(dset.shape[:-2] + dset.shape[-1:])
     else:
         raise ValueError("Dataset must have repetition and eventually channel dimensions in addition to spatial dimensions.")
