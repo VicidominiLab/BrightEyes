@@ -4,7 +4,7 @@ import einops
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
-from .utils import partial_convolution_rfft, centered_pad
+from .utils import partial_convolution_rfft, centered_pad, forward
 
 
 def forward_model(otf, obj):
@@ -57,14 +57,14 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     num_axis_to_conv = 2  
 
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
-        obj_set = obj_set.unsqueeze(0)  # Add a batch dimension
+        obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
         n_dim = n_dim + 1
         
     str_psf = alphabet[1:n_dim]   # 'bc' or 'bcd'
-    str_obj = alphabet[:n_dim]   # 'abc' or 'abcd'
+    str_obj = alphabet[:n_dim-1] + alphabet[n_dim]   # 'abc' or 'abcd'
     axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
-    str_final = str_obj
-    axis_to_sum = tuple(range(1, obj_set.ndim))
+    str_final = alphabet[:n_dim+1]
+    axis_to_sum = tuple(range(1, obj_set.ndim+1))
 
     if psf.is_floating_point():
         sz = dataset.shape[:num_axis_to_conv]
@@ -92,7 +92,6 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         fidelity = einops.einsum(fidelity, weight_map, ein_str)
     else:
         fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present)
-
     return fidelity
 
 

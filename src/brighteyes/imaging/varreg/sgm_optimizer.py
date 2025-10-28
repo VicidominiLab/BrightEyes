@@ -8,15 +8,71 @@ from torch.fft import rfftn, irfftn, ifftshift
 from torch import real, einsum
 from tqdm import tqdm
 
+from .loss import fidelity_loss, regularization_loss
+
 from .utils import partial_convolution_rfft, centered_pad, forward
-
 from .regularizers import grad_l2, grad_l1, grad_kl
-
 from .preprocessing import binomial_split
 
 from . import initializers as init
 
-def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: str, regularizer: str):
+def tensor_scalar_product(tensor1, tensor2):
+    """
+    Compute the scalar product between two tensors.
+
+    Parameters:
+    tensor1 (Tensor): First input tensor.
+    tensor2 (Tensor): Second input tensor.
+
+    Returns:
+    float: Scalar product result.
+    """
+    return torch.sum(tensor1 * tensor2)
+
+def compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weight, initial_step_size=1.0):
+    theta = 0.8
+    delta = 0.5
+    max_iter = 50
+    descent_lemma = False
+    i = 0
+    step_size = initial_step_size / ((theta**2))
+    
+    while descent_lemma is False:
+        #Compute current loss
+        fidelity = fidelity_loss(img, obj, psf_fft)
+        regularization = regularization_loss(obj, iteration_axis=False)
+        loss_value = alpha * fidelity + lam * regularization
+        
+        #Compute next point
+        obj_mean = obj.mean(dim=-1, keepdim=True)
+        grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
+        obj_tmp = torch.where(obj - grad > 0, obj - grad, 0)
+        obj_new = obj + step_size * (obj_tmp - obj)
+        
+        #Compute new loss
+        fidelity = fidelity_loss(img, obj_new, psf_fft)
+        regularization = regularization_loss(obj_new, iteration_axis=False)
+        loss_value_new = alpha * fidelity + lam * regularization
+        
+        #Check descent lemma
+        grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
+        lhs = loss_value_new - loss_value - tensor_scalar_product(obj_new - obj, grad)
+        rhs = delta/ (step_size * torch.norm(obj_new - obj)**2 )
+        print(f"Line search iteration {i}: lhs = {lhs}, rhs = {rhs}")
+        if lhs <= rhs:
+            descent_lemma = True
+        else:
+            i = i + 1
+            step_size = initial_step_size*(theta**i)
+            print(f"Line search iteration {i}: step size updated to {step_size}")
+            if i > max_iter:
+                print(f"Line search did not converge after {max_iter} iterations. Using last step size.")
+                descent_lemma = True
+                break
+            
+    return step_size
+
+def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, step_size_search:str, initial_step_size: float = 1.0):
     """
     Performs a single iteration update for SGM with variance regularization.
 
@@ -48,6 +104,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
     update_k = alpha * forward(psf_m_fft, fraction).sum(-2)  # Sum over channels
     del fraction
 
+    step_size = None
+    
     # === Metodo OSL ===
     if method.lower() == 'osl':
         obj_mean = obj.mean(dim=-1, keepdim=True)
@@ -85,14 +143,69 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, method: st
         obj_update = update_k / denom
         obj_new = obj * obj_update
 
-    else:
-        raise ValueError("Metodo non valido. Usare 'osl' o 'sgm'.")
+    # === Metodo GD con step size ===
+    elif method.lower() == 'gd':
+        
+        obj_mean = obj.mean(dim=-1, keepdim=True)
+        grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
+        obj_tmp = torch.where(obj - grad > 0, obj - grad, 0)
+        ### TO DO: Controllare che qua non ci voglia un check obj = obj_tmp per decretare punto fisso vd Bonettini paper ###
+        
+        if step_size_search == 'rl':
+            step_size = obj
+        elif step_size_search == 'fixed':
+            step_size = initial_step_size    
+        elif step_size_search == 'line_search':
+            step_size = compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weight, initial_step_size=initial_step_size)
+        else:
+            raise ValueError("step_size_search must be 'rl', 'line_search' or 'fixed'.")
+            
+        obj_new = obj + step_size * (obj_tmp - obj)
 
-    return obj_new
+    # === Metodo SGP ===
+    elif method.lower() == 'sgp':
+        
+        if regularizer == 'l2':
+            u, v = grad_l2(obj)
+        elif regularizer == 'kl':
+            u, v = grad_kl(obj)
+        elif regularizer == 'l1':
+            u, v = grad_l1(obj)
+        else:
+            raise ValueError("Regularizer must be 'l2', 'kl', or 'l1'.")
+        
+        obj_mean = obj.mean(dim=-1, keepdim=True)
+        grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
+        D_matrix_inv = obj/(1+2*lam*weight*obj)
+        s1 = 1e10
+        s2 = 2
+        thr = np.sqrt( 1 + (s1/( (m+1)**s2 ) ) )
+        min_value = 1/thr
+        max_value = thr
+        D_matrix_inv = torch.clamp(D_matrix_inv, min=min_value, max=max_value)
+        
+        obj_tmp = torch.where( (obj - D_matrix_inv * grad) > 0, (obj - D_matrix_inv * grad), 0)
+        ### TO DO: Controllare che qua non ci voglia un check obj = obj_tmp per decretare punto fisso vd Bonettini paper ###
+        
+        if step_size_search == 'rl':
+            step_size = obj
+        elif step_size_search == 'fixed':
+            step_size = initial_step_size    
+        elif step_size_search == 'line_search':
+            step_size = compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weight, initial_step_size=initial_step_size)
+        else:
+            raise ValueError("step_size_search must be 'rl', 'line_search' or 'fixed'.")
+            
+        obj_new = obj + step_size * (obj_tmp - obj)
+        
+    else:
+        raise ValueError("Metodo non valido. Usare 'osl', 'sgm', 'sgp' o 'gd'.")
+
+    return obj_new, step_size
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
-            normalize, rec_to_save, binomial):
+            normalize, rec_to_save, binomial, step_size_search):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -160,10 +273,19 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
 
+    #Control check parameter stepsize
+    if isinstance(step_size_search, (float, int)):
+        if step_size_search <= 0:
+            raise ValueError("step_size_search must be a positive number.")
+        initial_step_size = step_size_search
+        step_size_search = 'fixed'
+    else:
+        initial_step_size = 1.0
+
     idx = 0
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_set = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, method, regularizer)
+        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer, step_size_search=step_size_search, initial_step_size=initial_step_size)
 
         # flux conservation
         if normalize is True:
@@ -191,7 +313,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu',
-                            rec_to_save='last', binomial: bool = False):
+                            rec_to_save='last', binomial: bool = False, step_size_search: str = 'fixed'):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
@@ -234,7 +356,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
     obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
-                      regularizer, initialization, normalize, rec_to_save, binomial)
+                      regularizer, initialization, normalize, rec_to_save, binomial, step_size_search)
     
     if rec_to_save == 'last':
         return obj_all[-1]
