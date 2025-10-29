@@ -35,7 +35,7 @@ def compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weigh
     max_iter = 50
     descent_lemma = False
     i = 0
-    step_size = initial_step_size / ((theta**2))
+    step_size = initial_step_size / ((theta**1))
     
     while descent_lemma is False:
         #Compute current loss
@@ -58,7 +58,7 @@ def compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weigh
         grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
         lhs = loss_value_new - loss_value - tensor_scalar_product(obj_new - obj, grad)
         rhs = delta/ (step_size * torch.norm(obj_new - obj)**2 )
-        print(f"Line search iteration {i}: lhs = {lhs}, rhs = {rhs}")
+        print(f"Line search iteration {i}: lhs = {lhs}, rhs = {rhs}, step size = {step_size}")
         if lhs <= rhs:
             descent_lemma = True
         else:
@@ -72,7 +72,7 @@ def compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weigh
             
     return step_size
 
-def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, step_size_search:str, initial_step_size: float = 1.0):
+def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, step_size_search:str, initial_step_size: float = 1.0, line_search_params: tuple=None):
     """
     Performs a single iteration update for SGM with variance regularization.
 
@@ -177,8 +177,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
         obj_mean = obj.mean(dim=-1, keepdim=True)
         grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
         D_matrix_inv = obj/(1+2*lam*weight*obj)
-        s1 = 1e10
-        s2 = 2
+        s1 = line_search_params[0]
+        s2 = line_search_params[1]
         thr = np.sqrt( 1 + (s1/( (m+1)**s2 ) ) )
         min_value = 1/thr
         max_value = thr
@@ -205,7 +205,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
-            normalize, rec_to_save, binomial, step_size_search):
+            normalize, rec_to_save, binomial, step_size_search, line_search_params):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -280,12 +280,13 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         initial_step_size = step_size_search
         step_size_search = 'fixed'
     else:
-        initial_step_size = 1.0
+        initial_step_size = 0.8
 
     idx = 0
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer, step_size_search=step_size_search, initial_step_size=initial_step_size)
+        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer,
+                                                step_size_search=step_size_search, initial_step_size=initial_step_size, line_search_params=line_search_params)
 
         # flux conservation
         if normalize is True:
@@ -313,7 +314,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=50, tol=None, method='sgm',
                             regularizer='l2', initialization='flat', normalize=False, process='gpu',
-                            rec_to_save='last', binomial: bool = False, step_size_search: str = 'fixed'):
+                            rec_to_save='last', binomial: bool = False, step_size_search: str = 'fixed', line_search_params=None):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
@@ -356,7 +357,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
     obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
-                      regularizer, initialization, normalize, rec_to_save, binomial, step_size_search)
+                      regularizer, initialization, normalize, rec_to_save, binomial, step_size_search, line_search_params)
     
     if rec_to_save == 'last':
         return obj_all[-1]

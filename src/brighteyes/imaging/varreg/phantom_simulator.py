@@ -80,3 +80,109 @@ def generate_disk_phantom(shape, num, radius, value_range=(0.1, 1.0), smooth: bo
     phantom[phantom < 0] = 0
 
     return phantom
+
+def IIT_G2DFit_gaussian2D(x, y, sx, sy, ux, uy, K):
+    result = K / (2.0 * np.pi * sx * sy) * np.exp(-((x - ux)**2 / (2.0 * sx**2)) - ((y - uy)**2 / (2.0 * sy**2)))
+    return result
+
+def IIT_G2DFit_gaussian2DDraw(w, h, sx, sy, ux, uy, theta, K, pixelSize):
+    result = np.zeros((h, w))
+    for y in range(h):
+        for x in range(w):
+            xp = x * pixelSize - ux
+            yp = y * pixelSize - uy
+            xpp = xp * np.cos(theta) - yp * np.sin(theta)
+            ypp = xp * np.sin(theta) + yp * np.cos(theta)
+            result[y, x] = IIT_G2DFit_gaussian2D(xpp, ypp, sx, sy, 0, 0, K)
+    return result
+
+def Nucleus(shape, noOfGauss, value_range, std_range, ellipse_axes, background_noise=0.01, seed=None):
+    
+    # Parameters
+    dimImx = shape[0] // 2
+    dimImy = shape[1] // 2
+    minAmpGauss = value_range[0]
+    maxAmpGauss = value_range[1]
+    stdMin = std_range[0]
+    stdMax = std_range[1]
+    
+    if seed is not None:
+        np.random.seed(seed)
+
+    h, w = shape
+    y, x = np.indices(shape)
+    cy, cx = h / 2, w / 2  # center of image
+
+    # --- Define elliptical mask for the nucleus ---
+    ellipse_mask = ((x - cx) / ellipse_axes[0])**2 + ((y - cy) / ellipse_axes[1])**2 <= 1
+
+    # --- Initialize empty image ---
+    phantom = np.zeros(shape, dtype=float)
+
+    # --- Random positions for blobs inside the ellipse ---
+    positions = []
+    while len(positions) < noOfGauss:
+        px = np.random.uniform(0, w)
+        py = np.random.uniform(0, h)
+        if ellipse_mask[int(py % h), int(px % w)]:
+            positions.append((px, py))
+    positions = np.array(positions)
+
+    # --- Add Gaussian blobs efficiently ---
+    for (px, py) in positions:
+        amp = np.random.uniform(*value_range)
+        std = np.random.uniform(*std_range)
+        # Create Gaussian around position (vectorized local window)
+        xg = np.exp(-((x - px)**2 + (y - py)**2) / (2 * std**2))
+        phantom += amp * xg
+
+    # --- Mask everything outside ellipse ---
+    phantom *= ellipse_mask
+
+    # --- Add smoothness + background noise for realism ---
+    phantom = gaussian_filter(phantom, sigma=1.0)
+    phantom += background_noise * np.random.random(shape)
+
+    # --- Normalize to [0, 1] for display ---
+    phantom -= phantom.min()
+    phantom /= phantom.max()
+
+    return phantom
+
+
+def generate_membrane_phantom(shape, radius, thickness, value_range, noise_level=0.05, blur_sigma=1.0, seed=None):
+    """
+    Generate a synthetic 2D fluorescence-like image of a cell membrane
+    as a bright elliptical shell with slight intensity variation and blur.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    h, w = shape
+    y, x = np.indices(shape)
+    cy, cx = h / 2, w / 2
+
+    # Ellipse parameters
+    r1, r2 = radius
+    a = r1  # x-axis radius
+    b = r2  # y-axis radius
+
+    # Distance from ellipse boundary (approximation)
+    ellipse_eq = ((x - cx) / a)**2 + ((y - cy) / b)**2
+    membrane_mask = np.exp(-((ellipse_eq - 1.0)**2) / (2 * (thickness / 100)**2))
+
+    # Random intensity variations along the membrane
+    rand_texture = np.random.uniform(*value_range, size=shape)
+    phantom = membrane_mask * rand_texture
+
+    # Smooth slightly to look more optical
+    phantom = gaussian_filter(phantom, sigma=blur_sigma)
+
+    # Add background noise
+    phantom += noise_level * np.random.random(shape)
+
+    # Normalize
+    phantom -= phantom.min()
+    phantom /= phantom.max()
+
+    return phantom
