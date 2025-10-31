@@ -186,3 +186,65 @@ def generate_membrane_phantom(shape, radius, thickness, value_range, noise_level
     phantom /= phantom.max()
 
     return phantom
+
+def generate_hollow_membrane_phantom(
+    shape=(256, 256),
+    n_ellipses=40,
+    radius_range=(6, 25),
+    amplitude_range=(0.5, 1.0),
+    thickness=0.15,
+    blur_sigma=1.0,
+    noise_level=0.05,
+    seed=None
+):
+    """
+    Generate a 2D fluorescence-like phantom with multiple small hollow elliptical
+    membranes (e.g., simulating mitochondria or vesicles).
+
+    Each ellipse is randomly placed, oriented, and sized, with soft blurred edges.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    h, w = shape
+    y, x = np.indices(shape)
+    phantom = np.zeros(shape, dtype=float)
+
+    for _ in range(n_ellipses):
+        # Random ellipse parameters
+        cx = np.random.uniform(0.2 * w, 0.8 * w)
+        cy = np.random.uniform(0.2 * h, 0.8 * h)
+        rx = np.random.uniform(*radius_range)
+        ry = np.random.uniform(*radius_range)
+        amp = np.random.uniform(*amplitude_range)
+        theta = np.random.uniform(0, np.pi)
+
+        # Rotate coordinate system
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        X = x - cx
+        Y = y - cy
+        Xr = cos_t * X + sin_t * Y
+        Yr = -sin_t * X + cos_t * Y
+
+        # Elliptical distance field
+        ellipse_eq = (Xr / rx)**2 + (Yr / ry)**2
+
+        # Hollow ring profile (soft Gaussian shell)
+        ring = np.exp(-((ellipse_eq - 1.0)**2) / (2 * thickness**2))
+
+        # Random local modulation to simulate uneven labeling
+        ring *= amp * np.random.uniform(0.8, 1.2, size=shape)
+
+        phantom += ring
+
+    # Add Gaussian blur for optical softness
+    phantom = gaussian_filter(phantom, sigma=blur_sigma)
+
+    # Add background noise
+    phantom += noise_level * np.random.random(shape)
+
+    # Normalize to [0,1]
+    phantom -= phantom.min()
+    phantom /= phantom.max()
+
+    return phantom

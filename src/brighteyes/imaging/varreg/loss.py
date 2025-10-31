@@ -77,6 +77,9 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
 
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
 
+    print(f'forward shape: {forward.dtype}' )
+    print(f'dataset shape: {dataset.dtype}' )
+
     fidelity = forward - dataset * torch.log(forward + eps)
 
     if full_KL:
