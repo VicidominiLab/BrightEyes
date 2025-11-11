@@ -57,6 +57,7 @@ def compute_step_size_line_search(img, obj, psf_fft, update_k, lam, alpha, weigh
         #Check descent lemma
         grad = (1 - update_k + 2 * lam * weight * (obj - obj_mean))
         lhs = loss_value_new - loss_value - tensor_scalar_product(obj_new - obj, grad)
+        
         rhs = delta/ (step_size * torch.norm(obj_new - obj)**2 )
         print(f"Line search iteration {i}: lhs = {lhs}, rhs = {rhs}, step size = {step_size}")
         if lhs <= rhs:
@@ -280,7 +281,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         initial_step_size = step_size_search
         step_size_search = 'fixed'
     else:
-        initial_step_size = 0.8
+        initial_step_size = 0.005
 
     idx = 0
     # Reconstruction loop

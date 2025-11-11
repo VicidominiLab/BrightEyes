@@ -59,12 +59,22 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
         n_dim = n_dim + 1
+    
+    if psf.ndim == num_axis_to_conv:
+        psf = psf.unsqueeze(-1)  # Add channel dimension if needed
+        dataset = dataset.unsqueeze(-1)
+            
+    if obj_set.shape[-1] != dataset.shape[-1]:
+        obj_set = obj_set.unsqueeze(-1)  # Add a K dimension if missing
+    
+    if obj_set.ndim != dataset.ndim:
+        dataset = dataset.unsqueeze(-1)  # Add a K dimension if missing (for RL case)
         
-    str_psf = alphabet[1:n_dim]   # 'bc' or 'bcd'
-    str_obj = alphabet[:n_dim-1] + alphabet[n_dim]   # 'abc' or 'abcd'
+    str_psf = alphabet[1:num_axis_to_conv+2]   # 'bcd'
+    str_obj = alphabet[:num_axis_to_conv+1] + alphabet[num_axis_to_conv+2]  # 'abce'
     axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
-    str_final = alphabet[:n_dim+1]
-    axis_to_sum = tuple(range(1, obj_set.ndim+1))
+    str_final = alphabet[:num_axis_to_conv+3]  # 'abcde'
+    axis_to_sum = tuple(range(1, dataset.ndim+1))  # Sum over all but the first dimension (num_iter)
 
     if psf.is_floating_point():
         sz = dataset.shape[:num_axis_to_conv]
@@ -76,9 +86,6 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
 
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
-
-    print(f'forward shape: {forward.dtype}' )
-    print(f'dataset shape: {dataset.dtype}' )
 
     fidelity = forward - dataset * torch.log(forward + eps)
 
@@ -94,7 +101,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         ein_str = f"b {lhs} ... , {lhs} -> b"
         fidelity = einops.einsum(fidelity, weight_map, ein_str)
     else:
-        fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present)
+        fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present) and last (K)
     return fidelity
 
 
