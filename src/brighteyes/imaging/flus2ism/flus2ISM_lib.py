@@ -234,14 +234,17 @@ def flus2ism_pulseinterl__update(img, obj, psf_fft, psf_m_fft, eps: float, devic
 
     del img_estimate
 
-    up = torch.empty(szt).to(device)
+    diff_dim = psf_m_fft.ndim - fraction.ndim
+    fraction_str = alphabet[diff_dim:fraction.ndim+diff_dim]
+    axis_to_conv = fraction_str[:num_axis_to_conv]
+    up = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=fraction_str, axis=axis_to_conv, fourier=(True, False))
 
-    for z in range(Nz):
-        for c in range(Nch):
-            for tau in range(Ntau):
-                for t in range(T):
-                    for p in range(Np):                
-                        up[z,tau,p, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau,p, ...,t, c])
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 for p in range(Np):                
+    #                     up[z,tau,p, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau,p, ...,t, c])
                 
     update = up.sum(-1)
     
