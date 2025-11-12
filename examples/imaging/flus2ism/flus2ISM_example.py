@@ -1,9 +1,10 @@
+# %%
 import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.signal import convolve
 import os
-
+import string
 from tqdm import trange
 
 import brighteyes_ism.simulation.PSF_sim as sim
@@ -13,6 +14,7 @@ import brighteyes_ism.analysis.APR_lib as apr
 from skimage.filters import gaussian
 import brighteyes_ism.simulation.Tubulin_sim as simTub
 
+from flus2ISM_lib import partial_convolution_rfft
 import flus2ISM_lib as us2ism
 
 # %%
@@ -151,11 +153,13 @@ for z in range(Ntau):
 
 irf_fin = np.empty((Ntau,nbin*3,N))
 
-for i in range(Ntau):
-    for c in range(N):
-        irf_fin[i,...,c] = convolve(decay[i], irf[...,c], mode='same')
-        
-        #%%
+# Update
+str_irf = 'tc'
+str_decay = 'mt'
+
+irf_fin = partial_convolution_rfft(irf, decay, dim1=str_irf, dim2=str_decay, dim3='mtc', axis='t', fourier=(False, False))
+
+#%%
     
 plt.figure()
 plt.plot(irf_fin[0].sum(-1))
@@ -184,25 +188,38 @@ dataset_bkg = np.empty([ 2, Nx, Nx, 3*nbin, N])
 ground_truth_bkg = ground_truth[:2]
 ground_truth_focus = ground_truth[2:]
 
+alphabet = string.ascii_lowercase
+num_axis_to_conv = 2
+str_psf = alphabet[:psf_irf_focus.ndim]
+obj_str = alphabet[:ground_truth_focus.ndim]
+axis_to_conv = alphabet[ground_truth_focus.ndim-num_axis_to_conv : ground_truth_focus.ndim]
 
-for c in range(N):
-        for j in range(2):
-            for l in range(3*nbin):
-                dataset_focus[j, :, :, l, c] = convolve(ground_truth_focus[j], psf_irf_focus[ j, :, :,l, c], mode='same')
+#%% Partial Convolution
+dataset_focus = partial_convolution_rfft(psf_irf_focus, ground_truth_focus, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(False, False))
+
+# for c in range(N):
+#         for j in range(2):
+#             for l in range(3*nbin):
+#                 dataset_focus[j, :, :, l, c] = convolve(ground_truth_focus[j], psf_irf_focus[ j, :, :,l, c], mode='same')
                 
+dataset_bkg = partial_convolution_rfft(psf_irf_bkg, ground_truth_bkg, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(False, False))              
                 
-for c in range(N):
-        for j in range(2):
-            for l in range(3*nbin):
-                dataset_bkg[j, :, :, l, c] = convolve(ground_truth_bkg[j], psf_irf_bkg[j, :, :,l, c], mode='same')
+# for c in range(N):
+#         for j in range(2):
+#             for l in range(3*nbin):
+#                 dataset_bkg[j, :, :, l, c] = convolve(ground_truth_bkg[j], psf_irf_bkg[j, :, :,l, c], mode='same')
 
 #%%
-dataset = dataset_focus +dataset_bkg
+dataset = dataset_focus + dataset_bkg
 
 dataset[dataset < 0] = 0
 d = dataset.sum(axis=(0))
 
 dset = np.random.poisson(d)
+
+#%% DISPLAYING THE SIMULATED DATASET
+plt.figure()
+gra.ShowImg(dset.sum(axis=(-2,-1)), grid.pxsizex*1e-3, cmap='hot')
 
 #%% PLOTTING THE RAW TEMPORAL DECAY
 
@@ -232,8 +249,10 @@ psf_irf_finale= np.stack((psf_irf_bkg, psf_irf_focus))
 n_iter = 40
 
 #%%
+import importlib
+importlib.reload(us2ism)
 
-file_rec = 'recon_flus2ism.npy'
+file_rec = 'fast_data' #recon_flus2ism.npy'
 
 analyze = False
 
@@ -243,8 +262,7 @@ else:
     reconstruction, *_ = us2ism.flus2ism(dset, psf_irf_finale, max_iter=n_iter, rep_to_save='all',process ='cpu')
     np.save(file_rec, reconstruction)
     
-    #%%
-
+#%%
 rec_focus= reconstruction[:,1]
 
 rec_bkg = reconstruction[:,0]

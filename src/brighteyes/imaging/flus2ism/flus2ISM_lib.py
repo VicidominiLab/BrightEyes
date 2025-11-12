@@ -3,36 +3,77 @@ from collections.abc import Iterable
 
 import numpy as np
 from tqdm import tqdm
-
+import string
 import torch
 import torch.nn.functional as torchpad
-from torch.fft import fftn, ifftn, ifftshift
+from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
+from torch import real, einsum
 
+def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl',
+                             axis: str = 'jk',  dim3: str = None, fourier: tuple = (False, False),
+                             padding: list = None):
 
+    kernel = torch.as_tensor(kernel)
+    volume = torch.as_tensor(volume)
 
-def torch_conv(signal, kernel_fft):
-    """
-    It calculates the circular convolution of a real signal with a real kernel using the FFT method using pytorch.
+    if dim3 is None:
+        dim3 = dim1 + dim2
+        dim3 = ''.join(sorted(set(dim3), key=dim3.index))
+    elif not isinstance(dim3, str):
+        raise ValueError("dim3 must be a string")
 
-    Parameters
-    ----------
-    signal : torch.Tensor
-        Tensor with N dimensions to be convolved.
-    kernel_fft : torch.Tensor
-        Kernel in the frequency domain of the convolution. It has the same number of dimensions of the signal.
+    dims = [dim1, dim2, dim3]
 
-    Returns
-    -------
-        conv : torch.Tensor
-            Circular convolution of signal with kernel.
-    """
+    axis_list = [[d.find(c) for c in axis] for d in dims]
 
-    conv = fftn(signal) * kernel_fft  # product of FFT
-    conv = ifftn(conv)  # inverse FFT of the product
-    conv = ifftshift(conv)  # Rotation of 180 degrees of the phase of the FFT
-    conv = torch.real(conv)  # Clipping to zero the residual imaginary part
+    if padding is None:
+        padding = [volume.size(d) for d in axis_list[1]]
+
+    if fourier[0] == False:
+        #kernel_shifted = ifftshift(kernel, dim=axis_list[0])  # Centra il kernel
+        kernel_fft = rfftn(kernel, dim=axis_list[0], s=padding)
+    else:
+        kernel_fft = kernel
+
+    if fourier[1] == False:
+        #volume_shifted = ifftshift(volume, dim=axis_list[1])  # Centra il volume
+        volume_fft = rfftn(volume, dim=axis_list[1], s=padding)
+    else:
+        volume_fft = volume
+
+    print(f'kernel_fft shape: {kernel_fft.shape}, volume_fft shape: {volume_fft.shape}')
+
+    conv = einsum(f'{dim1},{dim2}->{dim3}', kernel_fft, volume_fft)
+    
+    conv = irfftn(conv, dim=axis_list[2], s=padding)  # inverse FFT of the product
+    conv = ifftshift(conv, dim=axis_list[2])  # Rotation of 180 degrees of the phase of the FFT
+    conv = real(conv)  # Clipping to zero the residual imaginary part
 
     return conv
+
+# def torch_conv(signal, kernel_fft):
+#     """
+#     It calculates the circular convolution of a real signal with a real kernel using the FFT method using pytorch.
+
+#     Parameters
+#     ----------
+#     signal : torch.Tensor
+#         Tensor with N dimensions to be convolved.
+#     kernel_fft : torch.Tensor
+#         Kernel in the frequency domain of the convolution. It has the same number of dimensions of the signal.
+
+#     Returns
+#     -------
+#         conv : torch.Tensor
+#             Circular convolution of signal with kernel.
+#     """
+
+#     conv = fftn(signal) * kernel_fft  # product of FFT
+#     conv = ifftn(conv)  # inverse FFT of the product
+#     conv = ifftshift(conv)  # Rotation of 180 degrees of the phase of the FFT
+#     conv = torch.real(conv)  # Clipping to zero the residual imaginary part
+
+#     return conv
 
 
 def flus2ism_update(img, obj, psf_fft, psf_m_fft, eps: float, device: str):
@@ -78,11 +119,20 @@ def flus2ism_update(img, obj, psf_fft, psf_m_fft, eps: float, device: str):
     den = torch.empty(szt).to(device)
 
     # Update
-    for z in range(Nz):
-        for c in range(Nch):
-            for tau in range(Ntau):
-                for t in range(T):
-                    den[z,tau, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau, ...,t, c])
+    alphabet = string.ascii_lowercase
+    num_axis_to_conv = 2
+    str_psf = alphabet[:psf_fft.ndim]
+    obj_str = alphabet[:obj.ndim]
+    axis_to_conv = alphabet[obj.ndim-num_axis_to_conv : obj.ndim]
+    
+    den = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(True, False))
+
+    # Update
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 den[z,tau, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau, ...,t, c])
     img_estimate = den.sum(axis=(0,1))
 
     del den
@@ -90,15 +140,18 @@ def flus2ism_update(img, obj, psf_fft, psf_m_fft, eps: float, device: str):
     fraction = torch.where(img_estimate < eps, 0, img / img_estimate)
 
     del img_estimate
+    
+    diff_dim = psf_m_fft.ndim - fraction.ndim
+    fraction_str = alphabet[diff_dim:fraction.ndim+diff_dim]
+    axis_to_conv = fraction_str[:num_axis_to_conv]
+    up = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=fraction_str, axis=axis_to_conv, fourier=(True, False))
 
-    up = torch.empty(szt).to(device)
-
-    for z in range(Nz):
-        for c in range(Nch):
-            for tau in range(Ntau):
-                for t in range(T):
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
                 
-                    up[z,tau, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau, ...,t, c])
+    #                 up[z,tau, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau, ...,t, c])
                 
     update = up.sum(-1)
     
@@ -156,12 +209,22 @@ def flus2ism_pulseinterl__update(img, obj, psf_fft, psf_m_fft, eps: float, devic
     den = torch.empty(szt).to(device)
 
     # Update
-    for z in range(Nz):
-        for c in range(Nch):
-            for tau in range(Ntau):
-                for t in range(T):
-                    for p in range(Np):
-                        den[z,tau,p, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau,p, ...,t, c])
+    alphabet = string.ascii_lowercase
+    num_axis_to_conv = 2
+    str_psf = alphabet[:psf_fft.ndim]
+    obj_str = alphabet[:obj.ndim]
+    axis_to_conv = alphabet[obj.ndim-num_axis_to_conv : obj.ndim]
+    print(f'str_psf: {str_psf}, obj_str: {obj_str}, axis_to_conv: {axis_to_conv}')
+    
+    den = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(True, False))
+
+    # # Update
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 for p in range(Np):
+    #                     den[z,tau,p, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau,p, ...,t, c])
                     
     img_estimate = den.sum(axis=(0,1,2))
 
@@ -401,11 +464,9 @@ def flus2ism(dset, psf, stop='fixed', max_iter: int = 100,
     pbar = tqdm(total=total, desc='Progress', position=0)
     
     # FFT transform on the spatial dimensions of the 2 given PSFs
-    
-    
-    h_fft = fftn(h, dim=flip_ax)
+    h_fft = rfftn(h, dim=flip_ax)
     del h
-    ht_fft = fftn(ht, dim=flip_ax)
+    ht_fft = rfftn(ht, dim=flip_ax)
     del ht
 
     while flag:
@@ -582,8 +643,6 @@ def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
     pbar = tqdm(total=total, desc='Progress', position=0)
     
     # FFT transform on the spatial dimensions of the 2 given PSFs
-    
-   
     h_fft = fftn(h, dim=flip_ax)
     del h
     ht_fft = fftn(ht, dim=flip_ax)
