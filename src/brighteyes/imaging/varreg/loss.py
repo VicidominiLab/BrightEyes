@@ -48,7 +48,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     """
     
     if eps is None:
-        eps = 1e-2
+        eps = 1e-10
 
     psf = torch.as_tensor(psf)
     num_axis_to_conv = 2  # to generalize to 3D later
@@ -75,13 +75,16 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         
     axis_str = alphabet[1:num_axis_to_conv+1] # 'bc'
     str_final = alphabet[:dataset.ndim + 1]  # 'abcde'
-    axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
 
+    if dataset.ndim == num_axis_to_conv or dataset.ndim == num_axis_to_conv + 1: # No K and no Ch dimension or no K but Ch dimension
+        axis_to_sum = tuple(range(1, dataset.ndim + 1))  # Sum over all but the first dimension (num_iter)
+    else:
+        axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
     fidelity = forward - dataset * torch.log(forward + eps)
 
     if full_KL:
-        fidelity = fidelity + dataset * torch.log( dataset ) - dataset
+        fidelity = fidelity + dataset * torch.log( dataset + eps ) - dataset
 
     idx = ~torch.isfinite(fidelity)
     fidelity[ idx ] = 0
@@ -97,7 +100,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     return fidelity.squeeze()
 
 
-def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1, otf = None,
+def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor = 1, otf = None,
                         iteration_axis: bool = False, eps: float = None, fourier: bool = False):
     """
     Compute the variance regularization term for a set of objects.
@@ -111,7 +114,7 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
     """
 
     if eps is None:
-        eps = 1e-2
+        eps = 1e-8
 
     if fourier is True:
         ft_dim = (1, 2) if iteration_axis is True else (0, 1) # to generalize to 3D later

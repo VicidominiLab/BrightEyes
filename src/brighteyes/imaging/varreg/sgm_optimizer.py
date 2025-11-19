@@ -33,16 +33,15 @@ def tensor_scalar_product(tensor1, tensor2, axis_to_sum=None):
         
     return torch.sum(tensor1 * tensor2, dim=axis_to_sum)
 
-def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 40, initial_step_size=None, verbose=False):
+def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 25, initial_step_size=None, verbose=False):
     
     K=obj.shape[-1]
     
     if initial_step_size is None:
-        initial_step_size = 1.0*torch.ones(K)
-    else:
-        initial_step_size = initial_step_size.clone()
+        initial_step_size = 1.0*torch.ones(K)*theta
         
     step_size = initial_step_size / ((theta**1))
+    step_size = torch.clamp(step_size, max=1)
     
     #Compute current loss
     fidelity = fidelity_loss(img, obj, psf_fft)
@@ -54,25 +53,24 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
     # Track which k have already fixed their step size
     frozen = torch.zeros(K, dtype=torch.bool)
 
-    
     for i in range(max_iter):
         
         # If all ks are frozen, stop early
         if frozen.all():
             break
             
-        # # Only update ks where frozen[k] == False
-        # active_step = step_size.clone()
-        # active_step[frozen] = 0.0    # unused but keeps shapes consistent
+        # Only update ks where frozen[k] == False
+        active_step = step_size.clone()
+        active_step[frozen] = 0.0    # unused but keeps shapes consistent
         
         #Compute next point
-        obj_new = obj + step_size * direction
+        obj_new = obj + active_step * direction
         
         # flux conservation
         if normalize is True:
             # Axis to sum for flux conservation
             axis_to_sum = tuple(range(img.ndim - 1))
-            flux = img.sum(axis_to_sum, keepdim=True)
+            flux = img.sum(axis_to_sum, keepdim=True).squeeze(0)
             # Flux conservation
             obj_axis_to_sum = tuple(range(0, obj.ndim - 1))
             obj_new = obj_new * flux / obj_new.sum(obj_axis_to_sum, keepdim=True)
@@ -83,9 +81,9 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
         loss_value_new = alpha * fidelity_new + lam * regularization_new
                 
         #Check descent lemma
-        lhs = loss_value_new - loss_value - tensor_scalar_product(obj_new - obj, grad)
-        
-        rhs = (delta / step_size) * tensor_scalar_product(obj_new - obj, D_matrix_inv**(-1) * (obj_new - obj))
+        diff = obj_new - obj
+        lhs = loss_value_new - loss_value - tensor_scalar_product(diff, grad, axis_to_sum=tuple(range(0, diff.ndim-1)))
+        rhs = (delta / step_size) * tensor_scalar_product(diff, D_matrix_inv**(-1) * diff, axis_to_sum=tuple(range(0, diff.ndim-1)))
         if verbose:
             print(f"Line search iteration {i} mean values: lhs = {lhs.mean()}, rhs = {rhs.mean()}, step size = {step_size.mean()}")
         
@@ -98,7 +96,10 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
 
         # For ks that are not frozen yet, shrink η_k
         step_size = torch.where(frozen, step_size, step_size * theta)
-            
+    
+    step_size = torch.clamp(step_size, max=1)
+    # if verbose:
+    #     print(f"Step sizes: {step_size}")
     return step_size
 
 def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, normalize: bool,  step_size_search:str, initial_step_size: float = 1.0, line_search_params: tuple=(10,2), verbose=False):
@@ -174,10 +175,11 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
 
     # === Metodo GD con step size ===
     elif method.lower() == 'pgd':
-        
         obj_mean = obj.mean(dim=-1, keepdim=True)
         grad = (alpha * 1 - update_k + 2 * lam * weight * (obj - obj_mean))
         obj_tmp = torch.where(obj - grad > 0, obj - grad, 0)
+        print(f'min obj_tmp: {obj_tmp.min()}, max obj_tmp: {obj_tmp.max()}')
+        print(f'grad min: {grad.min()}, grad max: {grad.max()}')
         ### TO DO: Controllare che qua non ci voglia un check obj = obj_tmp per decretare punto fisso vd Bonettini paper ###
         
         if step_size_search == 'rl':
@@ -197,6 +199,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
         
         obj_mean = obj.mean(dim=-1, keepdim=True)
         grad = (alpha * 1 - update_k + 2 * lam * weight * (obj - obj_mean))
+        #grad_thr = torch.where( abs(grad) < eps, eps, grad)
         D_matrix_inv = obj/(alpha*1+2*lam*weight*obj)
         s1 = line_search_params[0]
         s2 = line_search_params[1]
@@ -304,7 +307,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         initial_step_size = step_size_search
         step_size_search = 'fixed'
     else:
-        initial_step_size = 1e-2*torch.ones(obj_all.shape[-1]).to(device)
+        initial_step_size = 1*torch.ones(obj_all.shape[-1]).to(device)
 
     idx = 0
     # Reconstruction loop
