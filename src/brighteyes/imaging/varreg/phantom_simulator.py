@@ -176,10 +176,12 @@ def generate_membrane_phantom(shape, radius, thickness, value_range, noise_level
     phantom = membrane_mask * rand_texture
 
     # Smooth slightly to look more optical
-    phantom = gaussian_filter(phantom, sigma=blur_sigma)
+    if blur_sigma > 0:
+        phantom = gaussian_filter(phantom, sigma=blur_sigma)
 
     # Add background noise
-    phantom += noise_level * np.random.random(shape)
+    if noise_level > 0:
+        phantom += noise_level * np.random.random(shape)
 
     # Normalize
     phantom -= phantom.min()

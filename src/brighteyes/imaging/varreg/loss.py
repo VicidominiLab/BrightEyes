@@ -51,31 +51,12 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         eps = 1e-2
 
     psf = torch.as_tensor(psf)
-
-    alphabet = string.ascii_lowercase
-    n_dim = obj_set.ndim      # 3 or 4
-    num_axis_to_conv = 2  
+    num_axis_to_conv = 2  # to generalize to 3D later
+    
 
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
-        n_dim = n_dim + 1
     
-    if psf.ndim == num_axis_to_conv:
-        psf = psf.unsqueeze(-1)  # Add channel dimension if needed
-        dataset = dataset.unsqueeze(-1)
-            
-    if obj_set.shape[-1] != dataset.shape[-1]:
-        obj_set = obj_set.unsqueeze(-1)  # Add a K dimension if missing
-    
-    if obj_set.ndim != dataset.ndim:
-        dataset = dataset.unsqueeze(-1)  # Add a K dimension if missing (for RL case)
-        
-    str_psf = alphabet[1:num_axis_to_conv+2]   # 'bcd'
-    str_obj = alphabet[:num_axis_to_conv+1] + alphabet[num_axis_to_conv+2]  # 'abce'
-    axis_str = alphabet[1:1+num_axis_to_conv] # 'bc'
-    str_final = alphabet[:num_axis_to_conv+3]  # 'abcde'
-    axis_to_sum = tuple(range(1, dataset.ndim+1))  # Sum over all but the first dimension (num_iter)
-
     if psf.is_floating_point():
         sz = dataset.shape[:num_axis_to_conv]
         psf_pad = centered_pad(psf, target_shape=sz) # Centered padding of PSF to match dataset shape
@@ -85,8 +66,18 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     else:
         raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
 
-    forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
+    alphabet = string.ascii_lowercase
+    
+    str_psf = alphabet[1:psf_fft.ndim+1]   # 'bcd'
+    str_obj = alphabet[:num_axis_to_conv+1] # 'abc'
+    if len(str_obj) != obj_set.ndim:
+        str_obj += alphabet[dataset.ndim]  # 'abc e'
+        
+    axis_str = alphabet[1:num_axis_to_conv+1] # 'bc'
+    str_final = alphabet[:dataset.ndim + 1]  # 'abcde'
+    axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
 
+    forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
     fidelity = forward - dataset * torch.log(forward + eps)
 
     if full_KL:
@@ -102,7 +93,8 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         fidelity = einops.einsum(fidelity, weight_map, ein_str)
     else:
         fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present) and last (K)
-    return fidelity
+        
+    return fidelity.squeeze()
 
 
 def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor =1, otf = None,
@@ -127,9 +119,9 @@ def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_m
         # obj_set = fftshift(obj_set, dim=ft_dim) # useful for visualization but not for computation
 
     if iteration_axis:
-        axis_to_sum = tuple(range(1, obj_set.ndim))
+        axis_to_sum = tuple(range(1, obj_set.ndim-1))
     else:
-        axis_to_sum = tuple(range(0, obj_set.ndim))
+        axis_to_sum = tuple(range(0, obj_set.ndim-1))
 
     centroid = compute_centroid(obj_set, regularizer)
 
