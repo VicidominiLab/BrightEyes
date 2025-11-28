@@ -33,7 +33,7 @@ def tensor_scalar_product(tensor1, tensor2, axis_to_sum=None):
         
     return torch.sum(tensor1 * tensor2, dim=axis_to_sum)
 
-def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 25, initial_step_size=None, verbose=False):
+def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 40, initial_step_size=None, verbose=False):
     
     K=obj.shape[-1]
     
@@ -324,7 +324,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         obj_all[idx] = obj_set
 
         if tol is not None:
-            rel_diff = torch.norm(obj_all[m + 1] - obj_all[m]) / torch.norm(obj_all[m])
+            rel_diff = ((obj_all[m + 1] - obj_all[m])**2).sum() / ((obj_all[m])**2).sum()
             if rel_diff.item() < tol:
                 print(f"Converged at iteration {m + 1}")
                 obj_all = obj_all[:m + 1]

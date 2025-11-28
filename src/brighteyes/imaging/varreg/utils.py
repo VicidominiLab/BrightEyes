@@ -143,7 +143,7 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     return padded_arr
 
 
-def calculate_snr(dset, smooth_sigma: float = 0):
+def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
     """
     Calculate pixel-wise the Signal-to-Noise Ratio (SNR) of a dataset.
 
@@ -154,6 +154,9 @@ def calculate_snr(dset, smooth_sigma: float = 0):
     Returns:
         float: SNR value.
     """
+    
+    if eps is None:
+        eps = torch.finfo(torch.float32).eps
 
     if not isinstance(dset, torch.Tensor):
         dset = torch.tensor(dset, dtype=torch.float32)
@@ -161,7 +164,7 @@ def calculate_snr(dset, smooth_sigma: float = 0):
     signal = dset.mean(dim = -1)
     noise = dset.std(dim=-1)
 
-    snr = torch.where(signal == 0, 0, signal / noise)
+    snr = signal / (noise + eps)
 
     if smooth_sigma > 0:
         offset = 1e-1
