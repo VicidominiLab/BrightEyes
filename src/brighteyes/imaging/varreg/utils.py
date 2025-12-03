@@ -306,7 +306,7 @@ def peak_signal_to_noise_ratio(img_ref, img, normalize_entries = True):
 
     return torch.squeeze(psnr).numpy()
 
-def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False):
+def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False, k_loss=False):
     """
     Compute the Kullback-Leibler divergence (KL divergence) between two images.
 
@@ -328,7 +328,10 @@ def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False)
     if diff_dim > 0:
         img_ref = img_ref.unsqueeze(0)
 
-    axis_to_sum = tuple(range(diff_dim, img.ndim))
+    if k_loss is True:
+        axis_to_sum = tuple(range(diff_dim, img.ndim-1))  # Sum over all but the first dimension (num_iter) and last (K)
+    else:
+        axis_to_sum = tuple(range(diff_dim, img.ndim))  # Sum over all but the first dimension (num_iter)
 
     if normalize_entries is True:
         img = img / torch.sum(img, dim=axis_to_sum, keepdim=True)

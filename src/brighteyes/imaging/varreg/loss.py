@@ -4,7 +4,7 @@ import einops
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
-from .utils import partial_convolution_rfft, centered_pad, forward
+from .utils import partial_convolution_rfft, centered_pad, forward, kl_divergence
 
 
 def forward_model(otf, obj):
@@ -33,7 +33,7 @@ def forward_model(otf, obj):
     return dset
 
 
-def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False):
+def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False, k_loss=False):
     """
     Compute the fidelity loss between data and the forward value from predicted solution.
 
@@ -48,7 +48,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     """
     
     if eps is None:
-        eps = 1e-10
+        eps = 1e-8
 
     psf = torch.as_tensor(psf)
     num_axis_to_conv = 2  # to generalize to 3D later
@@ -81,21 +81,24 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     else:
         axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
     forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
-    fidelity = forward - dataset * torch.log(forward + eps)
+    
+    fidelity = kl_divergence(dataset, forward, full_KL=full_KL, normalize_entries = False, k_loss=k_loss)
+    
+    # fidelity = forward - dataset * torch.log(forward + eps)
 
-    if full_KL:
-        fidelity = fidelity + dataset * torch.log( dataset + eps ) - dataset
+    # if full_KL:
+    #     fidelity = fidelity + dataset * torch.log( dataset + eps ) - dataset
 
-    idx = ~torch.isfinite(fidelity)
-    fidelity[ idx ] = 0
+    # idx = ~torch.isfinite(fidelity)
+    # fidelity[ idx ] = 0
 
     if torch.is_tensor(weight_map):
         letters = ["x", "y", "z"][: weight_map.ndim]
         lhs = " ".join(letters)
         ein_str = f"b {lhs} ... , {lhs} -> b"
         fidelity = einops.einsum(fidelity, weight_map, ein_str)
-    else:
-        fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present) and last (K)
+    # else:
+    #     fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present) and last (K)
         
     return fidelity.squeeze()
 

@@ -33,15 +33,22 @@ def tensor_scalar_product(tensor1, tensor2, axis_to_sum=None):
         
     return torch.sum(tensor1 * tensor2, dim=axis_to_sum)
 
-def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 40, initial_step_size=None, verbose=False):
+def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=True, theta = 0.8, delta = 0.5, max_iter = 30, initial_step_size=None, verbose=False):
     
+    
+    min_step_size = 1e-10
     K=obj.shape[-1]
+    
     
     if initial_step_size is None:
         initial_step_size = 1.0*torch.ones(K)*theta
         
     step_size = initial_step_size / ((theta**1))
     step_size = torch.clamp(step_size, max=1)
+    
+    # Track ks that ever satisfy the descent lemma
+    satisfied_once = torch.zeros(K, dtype=torch.bool, device=obj.device)
+
     
     #Compute current loss
     fidelity = fidelity_loss(img, obj, psf_fft)
@@ -55,6 +62,12 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
 
     for i in range(max_iter):
         
+        # Freeze ks whose step is below min threshold
+        below_thr = (step_size < min_step_size)
+        if below_thr.any():
+            step_size = torch.where(below_thr, min_step_size, step_size)
+            frozen = frozen | below_thr  # freeze these ks
+            
         # If all ks are frozen, stop early
         if frozen.all():
             break
@@ -90,6 +103,9 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
         # Which ks satisfy descent lemma?
         satisfied = lhs <= rhs
         
+        # Mark ks that satisfied at least once
+        satisfied_once |= satisfied
+        
         # Only freeze ks that are not frozen yet
         newly_frozen = (~frozen) & satisfied
         frozen = frozen | newly_frozen
@@ -98,9 +114,13 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
         step_size = torch.where(frozen, step_size, step_size * theta)
     
     step_size = torch.clamp(step_size, max=1)
+    
+    # ks that should actually update obj:
+    should_update = satisfied_once.clone()
+    
     # if verbose:
     #     print(f"Step sizes: {step_size}")
-    return step_size
+    return step_size, should_update
 
 def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, normalize: bool,  step_size_search:str, initial_step_size: float = 1.0, line_search_params: tuple=(10,2), verbose=False):
     """
@@ -134,7 +154,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
     update_k = alpha * forward(psf_m_fft, fraction).sum(-2)  # Sum over channels
     del fraction
 
-    step_size = None
+    step_size = 1.0
     
     # === Metodo OSL ===
     if method.lower() == 'osl':
@@ -187,7 +207,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
         elif step_size_search == 'fixed':
             step_size = initial_step_size    
         elif step_size_search == 'line_search':
-            step_size = compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv=1, normalize=normalize, initial_step_size=initial_step_size, verbose=verbose)
+            step_size, should_update = compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv=1, normalize=normalize, initial_step_size=initial_step_size, verbose=verbose)
             #step_size = step_size[None, None, :]
         else:
             raise ValueError("step_size_search must be 'rl', 'line_search' or 'fixed'.")
@@ -196,7 +216,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
 
     # === Metodo SGP ===
     elif method.lower() == 'sgp':
-        
+        should_update = torch.ones(obj.shape[-1], dtype=torch.bool, device=obj.device)
+        step_size = initial_step_size
         obj_mean = obj.mean(dim=-1, keepdim=True)
         grad = (alpha * 1 - update_k + 2 * lam * weight * (obj - obj_mean))
         #grad_thr = torch.where( abs(grad) < eps, eps, grad)
@@ -214,12 +235,15 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
         elif step_size_search == 'fixed':
             step_size = initial_step_size    
         elif step_size_search == 'line_search':
-            step_size = compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=normalize, initial_step_size=initial_step_size, verbose=verbose)
+            step_size, should_update = compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, D_matrix_inv, normalize=normalize, initial_step_size=initial_step_size, verbose=verbose)
             #step_size = step_size[None, None, :]
         else:
             raise ValueError("step_size_search must be 'rl', 'line_search' or 'fixed'.")
-            
-        obj_new = obj + step_size * (obj_tmp - obj)
+
+        #obj_new = obj + step_size * (obj_tmp - obj)
+        obj_new = obj.clone()
+        obj_new[..., should_update] = (obj[..., should_update] +
+                    step_size[should_update] * (obj_tmp[..., should_update] - obj[..., should_update]) )   
     else:
         raise ValueError("Metodo non valido. Usare 'osl', 'sgm', 'sgp' o 'gd'.")
     
@@ -262,7 +286,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     if rec_to_save == 'last' and tol is not None:
         raise ValueError("If rec_to_save is 'last', tol must be None.")
 
-    eps = torch.finfo(torch.float32).eps
+    eps = 1e-8  # torch.finfo(torch.float32).eps
     
     conv_dims = 2  # to generalize to 3D later
     if dset.ndim != psf.ndim + 1:
@@ -310,11 +334,14 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         initial_step_size = 1*torch.ones(obj_all.shape[-1]).to(device)
 
     idx = 0
+    step_size = []
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
         obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer, normalize,
                                                 step_size_search=step_size_search, initial_step_size=initial_step_size, line_search_params=line_search_params, verbose=verbose)
 
+        step_size.append(initial_step_size)
+        
         if rec_to_save == 'all':
             idx = m + 1
         elif rec_to_save == 'last':
@@ -332,7 +359,8 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
 
         if binomial is True:
             dset = binomial_split(img, n_splits=n_rep, p=0.5, device=device)
-    return obj_all
+            
+    return obj_all, step_size
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=50, tol=None, method='sgm',
@@ -379,12 +407,13 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
-    obj_all = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
+    obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
                       regularizer, initialization, normalize, rec_to_save, binomial, step_size_search, line_search_params, verbose)
     
     if rec_to_save == 'last':
         return obj_all[-1]
+    
     elif rec_to_save == 'all':
-        return obj_all
+        return obj_all, step_size
     else:
         raise ValueError("rec_to_save must be 'last' or 'all'.")

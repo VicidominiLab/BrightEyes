@@ -10,9 +10,11 @@ import brighteyes_ism.analysis.Graph_lib as gra
 from IPython.display import display, HTML
 from matplotlib.patches import Circle
 from PIL import Image
+from microssim import MicroSSIM, micro_structural_similarity
 
 from varreg import varreg, loss, utils
 from varreg import run_and_save as rs
+from s2ism import s2ism as s2
 
 
 def frequency_axes(shape, pxsize: float = 1):
@@ -127,7 +129,7 @@ def save_experiment_results(fig_results, fig_loss, fig_KL, fig_best, fig_PSNR, p
     if print_csv:
         display(HTML(df_log.to_html(escape=False)))
 
-def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_rl, output_dir, compute_adam=False, plot_K=False, print_csv=False):
+def run_single_experiment(dset, psf, params, weight, ground_truth):
     """
     Run a single experiment with the given parameters and save the results.
     
@@ -137,208 +139,95 @@ def run_single_experiment(dset, psf, params, weight, ground_truth, img, rl, kl_r
         params (dict): Dictionary of parameters for the experiment.
         weight (ndarray): Weight map of shape Nx x Ny.
         ground_truth (ndarray): Ground truth image of shape Nx x Ny.
-        img (ndarray): Image of shape Nx x Ny. It is the dset summed over K.
-        rl (ndarray): Richardson-Lucy reconstruction of shape num_iter x Nx x Ny.
-        kl_rl (ndarray): KL divergence for Richardson-Lucy reconstruction array of length num_iter.
-        output_dir (str): Output directory for saving results.
-        compute_adam (bool): Whether to compute Adam solution.
-        plot_K (bool): Whether to plot the figure of all K solutions.
-        print_csv (bool): Whether to print the CSV log.
+        
+    Returns:
+        dict: Dictionary containing the results of the experiment.
     """
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
 
     # Run the experiment
-    varreg_solution = varreg.variance_reconstruction(dset, psf, lambda_value=params["lambda"], alpha_value=params["alpha"], weight_map=weight,
-                                                     max_iter=params["num_iter"], tol=None, method=params["method"],
-                                                     regularizer=params["regularizer"], initialization=params["initialization"], normalize=False,
-                                                     process='gpu', rec_to_save='all')
-    varreg_mean = varreg_solution.mean(axis=-1)
-    varreg_mean = torch.nan_to_num(varreg_mean, nan=0.0)
+    mid_sol, *_ = s2.max_likelihood_reconstruction(dset.sum(axis=-1), psf[np.newaxis,...], max_iter = params["num_iter"], rep_to_save ='all')
 
-    adam_solution, losses = varreg.adam_optimize_obj(dset, psf, num_iter=params["num_iter"], lambda_value=params["lambda"], alpha_value=params["alpha"],
-                                                 initialization=params["initialization"], weight_map=weight, regularizer=params["regularizer"],
-                                                 lr=params["lr"], process='gpu', full_KL=False, rec_to_save='all', verbose=False, sum_rep = False)
-    adam_mean = adam_solution.sum(axis=-1)
-    del adam_solution
-    adam_mean = torch.nan_to_num(adam_mean, nan=0.0)
+    ISM_SGM_solution, _ = varreg.variance_reconstruction(dset, psf, lambda_value=params["lambda"], alpha_value=params["alpha"], weight_map=weight,
+                            max_iter=params["num_iter"], tol=None, method=params["method"],
+                            regularizer=params["regularizer"], initialization=params["initialization"], normalize=True,
+                            process='gpu', rec_to_save='all', binomial = False)
+    ISM_SGM_mean = ISM_SGM_solution.mean(axis=-1)
+    ISM_SGM_norm = torch.round(ISM_SGM_mean * (dset.sum() / ISM_SGM_mean.sum((1,2))[:,None,None])).int()
+    
+    ISM_SGP_solution, step_size = varreg.variance_reconstruction(dset, psf, lambda_value=params["lambda"], alpha_value=params["alpha"], weight_map=weight,
+                            max_iter=params["num_iter"], tol=None, method=params["method"],
+                            regularizer=params["regularizer"], initialization=params["initialization"], normalize=True,
+                            process='gpu', rec_to_save='all', binomial = False, step_size_search=params["step_size_search"],
+                            line_search_params=params["line_search"], verbose=False)
+    step_size_array = torch.stack(step_size).cpu().numpy()
+    ISM_SGP_norm = ISM_SGP_solution.sum(axis=-1)
+    
+    # KL divergence computation
+    kl_mid = utils.kl_divergence(ground_truth, mid_sol, normalize_entries = True)
+    kl_SGM = utils.kl_divergence(ground_truth, ISM_SGM_norm.numpy().astype(np.float64), normalize_entries = True)
+    kl_SGP = utils.kl_divergence(ground_truth, ISM_SGP_norm.numpy().astype(np.float64), normalize_entries = True)
+    
+    # Compute SSIM
+    SSIM_mid = np.zeros(params["num_iter"])
+    SSIM_SGM = np.zeros(params["num_iter"])
+    SSIM_SGP = np.zeros(params["num_iter"])
 
-    pxsizex = params["pixelsize"]
-    full_KL = False
-    rec_idx=-1
-    n_rep = dset.shape[-1]
-    psf_rep = np.repeat(psf[..., np.newaxis], n_rep, -1)
-
-    fig_res, ax_res = plt.subplots(1, 5, figsize=(30, 7))
-    gra.ShowImg(img[15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[0])
-    ax_res[0].set_title('Raw Image')
-    gra.ShowImg(rl[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[1])
-    ax_res[1].set_title('Richardson-Lucy')
-    gra.ShowImg(varreg_mean[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[2])
-    ax_res[2].set_title('Variance Regularization - Mean')
-    gra.ShowImg(adam_mean[rec_idx, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[3])
-    ax_res[3].set_title('Adam Optimization')
-    gra.ShowImg(ground_truth[15: -15, 15:-15], pxsizex*1e-3, fig = fig_res, ax=ax_res[4])
-    ax_res[4].set_title('Ground Truth')
-    fig_res.suptitle(f"K={params['K']}, n_iter={params['num_iter'] if rec_idx==-1 else rec_idx}, \
-                lambda={params['lambda']}, W={params['W']}, method={params['method']}", fontsize=16)
+    for i in range(params["num_iter"]):
+        SSIM_mid[i] = micro_structural_similarity(ground_truth, mid_sol[i])
+        SSIM_SGM[i] = micro_structural_similarity(ground_truth, ISM_SGM_norm[i].numpy().astype(np.float64))
+        SSIM_SGP[i] = micro_structural_similarity(ground_truth, ISM_SGP_norm[i].numpy().astype(np.float64))
+    
+    # Compute PSNR 
+    PSNR_mid = utils.peak_signal_to_noise_ratio(ground_truth, mid_sol)
+    PSNR_SGM = utils.peak_signal_to_noise_ratio(ground_truth, ISM_SGM_norm.numpy().astype(np.float64))
+    PSNR_SGP = utils.peak_signal_to_noise_ratio(ground_truth, ISM_SGP_norm.numpy().astype(np.float64))
             
     # Loss computation
-    fidelity_rl = loss.fidelity_loss(torch.tensor(img), torch.tensor(rl), torch.tensor(psf))
-    fidelity = loss.fidelity_loss(torch.tensor(dset), varreg_solution, torch.tensor(psf_rep))
-    regularization = loss.regularization_loss(varreg_solution, iteration_axis=True, weight_map=weight) 
-
-    fidelity_loss = params["alpha"]*fidelity
-    reg_loss = params["lambda"]*regularization
-    total_loss = fidelity_loss + reg_loss
-    
-    if compute_adam:
-        total_loss_adam = np.asarray(losses['total'])
-        fidelity_adam = np.asarray(losses['fidelity'])
-        regularization_adam = np.asarray(losses['regularization'])
-        learning_rate_adam = np.asarray(losses['learning_rate'])
-    
-        fig_loss, ax_loss = plt.subplots(2,3, figsize=(20,10))
-
-        ax_loss[0,0].plot(fidelity_rl, color = 'red', label = 'fidelity_rl')
-        ax_loss[0,0].legend()
-        ax_loss[0,0].set_title('Richardson-Lucy')
-        ax_loss[0,0].set_xlabel('Iterations')
-        ax_loss[0,0].set_ylabel('Loss')
-
-        ax_loss[0,1].plot(fidelity_loss, label = 'fidelity')
-        ax_loss[0,1].plot(total_loss, label = 'total = fidelity + lambda*reg')
-        ax_loss[0,1].legend()
-        ax_loss[0,1].set_title('Variance Regularization')
-        ax_loss[0,1].set_xlabel('Iterations')
-        ax_loss[0,1].set_ylim([total_loss.min()*0.95, total_loss[-1]*1.05])
-
-        ax_loss[0,2].plot(reg_loss, color='green', label = 'regularization')
-        ax_loss[0,2].legend()
-        ax_loss[0,2].set_title('Variance Regularization')
-        ax_loss[0,2].set_xlabel('Iterations')
-        ax_loss[0,2].set_ylabel('Loss')
-
-        #New line
-
-        ax_loss[1,0].plot(learning_rate_adam, color = 'red', label = 'fidelity_rl')
-        ax_loss[1,0].legend()
-        ax_loss[1,0].set_title('Learning rate Adam')
-        ax_loss[1,0].set_xlabel('Iterations')
-        ax_loss[1,0].set_ylabel('lr')
-
-        ax_loss[1,1].plot(fidelity_adam, label = 'fidelity')
-        ax_loss[1,1].plot(total_loss_adam, label = 'total = fidelity + lambda*reg')
-        ax_loss[1,1].legend()
-        ax_loss[1,1].set_title('Variance Regularization')
-        ax_loss[1,1].set_xlabel('Iterations')
-        #ax_loss[1,1].set_ylim([total_loss_adam.min()*0.95, total_loss_adam[-1]*1.05])
-
-        ax_loss[1,2].plot(regularization_adam, color='green', label = 'regularization')
-        ax_loss[1,2].legend()
-        ax_loss[1,2].set_title('Variance Regularization')
-        ax_loss[1,2].set_xlabel('Iterations')
-        ax_loss[1,2].set_ylabel('Loss')
-        #ax_loss[1,2].set_ylim([0, regularization_adam.max()*1.05])
-
-        # Added lateral description
-        fig_loss.text(0.06, 0.7, 'sgm', va='center', rotation='vertical', fontsize=14, fontweight='bold')
-        fig_loss.text(0.06, 0.3, 'Adam', va='center', rotation='vertical', fontsize=14, fontweight='bold')
+    full_KL = False
+    fidelity_mid = loss.fidelity_loss(torch.tensor(dset.sum(-1)), torch.tensor(mid_sol), torch.tensor(psf), full_KL=full_KL, k_loss=False)
+    fidelity_sgm = loss.fidelity_loss(torch.tensor(dset), ISM_SGM_solution, torch.tensor(psf), full_KL=full_KL, k_loss=True)
+    fidelity_sgp = loss.fidelity_loss(torch.tensor(dset), ISM_SGP_solution, torch.tensor(psf), full_KL=full_KL, k_loss=True)
         
-        fig_loss.suptitle(str(params)[1:-1], fontsize=16)
-
-    else:
-        fig_loss, ax_loss = plt.subplots(1,3, figsize=(20,10))
-        ax_loss[0].plot(fidelity_rl, color = 'red', label = 'learning_rate')
-        ax_loss[0].legend()
-        ax_loss[0].set_title('Richardson-Lucy')
-        ax_loss[0].set_xlabel('Iterations')
-        ax_loss[0].set_ylabel('Loss')
-
-        ax_loss[1].plot(fidelity_loss, label = 'fidelity')
-        ax_loss[1].plot(total_loss, label = 'total = alpha*fidelity + lambda*reg')
-        ax_loss[1].legend()
-        ax_loss[1].set_title('Variance Regularization')
-        ax_loss[1].set_xlabel('Iterations')
-        #ax[1,1].set_ylim([total_loss_adam.min()*0.95, total_loss_adam.max()*1.05])
-
-        ax_loss[2].plot(reg_loss, color='green', label = 'regularization')
-        ax_loss[2].legend()
-        ax_loss[2].set_title('Variance Regularization')
-        ax_loss[2].set_xlabel('Iterations')
-        ax_loss[2].set_ylabel('Loss')
-        
-        fig_loss.suptitle(str(params)[1:-1], fontsize=16)
-        
-        
-    #plot KL divergence
-    #kl_rl = utils.kl_divergence(ground_truth, rl, normalize_entries = True)
-    kl_var = utils.kl_divergence(ground_truth, varreg_mean, normalize_entries = True)
-    kl_adam = utils.kl_divergence(ground_truth, adam_mean, normalize_entries = True)
-
-    idx_rl = np.argmin(kl_rl)
-    idx_varreg = np.argmin(kl_var)
-    idx_adam = np.argmin(kl_adam)
-
-    fig_kl, ax_kl = plt.subplots(1, 1, figsize=(20, 10))
-
-    ax_kl.plot(kl_rl, color='r', label = f'Richardson-Lucy KL_min={kl_rl[idx_rl]:.3f}')
-    ax_kl.plot(kl_var, color='C2', label = f'Variance Regularization - Mean KL_min={kl_var[idx_varreg]:.3f}')
-
-    ax_kl.scatter(idx_rl, kl_rl[idx_rl], color='r')
-    ax_kl.scatter(idx_varreg, kl_var[idx_varreg], color='C2')
-
-    ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_rl])
-    ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_varreg])
+    regularization_sgm = loss.regularization_loss(ISM_SGM_solution, iteration_axis=True).numpy()
+    regularization_sgp = loss.regularization_loss(ISM_SGP_solution, iteration_axis=True).numpy()
     
-    ax_kl.plot(kl_adam, color='C0', label = f'Adam Optimization KL_min={kl_adam[idx_adam]:.3f}')
-    ax_kl.scatter(idx_adam, kl_adam[idx_adam], color='C0')
-    ax_kl.set_xticks(list(ax_kl.get_xticks()[1:]) + [idx_adam])
-    
-    ax_kl.set_xlabel('Iteration')
-    ax_kl.set_ylabel('Normalized KL')
-    ax_kl.legend()
-    ax_kl.set_title(str(params)[1:-1], fontsize=16)
-    
-    # Plot best iteration
-    fig_bestres, ax_bestres = plt.subplots(1, 5, figsize=(30, 7))
+    fidelity_loss_sgm = params["alpha"]*fidelity_sgm
+    reg_loss_sgm = params["lambda"]*regularization_sgm
+    total_loss_sgm = fidelity_loss_sgm + reg_loss_sgm
 
-    gra.ShowImg(img[15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[0])
-    ax_bestres[0].set_title('Raw Image')
-    gra.ShowImg(rl[idx_rl, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[1])
-    ax_bestres[1].set_title('Richardson-Lucy')
-    gra.ShowImg(varreg_mean[idx_varreg, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[2])
-    ax_bestres[2].set_title('Variance Regularization - Mean')
-    gra.ShowImg(adam_mean[idx_adam, 15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[3])
-    ax_bestres[3].set_title('Adam Optimization - Mean')
-    gra.ShowImg(ground_truth[15: -15, 15:-15], pxsizex*1e-3, fig = fig_bestres, ax=ax_bestres[4])
-    ax_bestres[4].set_title('Ground Truth')
-    params_title = params.copy()
-    params_title["num_iter"] = 'best'
-    fig_bestres.suptitle(str(params_title)[1:-1], fontsize=16)
+    fidelity_loss_sgp = params["alpha"]*fidelity_sgp
+    reg_loss_sgp = params["lambda"]*regularization_sgp
+    total_loss_sgp = fidelity_loss_sgp + reg_loss_sgp
     
-    # Compute PSNR
-    psnr_rl = utils.peak_signal_to_noise_ratio(ground_truth, rl)
-    psnr_var = utils.peak_signal_to_noise_ratio(ground_truth, varreg_mean)
-        
-    fig_psnr, ax_psnr = plt.subplots(1, 1, figsize=(20, 10))
-
-    ax_psnr.plot(psnr_rl, color='r', label = 'rl')
-    ax_psnr.plot(psnr_var, color='C2', label = 'varreg')
+    mid_result = {
+        'solution': mid_sol,
+        "fidelity": fidelity_mid.numpy(),
+        "kl_divergence": kl_mid,
+        "SSIM": SSIM_mid,
+        "PSNR": PSNR_mid
+    }
     
-    psnr_adam = utils.peak_signal_to_noise_ratio(ground_truth, adam_mean)
-    ax_psnr.plot(psnr_adam, color='C0', label = 'adam')
-
-    ax_psnr.set_xlabel('Iteration')
-    ax_psnr.set_ylabel('Normalized PSNR')
-    ax_psnr.legend()
-    ax_psnr.set_title(str(params)[1:-1])
+    sgm_result = {
+        'k_solutions': ISM_SGM_solution,
+        'solution': ISM_SGM_norm.numpy().astype(np.float64),
+        "fidelity": fidelity_sgm.numpy(),
+        'regularization': regularization_sgm,
+        'total_loss': total_loss_sgm.sum(-1),
+        "kl_divergence": kl_SGM,
+        "SSIM": SSIM_SGM,
+        "PSNR": PSNR_SGM
+    }
     
+    sgp_result = {
+        'k_solutions': ISM_SGP_solution,
+        'step_size': step_size_array,
+        'solution': ISM_SGP_norm.numpy().astype(np.float64),
+        "fidelity": fidelity_sgp.numpy(),
+        'regularization': regularization_sgp,
+        'total_loss': total_loss_sgp.sum(-1),
+        "kl_divergence": kl_SGP,
+        "SSIM": SSIM_SGP,
+        "PSNR": PSNR_SGP
+    }
     
-    # Save the results
-    os.makedirs(output_dir, exist_ok=True)
-
-    rs.save_experiment_results(fig_res, fig_loss, fig_kl, fig_bestres, fig_psnr, params, output_dir, print_csv=print_csv)
-
-    plt.close('all')
-    return kl_var, kl_adam
+    return mid_result, sgm_result, sgp_result
