@@ -393,6 +393,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         device = torch.device("cuda:0")
     else:
         device = torch.device("cpu")
+        
+    print('Computing reconstruction on device:', device)
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)

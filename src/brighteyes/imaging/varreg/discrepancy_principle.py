@@ -4,165 +4,10 @@ from typing import Callable, Optional, Tuple
 
 from .loss import fidelity_loss
 from .sgm_optimizer import variance_reconstruction
-from .utils import forward
+from .utils import forward, kl_divergence
 import torch.nn as nn
 from torch.optim import Adam
-
-
-def estimate_tau_montecarlo(dataset: torch.Tensor,
-                            psf: torch.Tensor,
-                            recon_obj: torch.Tensor,
-                            n_mc: int = 30,
-                            device: Optional[torch.device] = None,
-                            eps: float = 1e-6) -> float:
-    """
-    Estimate expected KL discrepancy E[ KL(Y, mu) ] by Monte-Carlo sampling,
-    using `recon_obj` as the surrogate for the true object whose forward model
-    is mu = A(recon_obj).
-
-    Parameters
-    - dataset: observed data (torch.Tensor) shape like Nx x Ny x Ch x K
-    - psf: PSF (will be passed to fidelity_loss / forward)
-    - recon_obj: object estimate (Nx x Ny x K) used to compute mu = A(recon_obj)
-    - n_mc: number of Monte-Carlo samples
-    - device: torch device for sampling
-
-    Returns
-    - tau: scalar float, estimated expected KL for Poisson noise
-    """
-    if device is None:
-        device = recon_obj.device
-
-    # compute forward model mu = A(recon_obj)
-    # `forward` returns the predicted data with same dims as dataset
-    with torch.no_grad():
-        mu = forward(psf, recon_obj) if not torch.is_complex(psf) else forward(psf, recon_obj)
-
-    mu = mu.to(device)
-
-    kappas = []
-    for _ in range(n_mc):
-        # sample Poisson observation Y ~ Poisson(mu)
-        # torch.poisson expects rates (mu) and returns integer tensor
-        Y = torch.poisson(mu)
-        # compute KL(Y, mu) via fidelity_loss: fidelity_loss(Y, recon_obj, psf)
-        kl = fidelity_loss(Y, recon_obj, psf, eps=eps).cpu().float()
-        # fidelity_loss returns a tensor possibly with leading batch dimension; take mean if needed
-        if kl.numel() > 1:
-            kl_val = kl.mean().item()
-        else:
-            kl_val = float(kl.item())
-        kappas.append(kl_val)
-
-    return float(np.mean(kappas))
-
-
-def find_lambda_by_discrepancy(dataset: torch.Tensor,
-                               psf: torch.Tensor,
-                               reconstructor: Callable[[float], torch.Tensor],
-                               lambda_min: float = 1e-6,
-                               lambda_max: float = 1.0,
-                               tol: float = 0.05,
-                               max_outer_iters: int = 12,
-                               tau: Optional[float] = None,
-                               tau_estimate_mode: str = 'montecarlo',
-                               mc_samples: int = 40,
-                               device: Optional[torch.device] = None,
-                               verbose: bool = False) -> Tuple[float, torch.Tensor, float]:
-    """
-    Find regularization parameter `lambda` that satisfies the discrepancy principle
-    for Poisson data using a bisection search.
-
-    The function expects a `reconstructor(lambda_value)` callable that performs
-    the full reconstruction (returns an object tensor) for the given lambda.
-
-    Parameters
-    - dataset, psf: observed data and PSF (torch tensors). Shapes should match
-      what your reconstructor expects (e.g. Nx x Ny x Ch x K for dataset and
-      Mx x My x Ch for psf).
-    - reconstructor: callable lambda -> reconstructed object tensor (Nx x Ny x K)
-    - lambda_min, lambda_max: search interval for lambda (positive)
-    - tol: relative tolerance on fidelity: stop when |fidelity - tau|/tau < tol
-    - max_outer_iters: max bisection steps
-    - tau: optional user-provided target discrepancy. If None, it will be
-      estimated according to `tau_estimate_mode`.
-    - tau_estimate_mode: 'montecarlo' or 'manual'
-    - mc_samples: Monte-Carlo draws when estimating tau
-
-    Returns (lambda_star, obj_star, fidelity_star)
-    """
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    dataset = dataset.to(device)
-    psf = psf.to(device)
-
-    # Estimate target discrepancy tau if not provided
-    if tau is None:
-        if tau_estimate_mode == 'montecarlo':
-            if verbose:
-                print('Estimating target discrepancy tau with Monte-Carlo...')
-            # get an initial reconstruction with a small regularization to approximate mu
-            lambda_init = lambda_min
-            recon0 = reconstructor(lambda_init)
-            recon0 = recon0.to(device)
-            tau = estimate_tau_montecarlo(dataset, psf, recon0, n_mc=mc_samples, device=device)
-            if verbose:
-                print(f'Estimated tau = {tau:.4g}')
-        else:
-            raise ValueError('Unknown tau_estimate_mode. Provide manual tau or use montecarlo.')
-
-    lo = float(lambda_min)
-    hi = float(lambda_max)
-    lambda_star = None
-    obj_star = None
-    fidelity_star = None
-
-    for it in range(max_outer_iters):
-        mid = 0.5 * (lo + hi)
-        if verbose:
-            print(f'Outer iter {it}: testing lambda = {mid:.4g} in [{lo:.4g}, {hi:.4g}]')
-
-        # run reconstructor for mid
-        obj_mid = reconstructor(mid)
-        obj_mid = obj_mid.to(device)
-
-        # compute fidelity KL(dataset, A(obj_mid)) using fidelity_loss
-        fidelity = fidelity_loss(dataset, obj_mid, psf)
-        # fidelity_loss may return tensor; reduce to scalar
-        if isinstance(fidelity, torch.Tensor):
-            fidelity_val = float(fidelity.mean().item())
-        else:
-            fidelity_val = float(fidelity)
-
-        if verbose:
-            print(f'  fidelity = {fidelity_val:.6g}, target tau = {tau:.6g}')
-
-        # check convergence
-        rel_err = abs(fidelity_val - tau) / (tau + 1e-12)
-        if rel_err < tol:
-            lambda_star = mid
-            obj_star = obj_mid
-            fidelity_star = fidelity_val
-            if verbose:
-                print(f'Converged: lambda = {lambda_star:.4g}, fidelity = {fidelity_star:.6g}')
-            break
-
-        # monotonic assumption: fidelity increases with lambda
-        if fidelity_val > tau:
-            # fidelity too large => decrease lambda
-            hi = mid
-        else:
-            # fidelity too small => increase lambda
-            lo = mid
-
-        # keep last mid as fallback
-        lambda_star = mid
-        obj_star = obj_mid
-        fidelity_star = fidelity_val
-
-    return lambda_star, obj_star, fidelity_star
-
+from tqdm import tqdm
 
 # Example reconstructor wrapper using the repository `variance_reconstruction`:
 def make_variance_reconstructor(dset: np.ndarray,
@@ -282,21 +127,19 @@ def discrepancy_model(y_mat: torch.Tensor, c_mat: torch.Tensor) -> torch.Tensor:
     return 0.5 + fraction
 
 
-# Single-channel fitter removed: workflow uses multi-channel joint fitting only.
-
-
 def fit_discrepancy_model_multi(y_grid: torch.Tensor,
                                 deltaE_mean: torch.Tensor,
                                 deltaE_var: torch.Tensor,
                                 lr: float = 1e-2,
                                 iters: int = 10000,
+                                check: bool = False,
                                 device: Optional[torch.device] = None) -> torch.Tensor:
     """
     Fit channel-wise c parameters jointly from a grid of intensities.
 
     - y_grid: tensor shape (J, Ch)
-    - deltaE_mean: tensor shape (J,)
-    - deltaE_var: tensor shape (J,)
+    - deltaE_mean: tensor shape (J, Ch)
+    - deltaE_var: tensor shape (J, Ch)
 
     Returns c_hats tensor shape (Ch, 4)
     """
@@ -311,23 +154,63 @@ def fit_discrepancy_model_multi(y_grid: torch.Tensor,
     c = nn.Parameter(torch.zeros((Ch, 4), device=device))
     opt = Adam([c], lr=lr)
     w = 1.0 / torch.clamp(var, min=1e-12)
+    loss_iter = torch.zeros((iters,), device=device)
 
-    for _ in range(iters):
+    for it in tqdm(range(iters), desc='Fitting c parameters'):
         opt.zero_grad()
         # compute predicted f_j per-channel in vectorized form
         # y: (J,Ch), c: (Ch,4)
         preds = discrepancy_model(y, c)  # (J,Ch) per-sample per-channel
         loss = torch.sum(w * (preds - target) ** 2)
+        loss_iter[it] = loss
         loss.backward()
         opt.step()
 
-    return c.detach()
+    if check:
+        return c.detach(), loss_iter, 
+    else:
+        return c.detach()
+
+def fit_c_from_simulated_y(y_grid: torch.Tensor,
+                           mc_S: int = 20000,
+                           device: Optional[torch.device] = None,
+                           fit_iters: int = 5000,
+                           verbose: bool = False) -> torch.Tensor:
+    """
+    Fit c parameters from a simulated grid of intensities per channel.
+
+    Parameters
+    - y_grid: Tensor of shape (Ch, J) containing J candidate intensities per channel,
+              or shape (J,) for a single channel.
+    - mc_S: number of Monte-Carlo Poisson samples per intensity
+    - device: torch device
+    - fit_iters: iterations for fitting c via Adam
+
+    Returns
+    - c_hats: tensor shape (Ch, 4) or (4,) for single channel
+    """
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    y_grid = y_grid.to(device)
+
+    # Expect y_grid to be shape (J, Ch): J simulated intensity-vectors
+    if y_grid.ndim != 2:
+        raise ValueError('y_grid must be 2D tensor with shape (J, Ch)')
+
+    J, Ch = y_grid.shape
+    if verbose:
+        print(f'Fitting joint model for {Ch} channels using {J} intensity samples')
+    # monte carlo returns deltaE per sample where KL is summed across channels
+    delta_mean, delta_var = monte_carlo_deltaE(y_grid, S=mc_S, device=device)
+    # joint fit of all channel c parameters (returns (Ch,4))
+    c_hats = fit_discrepancy_model_multi(y_grid, delta_mean, delta_var, iters=fit_iters, device=device)
+    return c_hats
 
 
-# The previous helper that derived per-channel c from an initial reconstruction was
-# removed: in the current workflow we estimate channel-wise parameters `c` from
+# we estimate channel-wise parameters `c` from
 # simulated intensity vectors directly using `fit_c_from_simulated_y` which
-# performs a joint multi-channel fit. This avoids per-channel Python loops.
+# performs a joint multi-channel fit.
 
 
 def compute_D_lambda(obj: torch.Tensor, img: torch.Tensor, psf_fft: torch.Tensor, eps: float = 1e-6) -> float:
@@ -529,41 +412,7 @@ def choose_lambda_by_NEDP_bisection(solver_fn: Callable[[float], torch.Tensor],
     return mid, obj_mid, abs(f_mid)
 
 
-def fit_c_from_simulated_y(y_grid: torch.Tensor,
-                           mc_S: int = 20000,
-                           device: Optional[torch.device] = None,
-                           fit_iters: int = 5000,
-                           verbose: bool = False) -> torch.Tensor:
-    """
-    Fit c parameters from a simulated grid of intensities per channel.
 
-    Parameters
-    - y_grid: Tensor of shape (Ch, J) containing J candidate intensities per channel,
-              or shape (J,) for a single channel.
-    - mc_S: number of Monte-Carlo Poisson samples per intensity
-    - device: torch device
-    - fit_iters: iterations for fitting c via Adam
-
-    Returns
-    - c_hats: tensor shape (Ch, 4) or (4,) for single channel
-    """
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    y_grid = y_grid.to(device)
-
-    # Expect y_grid to be shape (J, Ch): J simulated intensity-vectors
-    if y_grid.ndim != 2:
-        raise ValueError('y_grid must be 2D tensor with shape (J, Ch)')
-
-    J, Ch = y_grid.shape
-    if verbose:
-        print(f'Fitting joint model for {Ch} channels using {J} intensity samples')
-    # monte carlo returns deltaE per sample where KL is summed across channels
-    delta_mean, delta_var = monte_carlo_deltaE(y_grid, S=mc_S, device=device)
-    # joint fit of all channel c parameters (returns (Ch,4))
-    c_hats = fit_discrepancy_model_multi(y_grid, delta_mean, delta_var, iters=fit_iters, device=device)
-    return c_hats
 
 
 
