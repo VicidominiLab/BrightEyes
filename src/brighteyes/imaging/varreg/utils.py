@@ -85,7 +85,7 @@ def forward(otf, obj):
 
     Parameters:
         obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
-        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
+        otf (Tensor): Fourier transform of the PSF (Nx x Ny x Nch) or (Nx x Ny x K x Nch).
 
     Returns:
         Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).

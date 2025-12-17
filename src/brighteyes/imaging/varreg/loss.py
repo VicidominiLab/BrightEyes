@@ -56,7 +56,7 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
 
     if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
-    
+            
     if psf.is_floating_point():
         sz = dataset.shape[:num_axis_to_conv]
         psf_pad = centered_pad(psf, target_shape=sz) # Centered padding of PSF to match dataset shape

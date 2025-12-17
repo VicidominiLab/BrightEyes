@@ -353,7 +353,6 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         if tol is not None:
             rel_diff = ((obj_all[m + 1] - obj_all[m])**2).sum() / ((obj_all[m])**2).sum()
             if rel_diff.item() < tol:
-                print(f"Converged at iteration {m + 1}")
                 obj_all = obj_all[:m + 1]
                 break
 
@@ -394,7 +393,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     else:
         device = torch.device("cpu")
         
-    print('Computing reconstruction on device:', device)
+    if verbose: 
+        print('Computing reconstruction on device:', device)
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
