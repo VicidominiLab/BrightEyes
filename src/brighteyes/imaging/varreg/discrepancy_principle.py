@@ -218,13 +218,14 @@ def fit_c_from_simulated_y(y_grid: torch.Tensor,
 
 def compute_D_lambda(obj: torch.Tensor, img: torch.Tensor, psf_fft: torch.Tensor, eps: float = 1e-6) -> float:
     
-    """Compute left-hand side D(λ; i) = sum_k KL(i_k, o_k * h)
+    """Compute left-hand side D(λ; i) = sum_pixel sum_ch KL(mean_k i_k, mean_k o_k * h)
     obj: reconstructed object (Nx x Ny x K)
     img: observed data (Nx x Ny x Ch x K) or (Nx x Ny x K) compatible with fidelity_loss
     psf_fft: PSF or OTF used by forward
     """
     # Use fidelity_loss to compute KL across whole image
-    kl = fidelity_loss(img, obj, psf_fft, eps=eps) #I'm summing across noise repetition K here
+    K = obj.shape[-1] if obj.ndim == 3 else 1
+    kl = fidelity_loss(img, obj, psf_fft, eps=eps) / K # sum over pixels, average over K repetitions
     if isinstance(kl, torch.Tensor):
         return float(kl.sum().item())
     else:
@@ -232,7 +233,7 @@ def compute_D_lambda(obj: torch.Tensor, img: torch.Tensor, psf_fft: torch.Tensor
 
 
 def compute_Delta_NE_lambda(obj: torch.Tensor, psf_fft: torch.Tensor, c_hats: torch.Tensor) -> float:
-    """Compute RHS ΔNE(λ) = sum_j δ^E(y_j) using channel-wise c_hats
+    """Compute RHS ΔNE(λ) = sum_pixel sum_Ch δ^E(mean_k y_k) using channel-wise c_hats
     c_hats: tensor shape (Ch,4)
     """
     y_pred = forward(psf_fft, obj)
@@ -243,13 +244,14 @@ def compute_Delta_NE_lambda(obj: torch.Tensor, psf_fft: torch.Tensor, c_hats: to
         y_mat = y_pred.reshape(-1, Ch)
     elif y_pred.ndim == 3:
         Nx, Ny, Ch = y_pred.shape
+        K = 1
         y_mat = y_pred.reshape(-1, Ch)
     else:
         raise ValueError('Unsupported y_pred ndim in compute_Delta_NE_lambda')
 
     # vectorized per-sample contributions (channels summed inside): (Npix,)
-    per_sample = discrepancy_model(y_mat, c_hats.to(y_mat.device))
-    total = float(per_sample.sum().item())
+    per_sample = discrepancy_model(y_mat, c_hats.to(y_mat.device))                
+    total = float(per_sample.sum().item() / K ) # sum over the pixel, average over K repetitions 
     return total
 
 
@@ -259,6 +261,7 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
                          psf: torch.Tensor,
                          c_hats: torch.Tensor,
                          device: Optional[torch.device] = None,
+                         Delta_GT: Optional[float] = None,
                          return_all: bool = False,
                          verbose: bool = False):
     """
@@ -295,8 +298,11 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
         obj_lam, _ = solver_fn(lam)
         obj_lam = obj_lam[-1]  # get last reconstruction if multiple returned
         
-        DL = compute_D_lambda(obj_lam, img, psf_fft)
-        DR = compute_Delta_NE_lambda(obj_lam, psf_fft, c_hats)
+        if Delta_GT is not None:
+            DR = Delta_GT
+        else:
+            DR = compute_Delta_NE_lambda(obj_lam, psf_fft, c_hats)                  # Taking the sum across noise repetitions K
+        DL = compute_D_lambda(obj_lam, img, psf_fft)               # Taking the sum across noise repetitions K
         return (DL - DR, DL, DR, obj_lam)
 
     for lam in lambdas:
@@ -310,8 +316,8 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
             obj_list.append(obj_lam)
         if verbose:
             print(f'  D_L={DL:.6g}, D_R={DR:.6g}, diff={diff:.6g}')
-        if diff < best_diff:
-            best_diff = diff
+        if abs(diff) < best_diff:
+            best_diff = abs(diff)
             best_lambda = lam
             best_obj = obj_lam
 
@@ -333,8 +339,9 @@ def choose_lambda_by_NEDP_bisection(solver_fn: Callable[[float], torch.Tensor],
                                      max_iters: int = 20,
                                      rel_tol: float = 0.05,
                                      expand_tries: int = 5,
+                                     Delta_GT: Optional[float] = None,
                                      return_all: bool = False,
-                                     verbose: bool = False) -> Tuple[float, torch.Tensor, float]:
+                                     verbose: bool = False):
     """
     Bisection search for lambda solving D(lambda) - DeltaNE(lambda) = 0.
 
@@ -347,21 +354,27 @@ def choose_lambda_by_NEDP_bisection(solver_fn: Callable[[float], torch.Tensor],
     """
     dev = img.device
     
-    conv_dims = 2
-    axis_to_conv = tuple(range(conv_dims))
-    sz = img.shape[:conv_dims]
-    psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-    # Normalize PSF
-    psf_norm = psf_pad / psf_pad.sum()
-    # Precompute FFTs
-    psf_fft = rfftn(psf_norm, dim=axis_to_conv)
+    if psf.is_floating_point():
+        conv_dims = 2
+        axis_to_conv = tuple(range(conv_dims))
+        sz = img.shape[:conv_dims]
+        psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
+        # Normalize PSF
+        psf_norm = psf_pad / psf_pad.sum()
+        # Precompute FFTs
+        psf_fft = rfftn(psf_norm, dim=axis_to_conv)
+    elif torch.is_complex(psf):
+        psf_fft = psf
 
     def f_func(lam: float):
         obj_lam, _ = solver_fn(lam)
         obj_lam = obj_lam[-1]  # get last reconstruction if multiple returned
         
-        DL = compute_D_lambda(obj_lam, img, psf_fft)
-        DR = compute_Delta_NE_lambda(obj_lam, psf_fft, c_hats)
+        if Delta_GT is not None:
+            DR = Delta_GT
+        else:
+            DR = compute_Delta_NE_lambda(obj_lam, psf_fft, c_hats)                  # Taking the sum across noise repetitions K
+        DL = compute_D_lambda(obj_lam, img, psf_fft)               # Taking the sum across noise repetitions K
         return (DL - DR, DL, DR, obj_lam)
 
     lo = float(lambda_lo)
@@ -407,13 +420,13 @@ def choose_lambda_by_NEDP_bisection(solver_fn: Callable[[float], torch.Tensor],
             hi = hi * expand_factor
             coarse_lams = np.linspace(lo, hi, num=n_coarse)
             #coarse_lams = np.logspace(np.log10(lo), np.log10(hi), num=n_coarse)
-            fvals = [eval_cached(l)[0] for l in coarse_lams]
+            discrepancy_vals = [eval_cached(l)[0] for l in coarse_lams]
             for k in range(len(coarse_lams) - 1):
-                if fvals[k] == 0:
+                if discrepancy_vals[k] == 0:
                     bracket_lo = bracket_hi = coarse_lams[k]
                     bracket_found = True
                     break
-                if fvals[k] * fvals[k + 1] < 0:
+                if discrepancy_vals[k] * discrepancy_vals[k + 1] < 0:
                     bracket_lo = coarse_lams[k]
                     bracket_hi = coarse_lams[k + 1]
                     bracket_found = True
@@ -445,9 +458,12 @@ def choose_lambda_by_NEDP_bisection(solver_fn: Callable[[float], torch.Tensor],
             print(f'Iter {i}: lam_mid={mid:.6g}, discrepancy_mid={discrepancy_mid:.6g}, DL={DL_mid:.6g}, DR={DR_mid:.6g}')
 
         # stop when relative error wrt DL is small
-        denom = max(abs(DL_mid), 1e-12)
-        if abs(discrepancy_mid) / denom < rel_tol: #
-            return mid, obj_mid, abs(discrepancy_mid)
+        #denom = max(abs(DL_mid), 1e-12)
+        if abs(discrepancy_mid) < rel_tol: #/ denom
+            if return_all:
+                return mid, obj_mid, abs(discrepancy_mid), cache
+            else:
+                return mid, obj_mid, abs(discrepancy_mid)
 
         # choose side
         if discrepancy_lo * discrepancy_mid <= 0:
