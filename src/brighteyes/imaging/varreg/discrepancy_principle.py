@@ -225,7 +225,7 @@ def compute_D_lambda(obj: torch.Tensor, img: torch.Tensor, psf_fft: torch.Tensor
     """
     # Use fidelity_loss to compute KL across whole image
     K = obj.shape[-1] if obj.ndim == 3 else 1
-    kl = fidelity_loss(img, obj, psf_fft, eps=eps) / K # sum over pixels, average over K repetitions
+    kl = fidelity_loss(img, obj, psf_fft, eps=eps) # sum over pixels, sum over K repetitions
     if isinstance(kl, torch.Tensor):
         return float(kl.sum().item())
     else:
@@ -236,6 +236,7 @@ def compute_Delta_NE_lambda(obj: torch.Tensor, psf_fft: torch.Tensor, c_hats: to
     """Compute RHS ΔNE(λ) = sum_pixel sum_Ch δ^E(mean_k y_k) using channel-wise c_hats
     c_hats: tensor shape (Ch,4)
     """
+    
     y_pred = forward(psf_fft, obj)
 
     # y_pred shape handling: collapse spatial dims and repetition into N x Ch
@@ -251,7 +252,7 @@ def compute_Delta_NE_lambda(obj: torch.Tensor, psf_fft: torch.Tensor, c_hats: to
 
     # vectorized per-sample contributions (channels summed inside): (Npix,)
     per_sample = discrepancy_model(y_mat, c_hats.to(y_mat.device))                
-    total = float(per_sample.sum().item() / K ) # sum over the pixel, average over K repetitions 
+    total = float(per_sample.sum().item()) # sum over the pixel, sum over K repetitions 
     return total
 
 
@@ -262,6 +263,7 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
                          c_hats: torch.Tensor,
                          device: Optional[torch.device] = None,
                          Delta_GT: Optional[float] = None,
+                         return_all_iters: bool = False,
                          return_all: bool = False,
                          verbose: bool = False):
     """
@@ -272,7 +274,11 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
     """
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f'Using device: {device}')
 
+    img = img.to(device)
+    psf = psf.to(device)
+    c_hats = c_hats.to(device)
     best_diff = float('inf')
     best_lambda = None
     best_obj = None
@@ -290,28 +296,29 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
         psf_fft = psf
         
     if return_all:
-        lambda_list = []
         diff_list = []
         obj_list = []
 
     def f_func(lam: float):
         obj_lam, _ = solver_fn(lam)
-        obj_lam = obj_lam[-1]  # get last reconstruction if multiple returned
+        obj_lam_last = obj_lam[-1].to(device)
         
         if Delta_GT is not None:
             DR = Delta_GT
         else:
-            DR = compute_Delta_NE_lambda(obj_lam, psf_fft, c_hats)                  # Taking the sum across noise repetitions K
-        DL = compute_D_lambda(obj_lam, img, psf_fft)               # Taking the sum across noise repetitions K
-        return (DL - DR, DL, DR, obj_lam)
+            DR = compute_Delta_NE_lambda(obj_lam_last, psf_fft, c_hats)                  # Taking the sum across noise repetitions K
+        DL = compute_D_lambda(obj_lam_last, img, psf_fft)               # Taking the sum across noise repetitions K
+        if return_all_iters:
+            return (DL - DR, DL, DR, obj_lam.to(device))
+        else:
+            return (DL - DR, DL, DR, obj_lam_last)
 
-    for lam in lambdas:
+    for idx_n, lam in enumerate(lambdas):
         if verbose:
-            print(f'Testing lambda={lam}')
+            print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
         diff, DL, DR, obj_lam = f_func(lam)
         if return_all:
-            lambda_list.append(lam)
             diff_list.append(diff)
             obj_list.append(obj_lam)
         if verbose:
@@ -319,13 +326,15 @@ def choose_lambda_by_NEDP(solver_fn: Callable[[float], torch.Tensor],
         if abs(diff) < best_diff:
             best_diff = abs(diff)
             best_lambda = lam
-            best_obj = obj_lam
+            if return_all_iters:
+                best_obj = obj_lam
+            else:
+                best_obj = obj_lam[-1]
 
     if best_lambda is None:
         raise ValueError('No lambdas were provided or evaluation failed.')
     if return_all:
-        return (float(best_lambda), best_obj, float(best_diff),
-                lambda_list, obj_list, diff_list)
+        return (float(best_lambda), best_obj, float(best_diff), obj_list, diff_list)
     else:
         return float(best_lambda), best_obj, float(best_diff)
 

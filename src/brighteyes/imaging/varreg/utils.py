@@ -204,16 +204,16 @@ def calculate_noise_variance(obj):
     """ Compute the noise variance of an object tensor.
 
     Parameters:
-        obj (Tensor): Input object tensor of shape N_iter x Nx x Ny x K.
+        obj (Tensor): Input object tensor of shape N_iter x Nx x Ny x L.
 
     Returns:
-        noise mean (Tensor): Mean of the power spectrum across K dimension shape (N_iter, Nx, Ny).
-        noise variance (Tensor): Variance of the power spectrum across K dimension shape (N_iter, Nx, Ny).
+        noise mean (Tensor): Mean of the power spectrum across L dimension shape (N_iter, Nx, Ny).
+        noise variance (Tensor): Variance of the power spectrum across L dimension shape (N_iter, Nx, Ny).
     """
 
     obj_fft = fftn(obj, dim=(1,2))
     obj_fftshifted = fftshift(obj_fft, dim=(1,2))  # Shift the zero frequency component to the center
-    mean = obj_fftshifted.mean(dim=-1, keepdim=False)  # Average over K dimension
+    mean = obj_fftshifted.mean(dim=-1, keepdim=False)  # Average over L dimension
     variance = obj_fftshifted.var(dim=-1, keepdim=False)
     noise_mean = torch.abs(mean) ** 2  # Power spectrum mean
     noise_variance = torch.abs(variance) # Power spectrum variance
@@ -345,7 +345,7 @@ def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False,
 
     kl_div = torch.sum(fidelity, dim=axis_to_sum)
 
-    return torch.squeeze(kl_div).numpy()
+    return torch.squeeze(kl_div).cpu().numpy()
 
 def forward_fill_nan(tensor):
     

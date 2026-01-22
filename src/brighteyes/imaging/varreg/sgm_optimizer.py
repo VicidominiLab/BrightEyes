@@ -38,7 +38,7 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
     
     min_step_size = 1e-10
     K=obj.shape[-1]
-    
+    device = obj.device    
     
     if initial_step_size is None:
         initial_step_size = 1.0*torch.ones(K)*theta
@@ -58,7 +58,7 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
     direction = obj_tmp - obj
     
     # Track which k have already fixed their step size
-    frozen = torch.zeros(K, dtype=torch.bool)
+    frozen = torch.zeros(K, dtype=torch.bool).to(device)
 
     for i in range(max_iter):
         
