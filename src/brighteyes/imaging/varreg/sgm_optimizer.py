@@ -351,7 +351,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         obj_all[idx] = obj_set
 
         if tol is not None:
-            rel_diff = ((obj_all[m + 1] - obj_all[m])**2).sum() / ((obj_all[m])**2).sum()
+            rel_diff = (abs(obj_all[m + 1] - obj_all[m])).sum() / (abs(obj_all[m])).sum()
             if rel_diff.item() < tol:
                 obj_all = obj_all[:m + 1]
                 break
