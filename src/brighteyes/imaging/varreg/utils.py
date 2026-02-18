@@ -98,7 +98,7 @@ def forward(otf, obj):
     str_psf = alphabet[:otf.ndim]
     axis_str = alphabet[:conv_dims]
     
-    if obj.ndim == otf.ndim and obj.shape[-1] != otf.shape[-1]:  # If 
+    if obj.ndim == otf.ndim and obj.shape[-1] != otf.shape[-1]: 
         str_obj = alphabet[:conv_dims] + alphabet[otf.ndim + 1]
     else:
         str_obj = alphabet[:obj.ndim]

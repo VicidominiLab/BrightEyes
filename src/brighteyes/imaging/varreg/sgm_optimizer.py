@@ -122,7 +122,9 @@ def compute_step_size_line_search(img, obj, obj_tmp, psf_fft, grad, lam, alpha, 
     #     print(f"Step sizes: {step_size}")
     return step_size, should_update
 
-def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method: str, regularizer: str, normalize: bool,  step_size_search:str, initial_step_size: float = 1.0, line_search_params: tuple=(10,2), verbose=False):
+def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
+               method: str, regularizer: str, normalize: bool, step_size_search:str,
+               initial_step_size: float = 1.0, line_search_params: tuple=(10,2), verbose=False):
     """
     Performs a single iteration update for SGM with variance regularization.
 
@@ -259,8 +261,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method:
     return obj_new, step_size
 
 
-def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regularizer, initialization,
-            normalize, rec_to_save, binomial, step_size_search, line_search_params, verbose=False):
+def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, regularizer_norm, initialization,
+            normalize, sectioning, rec_to_save, binomial, step_size_search, line_search_params, verbose=False):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -271,24 +273,28 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         lam (float): Variance regularization parameter.
         alpha (float): Fidelity term regularization parameter.
         weight (float): Regularization weight a scalar or tensor of shape Nx x Ny.
-        tol (float): Convergence tolerance to stop iterations.
+        stop_tol (float): Convergence tolerance to stop iterations.
         method (str): algorithm 'osl' or 'abs' or 'sgm'.
         device (str): device to perform computation on ('cpu' or 'cuda').
-        regularizer (str): distance to measure the differences between o_k and o_mean: 'l2', 'kl', or 'l1'.
+        regularizer_norm (str): distance to measure the differences between o_k and o_mean: 'l2', 'kl', or 'l1'.
         initialization (str): initialization method for the object estimate ('flat' or 'data').
         normalize (bool): whether to normalize the object estimate at each iteration.
-        rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
+        sectioning (bool): whether to use sectioning during reconstruction.
 
     Returns:
         Tensor: Updated object tensor of shape Nx x Ny x K.
     """
 
-    if rec_to_save == 'last' and tol is not None:
-        raise ValueError("If rec_to_save is 'last', tol must be None.")
+    if rec_to_save == 'last' and stop_tol is not None:
+        raise ValueError("If rec_to_save is 'last', stop_tol must be None.")
 
     eps = 1e-8  # torch.finfo(torch.float32).eps
     
-    conv_dims = 2  # to generalize to 3D later
+    if sectioning:
+        conv_dims = 3
+    else:
+        conv_dims = 2  
+        
     if dset.ndim != psf.ndim + 1:
         raise ValueError(f"The dataset must be one dimension larger than the psf. Got dataset with {dset.ndim} dimension and psf with {psf.ndim}.")
 
@@ -319,6 +325,9 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
         size = [1] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
+        
+    # if sectioning:
+    #     size = [psf.shape[0]] + size
 
     obj_all = torch.empty(size).to(device)
     
@@ -337,7 +346,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     step_size = []
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer, normalize,
+        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer_norm, normalize, 
                                                 step_size_search=step_size_search, initial_step_size=initial_step_size, line_search_params=line_search_params, verbose=verbose)
 
         step_size.append(initial_step_size)
@@ -350,9 +359,9 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
             raise ValueError("rec_to_save must be 'last' or 'all'.")
         obj_all[idx] = obj_set
 
-        if tol is not None:
+        if stop_tol is not None:
             rel_diff = (abs(obj_all[m + 1] - obj_all[m])).sum() / (abs(obj_all[m])).sum()
-            if rel_diff.item() < tol:
+            if rel_diff.item() < stop_tol:
                 obj_all = obj_all[:m + 1]
                 break
 
@@ -362,8 +371,8 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, tol, method, device, regula
     return obj_all, step_size
 
 
-def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=50, tol=None, method='sgm',
-                            regularizer='l2', initialization='flat', normalize=False, process='gpu',
+def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
+                            regularizer_norm='l2', initialization='flat', normalize=True, sectioning=False, process='gpu', 
                             rec_to_save='last', binomial: bool = False, step_size_search: str = 'fixed', line_search_params=None, verbose=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
@@ -375,14 +384,18 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         alpha_value (float): Fidelity term regularization parameter.
         weight_map (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         max_iter (int): Maximum number of iterations.
-        tol (float): Convergence tolerance.
-        method (str): Update method ('osl', 'abs', or 'sgm').
-        regularizer (str): Regularization type to measure distance ('l2', 'kl', or 'l1').
+        stop_tol (float): Convergence tolerance.
+        method (str): Update method ('osl', 'abs', or 'sgp').
+        regularizer_norm (str): Regularization type to measure distance ('l2', 'kl', or 'l1').
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
+        sectioning (bool): Whether to implement optical sectioning during reconstruction.
         process (str): Processing mode ('cpu' or 'gpu').
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
-
+        binomial (bool): Whether to use binomial splitting.
+        step_size_search (str): Step size search method ('fixed' or 'adaptive').
+        line_search_params (dict): Parameters for line search.
+        verbose (bool): Whether to print verbose output.
     Returns:
         Tensor: Reconstructed volume of shape Nx x Ny x K.
     """
@@ -399,7 +412,16 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
 
-    conv_dims = 2
+    if sectioning is True:
+        conv_dims = 3
+    else:
+        conv_dims = 2
+        
+    # # Add Nz dimension if missing
+    # if not sectioning:
+    #     psf = psf.unsqueeze(0)  # Add a z dimension #Nz x Nx x My x Ch
+        
+    # conv_dims = 3
     
     if dset.ndim - conv_dims == 1: #if I do not have channels
         dset = dset.unsqueeze(-2)  # Add a channel dimension #Nx x Ny x 1 x K
@@ -409,8 +431,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
-    obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, tol, method, device,
-                      regularizer, initialization, normalize, rec_to_save, binomial, step_size_search, line_search_params, verbose)
+    obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,
+                            initialization, normalize, sectioning, rec_to_save, binomial, step_size_search, line_search_params, verbose)
     
     if rec_to_save == 'last':
         return obj_all[-1]

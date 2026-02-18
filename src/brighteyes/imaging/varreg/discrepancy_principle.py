@@ -16,10 +16,10 @@ def make_variance_reconstructor(dset: np.ndarray,
                                 psf: np.ndarray,
                                 alpha: int = 1,
                                 weight_map=1,
-                                tol = 1e-5,
+                                stop_tol = 1e-5,
                                 max_iter: int = 50,
                                 method: str = 'sgp',
-                                regularizer: str = 'l2',
+                                regularizer_norm: str = 'l2',
                                 initialization: str = 'flat',
                                 normalize: bool = True,
                                 process: str = 'gpu',
@@ -43,8 +43,8 @@ def make_variance_reconstructor(dset: np.ndarray,
 
     def recon(lambda_value: float) -> torch.Tensor:
         obj = variance_reconstruction(dset, psf, lambda_value, alpha_value=alpha, weight_map=weight_map,
-                                      max_iter=max_iter, tol=tol, method=method, process=process,
-                                      regularizer=regularizer, initialization=initialization,
+                                      max_iter=max_iter, stop_tol=stop_tol, method=method, process=process,
+                                      regularizer_norm=regularizer_norm, initialization=initialization,
                                       normalize=normalize, rec_to_save=rec_to_save, binomial=binomial,
                                       step_size_search=step_size_search, line_search_params=line_search_params, verbose=verbose)
         return obj
