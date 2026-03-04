@@ -262,13 +262,13 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, regularizer_norm, initialization,
-            normalize, sectioning, rec_to_save, binomial, step_size_search, line_search_params, verbose=False):
+            normalize, rec_to_save, step_size_search, line_search_params, verbose=False):
     """
     Performs a single iteration update for the reconstruction process.
 
     Parameters:
-        dset (Tensor): Input data of shape Nx x Ny x Ch x K.
-        psf (Tensor): Fourier transform of the PSF of shape Nx x Ny x Ch.
+        dset (Tensor): Input data of shape Nx x Ny x K x Ch.
+        psf (Tensor): Fourier transform of the PSF of shape Nz x Nx x Ny x Ch.
         max_iter (int): Maximum number of iterations.
         lam (float): Variance regularization parameter.
         alpha (float): Fidelity term regularization parameter.
@@ -279,10 +279,9 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         regularizer_norm (str): distance to measure the differences between o_k and o_mean: 'l2', 'kl', or 'l1'.
         initialization (str): initialization method for the object estimate ('flat' or 'data').
         normalize (bool): whether to normalize the object estimate at each iteration.
-        sectioning (bool): whether to use sectioning during reconstruction.
 
     Returns:
-        Tensor: Updated object tensor of shape Nx x Ny x K.
+        Tensor: Updated object tensor of shape Nz x Nx x Ny x K.
     """
 
     if rec_to_save == 'last' and stop_tol is not None:
@@ -290,10 +289,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
 
     eps = 1e-8  # torch.finfo(torch.float32).eps
     
-    if sectioning:
-        conv_dims = 3
-    else:
-        conv_dims = 2  
+    conv_dims = 3
         
     if dset.ndim != psf.ndim + 1:
         raise ValueError(f"The dataset must be one dimension larger than the psf. Got dataset with {dset.ndim} dimension and psf with {psf.ndim}.")
@@ -303,32 +299,21 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     axis_to_conv = tuple(range(conv_dims))
 
     # Normalize PSF
-    psf_norm = psf / psf.sum()
+    norm_axis = tuple(np.arange(1, psf.ndim))
+    psf_norm = psf / psf.sum(axis=norm_axis, keepdim=True)
 
     # Precompute FFTs
     psf_fft = rfftn(psf_norm, dim=axis_to_conv)
     psf_m_fft = torch.conj(psf_fft)
 
-    if binomial is True:
-        img = dset.sum(dim=-1)
-        n_rep = dset.shape[-1]
-
     # Initialization
-    if dset.ndim - conv_dims == 1:
-        size = list(dset.shape)
-    elif dset.ndim - conv_dims == 2:
-        size = list(dset.shape[:-2] + dset.shape[-1:])
-    else:
-        raise ValueError("Dataset must have repetition and eventually channel dimensions in addition to spatial dimensions.")
+    size = list(dset.shape)
         
     if rec_to_save == 'last':
         size = [1] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
         
-    # if sectioning:
-    #     size = [psf.shape[0]] + size
-
     obj_all = torch.empty(size).to(device)
     
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
@@ -364,22 +349,19 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
             if rel_diff.item() < stop_tol:
                 obj_all = obj_all[:m + 1]
                 break
-
-        if binomial is True:
-            dset = binomial_split(img, n_splits=n_rep, p=0.5, device=device)
             
     return obj_all, step_size
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
-                            regularizer_norm='l2', initialization='flat', normalize=True, sectioning=False, process='gpu', 
-                            rec_to_save='last', binomial: bool = False, step_size_search: str = 'fixed', line_search_params=None, verbose=False):
+                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', 
+                            rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, verbose=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
     Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x K x Ch.
-        psf (ndarray): PSF kernel of shape Mx x My x K x Ch.
+        dset (ndarray): Input dataset of shape Nx x Nyx Ch x K.
+        psf (ndarray): PSF kernel of shape Mz x Mx x My x Ch x K.
         lambda_value (float): Variance regularization parameter.
         alpha_value (float): Fidelity term regularization parameter.
         weight_map (float): Regularization weight a scalar or tensor of shape Nx x Ny.
@@ -389,15 +371,13 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         regularizer_norm (str): Regularization type to measure distance ('l2', 'kl', or 'l1').
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
-        sectioning (bool): Whether to implement optical sectioning during reconstruction.
         process (str): Processing mode ('cpu' or 'gpu').
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
-        binomial (bool): Whether to use binomial splitting.
         step_size_search (str): Step size search method ('fixed' or 'adaptive').
         line_search_params (dict): Parameters for line search.
         verbose (bool): Whether to print verbose output.
     Returns:
-        Tensor: Reconstructed volume of shape Nx x Ny x K.
+        Tensor: Reconstructed volume of shape Nz x Nx x Ny x K.
     """
 
     # Ensure tensors are on the correct device
@@ -411,28 +391,35 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
+    
+    # Ensure correct shapes of PSF w.r.t. dataset
+    if psf.ndim == dset.ndim: # PSF has z but not channel dim
+        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
+        dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
+        
+    if psf.ndim == 3:
+        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My
 
-    if sectioning is True:
-        conv_dims = 3
-    else:
-        conv_dims = 2
-        
-    # # Add Nz dimension if missing
-    # if not sectioning:
-    #     psf = psf.unsqueeze(0)  # Add a z dimension #Nz x Nx x My x Ch
-        
-    # conv_dims = 3
+    conv_dims = 3
     
-    if dset.ndim - conv_dims == 1: #if I do not have channels
-        dset = dset.unsqueeze(-2)  # Add a channel dimension #Nx x Ny x 1 x K
-        psf = psf.unsqueeze(-1)  # Add a channel dimension #Mx x My x 1
+    # Ensure dataset has odd numbers of pixels for convolution
+    oddeven_check_x = dset.shape[0] % 2
+    oddeven_check_y = dset.shape[1] % 2
+
+    data_check = dset
+    if oddeven_check_x == 0:
+        data_check = data_check[1:]
+    if oddeven_check_y == 0:
+        data_check = data_check[:, 1:]
     
+    # Pad PSF to match dataset shape
     sz = dset.shape[:conv_dims]
-    
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
+        
+    # Run reconstruction
     obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,
-                            initialization, normalize, sectioning, rec_to_save, binomial, step_size_search, line_search_params, verbose)
+                            initialization, normalize, rec_to_save, step_size_search, line_search_params, verbose)
     
     if rec_to_save == 'last':
         return obj_all[-1]

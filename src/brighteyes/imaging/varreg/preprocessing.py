@@ -34,7 +34,8 @@ def rebin(dset, nbin, length, channel: int = -1):
         ndarray: Rebinned dataset of shape Nx x Ny x length.
     """
 
-    n_rep = dset.shape[channel]
+    dset = np.moveaxis(dset, channel, -1)
+    n_rep = dset.shape[-1]
     integer_part = ( n_rep // (nbin * length) ) * (nbin * length)
     remainder = n_rep - integer_part
 
