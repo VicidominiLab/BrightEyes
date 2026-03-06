@@ -5,7 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 from scipy.signal import convolve
 
-from .utils import centered_pad, partial_convolution_rfft, forward
+from .utils import centered_pad, partial_convolution_rfft, forward_model
 
 def flat(shape, flux, device):
 
@@ -106,13 +106,13 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
     Initialize the reconstruction based on the specified method.
 
     Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x Nch x K.
+        dset (ndarray): Input dataset of shape Nz x Nx x Ny x Nch x K.
         psf (ndarray): Point Spread Function of shape Px x Py.
         method (str): Initialization method ('flat', 'data', 'rl').
         device (str): Device to use ('cpu' or 'cuda'). Default is None, which uses 'cuda' if available.
 
     Returns:
-        Tensor: Initialized object tensor of shape Nx x Ny x K.
+        Tensor: Initialized object tensor of shape Nz x Nx x Ny x K.
     """
 
     if device is None:
@@ -132,8 +132,9 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
 
     if method == 'flat':
         if dset.ndim - conv_dims == 2: #if I have channels
-            dset = dset.sum(dim=-2)  # Sum over channels Nx x Ny x K
-        init = flat(dset.shape, flux, device)
+            dset = dset.sum(dim=-2)  # Sum over channels, output Nz x Nx x Ny x K
+        init_shape = (psf.shape[0],) + tuple(dset.shape)
+        init = flat(init_shape, flux, device)
     elif method == 'data':
         init = data(dset, flux, device)
     elif method == 'rl':

@@ -4,7 +4,7 @@ from typing import Callable, Optional, Tuple
 
 from .loss import fidelity_loss
 from .sgm_optimizer import variance_reconstruction
-from .utils import forward, kl_divergence, centered_pad
+from .utils import forward_model, kl_divergence, centered_pad
 
 from torch.fft import rfftn, irfftn, ifftshift
 import torch.nn as nn

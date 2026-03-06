@@ -14,6 +14,7 @@ def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: st
 
     dim3 = dim1 + dim2
     dim3 = ''.join(sorted(set(dim3), key=dim3.index))
+    print(f'Final dim: {dim3}')
 
     dims = [dim1, dim2, dim3]
 
@@ -78,32 +79,33 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
     return conv
 
 
-def forward(otf, obj):
+def forward_model(otf, obj):
     """
     Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
     The dimension K is optional.
 
     Parameters:
-        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
-        otf (Tensor): Fourier transform of the PSF (Nx x Ny x Nch) or (Nx x Ny x K x Nch).
+        obj (Tensor): Object (Nz x Nx x Ny x K) or fraction (Nz x Nx x Ny x K) or (Nx x Ny x K x Nch).
+        otf (Tensor): Fourier transform of the PSF (Nz x Nx x Ny x Nch) or (Nx x Ny x K x Nch).
 
     Returns:
         Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
     """
 
-    conv_dims = 2  # to generalize to 3D later
+    conv_dims = 2  
 
     alphabet = string.ascii_lowercase
 
-    str_psf = alphabet[:otf.ndim]
-    axis_str = alphabet[:conv_dims]
+    str_otf = alphabet[:otf.ndim]       # 'abcd' for 4D OTF
+    axis_str = alphabet[1:conv_dims+1]  # 'bc' for 2D convolution
     
-    if obj.ndim == otf.ndim and obj.shape[-1] != otf.shape[-1]: 
-        str_obj = alphabet[:conv_dims] + alphabet[otf.ndim + 1]
-    else:
-        str_obj = alphabet[:obj.ndim]
+    if obj.shape[0] == otf.shape[0] and obj.shape[-1] != otf.shape[-1]:         # PSF * object
+        str_obj = alphabet[:conv_dims+1] + alphabet[otf.ndim] # 'abce' for 4D object with K dimension
+    else:                                                                       # PSF^T * fraction    
+        str_obj = alphabet[1:obj.ndim+1]
     
-    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
+    #print(f'OTF shape: {otf.shape}, Object shape: {obj.shape}, str_otf: {str_otf}, str_obj: {str_obj}, axis_str: {axis_str}')
+    dset = partial_convolution_rfft(otf, obj, dim1=str_otf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
 
     return dset
 
@@ -122,7 +124,7 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
 
     conv_dims = 2
 
-    Mx, My = arr.shape[:conv_dims]
+    Mx, My = arr.shape[1:conv_dims+1]
     Nx, Ny = target_shape[:conv_dims]
 
     if Nx < Mx or Ny < My:
@@ -136,12 +138,28 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     pad_top = pad_x_total // 2
     pad_bottom = pad_x_total - pad_top
     pad = (pad_left, pad_right, pad_top, pad_bottom)
-    pad_extended = (0,) * (2 * (arr.ndim - 2)) + pad
+    
+    # Move axes (1,2) to the last two positions, pad them, then move back
+    arr_moved = torch.movedim(arr, (1, 2), (-2, -1))
+    arr_moved = functional.pad(arr_moved, (pad_left, pad_right, pad_top, pad_bottom))
+    padded_arr = torch.movedim(arr_moved, (-2, -1), (1, 2))
+    
+    #pad_extended = (0,) * (2 * (arr.ndim - 2)) + pad
+    #padded_arr = functional.pad(arr, pad_extended)
 
-    padded_arr = functional.pad(arr, pad_extended)
 
     return padded_arr
 
+def compute_otf_from_psf(psf, target_shape):
+    num_axis_to_conv = 2
+    axis_to_conv = tuple(torch.arange(1, num_axis_to_conv+1))
+    psf_pad = centered_pad(psf, target_shape=target_shape) # Centered padding of PSF to match dataset shape
+    # Normalize PSF
+    norm_axis = tuple(np.arange(1, psf.ndim))
+    psf_norm = psf_pad / psf_pad.sum(axis=norm_axis, keepdim=True)
+    psf_fft = rfftn(psf_norm, dim=axis_to_conv) # FFT of the PSF
+    
+    return psf_fft
 
 def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
     """

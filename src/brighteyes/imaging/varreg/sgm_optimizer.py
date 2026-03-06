@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from .loss import fidelity_loss, regularization_loss
 
-from .utils import partial_convolution_rfft, centered_pad, forward
+from .utils import forward_model, centered_pad
 from .regularizers import grad_l2, grad_l1, grad_kl
 from .preprocessing import binomial_split
 
@@ -148,12 +148,12 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
         torch.cuda.empty_cache()
 
     # === forward convolution ===
-    img_estimate_k = forward(psf_fft, obj)
+    img_estimate_k = forward_model(psf_fft, obj).sum(0)
     fraction = img / (img_estimate_k + eps)
 
     del img_estimate_k
 
-    update_k = alpha * forward(psf_m_fft, fraction).sum(-2)  # Sum over channels
+    update_k = alpha * forward_model(psf_m_fft, fraction).sum(-2)  # Sum over channels
     del fraction
 
     step_size = 1.0
@@ -200,8 +200,6 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
         obj_mean = obj.mean(dim=-1, keepdim=True)
         grad = (alpha * 1 - update_k + 2 * lam * weight * (obj - obj_mean))
         obj_tmp = torch.where(obj - grad > 0, obj - grad, 0)
-        print(f'min obj_tmp: {obj_tmp.min()}, max obj_tmp: {obj_tmp.max()}')
-        print(f'grad min: {grad.min()}, grad max: {grad.max()}')
         ### TO DO: Controllare che qua non ci voglia un check obj = obj_tmp per decretare punto fisso vd Bonettini paper ###
         
         if step_size_search == 'rl':
@@ -288,17 +286,10 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         raise ValueError("If rec_to_save is 'last', stop_tol must be None.")
 
     eps = 1e-8  # torch.finfo(torch.float32).eps
-    
-    conv_dims = 3
-        
-    if dset.ndim != psf.ndim + 1:
-        raise ValueError(f"The dataset must be one dimension larger than the psf. Got dataset with {dset.ndim} dimension and psf with {psf.ndim}.")
-
-    # axis_not_to_conv = tuple(range(-(psf.ndim - conv_dims), 0))
-    # print(f'axis_not_to_conv: {axis_not_to_conv}')
-    axis_to_conv = tuple(range(conv_dims))
 
     # Normalize PSF
+    num_axis_to_conv = 2
+    axis_to_conv = tuple(np.arange(1, num_axis_to_conv+1))
     norm_axis = tuple(np.arange(1, psf.ndim))
     psf_norm = psf / psf.sum(axis=norm_axis, keepdim=True)
 
@@ -307,15 +298,14 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     psf_m_fft = torch.conj(psf_fft)
 
     # Initialization
-    size = list(dset.shape)
+    size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
         
     if rec_to_save == 'last':
         size = [1] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
         
-    obj_all = torch.empty(size).to(device)
-    
+    obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
 
     #Control check parameter stepsize
@@ -400,7 +390,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     if psf.ndim == 3:
         psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My
 
-    conv_dims = 3
+    spatial_dims = 3
     
     # Ensure dataset has odd numbers of pixels for convolution
     oddeven_check_x = dset.shape[0] % 2
@@ -413,9 +403,9 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         data_check = data_check[:, 1:]
     
     # Pad PSF to match dataset shape
-    sz = dset.shape[:conv_dims]
+    sz = dset.shape[:spatial_dims]
+    print(f'Padded PSF to shape: {sz}')
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-        
         
     # Run reconstruction
     obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,

@@ -5,7 +5,7 @@ from functools import partial
 
 from .loss import fidelity_loss
 from .sgm_optimizer import variance_reconstruction
-from .utils import forward, kl_divergence, centered_pad
+from .utils import compute_otf_from_psf, forward_model
 
 from torch.fft import fftn, rfftn, irfftn, ifftshift
 import torch.nn as nn
@@ -56,7 +56,6 @@ class VarianceReconstructor:
         self.normalize = normalize
         self.process = process
         self.rec_to_save = rec_to_save
-        self.binomial = binomial
         self.step_size_search = step_size_search
         self.line_search_params = line_search_params if line_search_params is not None else (10, 2)
         self.verbose = verbose
@@ -75,7 +74,6 @@ class VarianceReconstructor:
             initialization=self.initialization,
             normalize=self.normalize, 
             rec_to_save=self.rec_to_save, 
-            binomial=self.binomial,
             step_size_search=self.step_size_search, 
             line_search_params=self.line_search_params, 
             verbose=self.verbose
@@ -157,7 +155,7 @@ def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Ten
     
     eps = 1e-10  # torch.finfo(torch.float32).eps
     
-    y_pred = forward(psf_fft, obj) + eps  # predicted data
+    y_pred = forward_model(psf_fft, obj).sum(0) + eps  # predicted data, summing over z
     idx_pos = dset > eps
     if masked:
         num = dset - y_pred * T_func(y_pred)
@@ -261,18 +259,23 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
     best_obj = None
     best_whiteness = float('inf')
     
-    if psf.is_floating_point():
-        conv_dims = 2
-        axis_to_conv = tuple(range(conv_dims))
-        sz = img.shape[:conv_dims]
-        psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
-        # Normalize PSF
-        psf_norm = psf_pad / psf_pad.sum()
-        # Precompute FFTs
-        psf_fft = rfftn(psf_norm, dim=axis_to_conv)
+    # Ensure correct shapes of PSF w.r.t. dataset
+    if psf.ndim == img.ndim: # PSF has z but not channel dim
+        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
+        img = img.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
+        
+    if psf.ndim == 3:
+        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My
+    
+    if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
+        num_axis_to_conv = 2
+        sz = tuple(img.shape[:num_axis_to_conv])
+        psf_fft = compute_otf_from_psf(psf, target_shape=sz)
     elif torch.is_complex(psf):
         psf_fft = psf
-        
+    else:
+        raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
+    
     if return_all:
         obj_list = []
         whiteness_measures_list = []

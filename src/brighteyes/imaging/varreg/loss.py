@@ -4,33 +4,7 @@ import einops
 
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
-from .utils import partial_convolution_rfft, centered_pad, forward, kl_divergence
-
-
-def forward_model(otf, obj):
-    """
-    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
-    The dimension K is optional.
-
-    Parameters:
-        obj (Tensor): Object (Nx x Ny x K) or fraction (Nx x Ny x K) or (Nx x Ny x K x Nch).
-        otf (Tensor): Fourier transform of the PSF (Nx x Ny x K) or (Nx x Ny x K x Nch).
-
-    Returns:
-        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
-    """
-
-    conv_dims = 2 # to generalize to 3D later
-
-    alphabet = string.ascii_lowercase
-
-    str_psf = alphabet[:otf.ndim]
-    str_obj = alphabet[:obj.ndim]
-    axis_str = alphabet[:conv_dims]
-
-    dset = partial_convolution_rfft(otf, obj, dim1=str_psf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
-
-    return dset
+from .utils import compute_otf_from_psf, forward_model, partial_convolution_rfft, centered_pad, kl_divergence
 
 
 def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False, k_loss=False):
@@ -51,38 +25,55 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
         eps = 1e-8
 
     psf = torch.as_tensor(psf)
-    num_axis_to_conv = 2  # to generalize to 3D later
+    num_axis_to_conv = 2 
     
-
-    if obj_set.shape[:num_axis_to_conv] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
+    if obj_set.shape[1:num_axis_to_conv+1] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
         obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
+        
+    if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
+        num_axis_to_conv = 2
+        sz = tuple(dataset.shape[:num_axis_to_conv])
+        psf_fft = compute_otf_from_psf(psf, target_shape=sz)
+    elif torch.is_complex(psf):
+        psf_fft = psf
+    else:
+        raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
             
-    if psf.is_floating_point():
+    if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
+        axis_to_conv = tuple(torch.arange(1, num_axis_to_conv+1))
         sz = dataset.shape[:num_axis_to_conv]
         psf_pad = centered_pad(psf, target_shape=sz) # Centered padding of PSF to match dataset shape
-        psf_fft = rfftn(psf_pad, dim=tuple(range(num_axis_to_conv))) # FFT of the PSF
+        psf_fft = rfftn(psf_pad, dim=axis_to_conv) # FFT of the PSF
     elif torch.is_complex(psf):
         psf_fft = psf
     else:
         raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
 
-    alphabet = string.ascii_lowercase
+    # alphabet = string.ascii_lowercase
     
-    str_psf = alphabet[1:psf_fft.ndim+1]   # 'bcd'
-    str_obj = alphabet[:num_axis_to_conv+1] # 'abc'
-    if len(str_obj) != obj_set.ndim:
-        str_obj += alphabet[dataset.ndim]  # 'abc e'
+    # str_psf = alphabet[1:psf_fft.ndim+1]   # 'bcd'
+    # str_obj = alphabet[:num_axis_to_conv+1] # 'abc'
+    # if len(str_obj) != obj_set.ndim:
+    #     str_obj += alphabet[dataset.ndim]  # 'abc e'
         
-    axis_str = alphabet[1:num_axis_to_conv+1] # 'bc'
-    str_final = alphabet[:dataset.ndim + 1]  # 'abcde'
+    # axis_str = alphabet[1:num_axis_to_conv+1] # 'bc'
+    # str_final = alphabet[:dataset.ndim + 1]  # 'abcde'
 
-    if dataset.ndim == num_axis_to_conv or dataset.ndim == num_axis_to_conv + 1: # No K and no Ch dimension or no K but Ch dimension
-        axis_to_sum = tuple(range(1, dataset.ndim + 1))  # Sum over all but the first dimension (num_iter)
-    else:
-        axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
-    forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
+    # if dataset.ndim == num_axis_to_conv or dataset.ndim == num_axis_to_conv + 1: # No K and no Ch dimension or no K but Ch dimension
+    #     axis_to_sum = tuple(range(1, dataset.ndim + 1))  # Sum over all but the first dimension (num_iter)
+    # else:
+    #     axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
+    # forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
     
-    fidelity = kl_divergence(dataset, forward, full_KL=full_KL, normalize_entries = False, k_loss=k_loss)
+    forward_obj = None
+    for it in range(obj_set.shape[0]):
+        forward_it = forward_model(psf_fft, obj_set[it])
+        if it == 0:
+            forward_obj = forward_it
+        else:
+            forward_obj = torch.cat((forward_obj, forward_it), dim=0)
+    
+    fidelity = kl_divergence(dataset, forward_obj, full_KL=full_KL, normalize_entries = False, k_loss=k_loss)
     
     # fidelity = forward - dataset * torch.log(forward + eps)
 
