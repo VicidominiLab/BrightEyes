@@ -260,7 +260,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, regularizer_norm, initialization,
-            normalize, rec_to_save, step_size_search, line_search_params, verbose=False):
+            normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, save_memory, verbose=False):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -272,6 +272,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         alpha (float): Fidelity term regularization parameter.
         weight (float): Regularization weight a scalar or tensor of shape Nx x Ny.
         stop_tol (float): Convergence tolerance to stop iterations.
+        stop_criteria (str): Criteria for stopping the iterations ('rel_diff' or 'step_size').
         method (str): algorithm 'osl' or 'abs' or 'sgm'.
         device (str): device to perform computation on ('cpu' or 'cuda').
         regularizer_norm (str): distance to measure the differences between o_k and o_mean: 'l2', 'kl', or 'l1'.
@@ -281,9 +282,6 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     Returns:
         Tensor: Updated object tensor of shape Nz x Nx x Ny x K.
     """
-
-    if rec_to_save == 'last' and stop_tol is not None:
-        raise ValueError("If rec_to_save is 'last', stop_tol must be None.")
 
     eps = 1e-8  # torch.finfo(torch.float32).eps
 
@@ -298,16 +296,18 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     psf_m_fft = torch.conj(psf_fft)
 
     # Initialization
-    size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
+    if save_memory:
+        size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny
+    else:
+        size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
         
     if rec_to_save == 'last':
-        size = [1] + size
+        size = [2] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
         
     obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
     obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
-
     #Control check parameter stepsize
     if isinstance(step_size_search, (float, int)):
         if step_size_search <= 0:
@@ -328,23 +328,30 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         
         if rec_to_save == 'all':
             idx = m + 1
+            previous_idx = m
         elif rec_to_save == 'last':
-            idx = -1
+            idx = 1
+            previous_idx = 0
+            obj_all[previous_idx] = obj_all[idx]    # copy last estimate to the first position to save memory
         else:
             raise ValueError("rec_to_save must be 'last' or 'all'.")
+        
         obj_all[idx] = obj_set
 
         if stop_tol is not None:
-            rel_diff = (abs(obj_all[m + 1] - obj_all[m])).sum() / (abs(obj_all[m])).sum()
-            if rel_diff.item() < stop_tol:
-                obj_all = obj_all[:m + 1]
+            if stop_criteria == 'rel_diff':
+                criteria = (abs(obj_all[idx] - obj_all[previous_idx])).sum() / (abs(obj_all[previous_idx])).sum()
+            elif stop_criteria == 'step_size':
+                criteria = step_size[previous_idx].min()
+            if criteria.item() < stop_tol:
+                obj_all = obj_all[:idx]
                 break
             
     return obj_all, step_size
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
-                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', 
+                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', stop_criteria='rel_diff',
                             rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, verbose=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
@@ -372,7 +379,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     # Ensure tensors are on the correct device
     if process == 'gpu' and torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device("cuda:1")
+        torch.cuda.empty_cache()
     else:
         device = torch.device("cpu")
         
@@ -383,13 +391,21 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     psf = torch.from_numpy(psf).float().to(device)
     
     # Ensure correct shapes of PSF w.r.t. dataset
-    if psf.ndim == dset.ndim: # PSF has z but not channel dim
-        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
-        dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
+    if dset.ndim <= 2:
+        raise Exception('The dataset should have at least 3 dimension: Nx x Ny x K, where K are noise repetitions')
+    
+    if psf.ndim == dset.ndim -1: # PSF has not Nz dim
+        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My (x Ch)
         
     if psf.ndim == 3:
-        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My
+        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
+    if dset.ndim == 3:
+        dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
 
+    if np.ndim(weight_map) == 2:
+        weight_map = torch.tensor(weight_map).float().to(device)
+        weight_map = weight_map.unsqueeze(0).unsqueeze(-1)  # Add z and K dimensions #1 x Nx x Ny x 1
+        
     spatial_dims = 3
     
     # Ensure dataset has odd numbers of pixels for convolution
@@ -404,17 +420,103 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     
     # Pad PSF to match dataset shape
     sz = dset.shape[:spatial_dims]
-    print(f'Padded PSF to shape: {sz}')
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
     # Run reconstruction
     obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,
-                            initialization, normalize, rec_to_save, step_size_search, line_search_params, verbose)
+                            initialization, normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, verbose)
     
-    if rec_to_save == 'last':
-        return obj_all[-1]
+    # if rec_to_save == 'last':
+    #     return obj_all[-1]
     
-    elif rec_to_save == 'all':
-        return obj_all, step_size
-    else:
-        raise ValueError("rec_to_save must be 'last' or 'all'.")
+    # elif rec_to_save == 'all':
+    #     return obj_all, step_size
+    # else:
+    #     raise ValueError("rec_to_save must be 'last' or 'all'.")
+    return obj_all, step_size
+    
+    
+def batch_reconstruction(dset: np.ndarray, psf: np.ndarray, batch_size: list, overlap: int,
+                         lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
+                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', 
+                            rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, verbose=False):
+    """
+
+    Parameters
+    ----------
+    dset : np.ndarray
+        ISM dataset shaped as (Nx x Ny x Nch x K).
+    psf : np.ndarray
+        ISM PSF shaped as (Nz x Nx x Ny x Nch).
+    batch_size : list
+        List containing the size of the batch in the x and y dimensions.
+    overlap : int
+         Overlap value between the batches.
+    stop: string, optional
+           String describing how to stop the algorithm. The default is 'auto'. If set to 'auto' the algorithm will stop
+            when the derivative of the photon counts reaches the threshold, if set to 'fixed' the algorithm will stop when
+            the maximum number of iterations is reached.
+    max_iter: int, optional
+             maximum number of iteration. The default is 100.
+    threshold: float, optional
+              The default is 1e-3. This value is needed when we choose stop = 'auto'. When the derivative of the photon counts
+              reaches this value the algorithm halt.
+    rep_to_save: iter, optional
+                  iterable containing the iteration at which one wants to save the algorithm reconstruction.The default is 'all'.
+    initialization : string, optional
+                      The default is 'flat'. If set to 'flat' the algorithm will initialize the first iteration with a flat object,
+                     if set to 'sum' the algorithm will initialize the first iteration with the ISM dataset.
+    process: string, optional
+               The default is 'gpu'. If set to 'gpu' the algorithm will run on the GPU if available, if set to 'cpu' the algorithm
+                will run on the CPU.
+
+    Returns
+    -------
+    reconstruction : np.ndarray ( Nz x Nx x Ny x Nch x K)
+                     reconstructed object.
+    """
+
+    wx, wy = batch_size
+    reconstruction = np.zeros((max_iter+1,) + (psf.shape[0],) + dset.shape[:-2] + (dset.shape[-1],))    # Initialize reconstruction array with shape (Nz x Nx x Ny x x K)
+
+    nx = dset.shape[0] // (wx - overlap) + int(dset.shape[0] % (wx - overlap) > 0)
+    ny = dset.shape[1] // (wy - overlap) + int(dset.shape[1] % (wy - overlap) > 0)
+
+    k_iter = 1
+    n_batch = nx * ny
+
+    rx = np.mod(dset.shape[0], wx - overlap)
+    ry = np.mod(dset.shape[1], wy - overlap)
+    thx = psf.shape[1]
+    thy = psf.shape[2]
+
+    if np.logical_and(rx > 0, rx < thx) or np.logical_and(ry > 0, ry < thy):
+        raise Exception('The PSF is bigger than the last batch size.')
+    
+    for i in range(nx):
+        for j in range(ny):
+            print(f'Batch {k_iter}/{n_batch}')
+
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+            overlap_x = overlap if i > 0 else 0
+            overlap_y = overlap if j > 0 else 0
+
+            indx = np.s_[i * (wx - overlap_x): (i + 1) * wx - i * overlap_x]
+            indy = np.s_[j * (wy - overlap_y): (j + 1) * wy - j * overlap_y]
+
+            crop_dset = dset[indx, indy]
+
+            recon, *_ = variance_reconstruction(crop_dset, psf, lambda_value, alpha_value, weight_map, max_iter, stop_tol, method,
+                            regularizer_norm, initialization, normalize, process, 
+                            rec_to_save, step_size_search, line_search_params, verbose)
+
+            recon = recon.cpu().numpy() if isinstance(recon, torch.Tensor) else recon
+
+            indx = np.s_[i * (wx - overlap_x) + overlap_x // 2: (i + 1) * wx - i * overlap_x]
+            indy = np.s_[j * (wy - overlap_y) + overlap_y // 2: (j + 1) * wy - j * overlap_y]
+
+            reconstruction[:, :, indx, indy] = recon[:, :, overlap_x // 2:, overlap_y // 2:]
+            k_iter += 1
+
+    return reconstruction

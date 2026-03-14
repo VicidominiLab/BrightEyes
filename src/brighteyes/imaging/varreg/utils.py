@@ -123,8 +123,15 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     """
 
     conv_dims = 2
-
-    Mx, My = arr.shape[1:conv_dims+1]
+    if arr.shape[0] == arr.shape[1]:
+        Mx, My = arr.shape[:conv_dims]
+        axis_to_move = (0,1)
+    elif arr.shape[1] == arr.shape[2]:
+        Mx, My = arr.shape[1:conv_dims+1]
+        axis_to_move = (1, 2)
+    else:
+        raise ValueError("Input tensor must have the same size in the first two dimensions or in the second and third dimensions.")
+    
     Nx, Ny = target_shape[:conv_dims]
 
     if Nx < Mx or Ny < My:
@@ -140,9 +147,9 @@ def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
     pad = (pad_left, pad_right, pad_top, pad_bottom)
     
     # Move axes (1,2) to the last two positions, pad them, then move back
-    arr_moved = torch.movedim(arr, (1, 2), (-2, -1))
+    arr_moved = torch.movedim(arr, axis_to_move, (-2, -1))
     arr_moved = functional.pad(arr_moved, (pad_left, pad_right, pad_top, pad_bottom))
-    padded_arr = torch.movedim(arr_moved, (-2, -1), (1, 2))
+    padded_arr = torch.movedim(arr_moved, (-2, -1), axis_to_move)
     
     #pad_extended = (0,) * (2 * (arr.ndim - 2)) + pad
     #padded_arr = functional.pad(arr, pad_extended)

@@ -67,14 +67,13 @@ def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1,
     
     forward_obj = None
     for it in range(obj_set.shape[0]):
-        forward_it = forward_model(psf_fft, obj_set[it])
+        forward_it = forward_model(psf_fft, obj_set[it]).sum(0) #sum over z
         if it == 0:
             forward_obj = forward_it
         else:
             forward_obj = torch.cat((forward_obj, forward_it), dim=0)
     
     fidelity = kl_divergence(dataset, forward_obj, full_KL=full_KL, normalize_entries = False, k_loss=k_loss)
-    
     # fidelity = forward - dataset * torch.log(forward + eps)
 
     # if full_KL:

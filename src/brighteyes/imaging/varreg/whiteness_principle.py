@@ -33,6 +33,7 @@ class VarianceReconstructor:
                  alpha: int = 1,
                  weight_map=1,
                  stop_tol=1e-5,
+                 stop_criteria: str = 'step_size',
                  max_iter: int = 50,
                  method: str = 'sgp',
                  regularizer_norm: str = 'l2',
@@ -49,6 +50,7 @@ class VarianceReconstructor:
         self.alpha = alpha
         self.weight_map = weight_map
         self.stop_tol = stop_tol
+        self.stop_criteria = stop_criteria
         self.max_iter = max_iter
         self.method = method
         self.regularizer_norm = regularizer_norm
@@ -68,6 +70,7 @@ class VarianceReconstructor:
             weight_map=self.weight_map,
             max_iter=self.max_iter, 
             stop_tol=self.stop_tol, 
+            stop_criteria=self.stop_criteria,
             method=self.method, 
             process=self.process,
             regularizer_norm=self.regularizer_norm, 
@@ -87,6 +90,7 @@ def make_variance_reconstructor(dset: np.ndarray,
                                 alpha: int = 1,
                                 weight_map=1,
                                 stop_tol = 1e-5,
+                                stop_criteria: str = 'step_size',
                                 max_iter: int = 50,
                                 method: str = 'sgp',
                                 regularizer_norm: str = 'l2',
@@ -116,7 +120,7 @@ def make_variance_reconstructor(dset: np.ndarray,
         dset=dset, psf=psf, alpha=alpha, weight_map=weight_map,
         stop_tol=stop_tol, max_iter=max_iter, method=method, regularizer_norm=regularizer_norm,
         initialization=initialization, normalize=normalize, process=process,
-        rec_to_save=rec_to_save, 
+        rec_to_save=rec_to_save, stop_criteria=stop_criteria,
         step_size_search=step_size_search, line_search_params=line_search_params,
         verbose=verbose
     )
@@ -156,29 +160,33 @@ def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Ten
     eps = 1e-10  # torch.finfo(torch.float32).eps
     
     y_pred = forward_model(psf_fft, obj).sum(0) + eps  # predicted data, summing over z
-    idx_pos = dset > eps
+    
     if masked:
+        idx_pos = dset > eps
         num = dset - y_pred * T_func(y_pred)
         den = torch.sqrt(y_pred * V_func(y_pred))
         z_var = torch.where(idx_pos & (den > eps), num / den, 0.0)
     else:
         num = dset - y_pred
         den = torch.sqrt(y_pred)
+        #z_var = num / (den + eps)
         z_var = torch.where(den > eps, num / den, 0.0)
     
     return z_var
 
 def compute_whiteness_measure(z: torch.Tensor) -> float:
     """
-    Compute W(Z) from eq. 10 via eq. 11 for a 2D real/complex tensor Z.
-    Assumes periodic boundary conditions. Returns a non-negative scalar.
+    Compute W(Z) with autocorrelation-based measure of whiteness for the z-transform.
+    z: z-transform of the residual (Nx, Ny, Nch, K)
     """
+    
     #energy = torch.sum(torch.abs(z)**2, axis=(0,1))
-    zhat = fftn(z, dim=(0,1))  # unnormalized DFT
-    num = torch.sum(torch.abs(zhat)**4) #, axis=(0,1))
-    energy = torch.sum(torch.abs(zhat)**2) #, axis=(0,1))
+    corr_axis = (0,1,2) # autocorrelation over x,y, channel, and k axes
+    zhat = fftn(z, dim=corr_axis)  # Compute the Fourier transform along the x,y,c axes
+    num = torch.sum(torch.abs(zhat)**4, dim=corr_axis) # sum over x,y, channel, and k axes
+    energy = torch.sum(torch.abs(zhat)**2, dim=corr_axis) # sum over x,y, channel, and k axes
     denom = energy**2
-    autocor = (num / denom).real #.sum()
+    autocor = (num / denom).real.sum() #sum over k axis
     return float(autocor)
 
 def _evaluate_single_lambda(lam: float, 
@@ -212,8 +220,11 @@ def _evaluate_single_lambda(lam: float,
     
     # Extract results and clean up immediately
     obj_lam_last = obj_lam[-1].cpu().clone()
-    obj_lam_full = obj_lam.cpu().clone() if return_all_iters else None
-    
+    if return_all_iters:
+        obj_lam_full = obj_lam.cpu().clone()
+    else:
+        obj_lam_full = None
+
     # Force cleanup
     del obj_lam, z
     gc.collect()
@@ -225,12 +236,12 @@ def _evaluate_single_lambda(lam: float,
 
 def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                          lambdas,
-                         img: torch.Tensor,
+                         dset: torch.Tensor,
                          psf: torch.Tensor,
                          masked: bool = False,
                          device: Optional[torch.device] = None,
                          return_all_iters: bool = False,
-                         return_all: bool = False,
+                         return_all_solutions: bool = False,
                          verbose: bool = False,
                          parallel: bool = False,
                          max_workers: Optional[int] = None):
@@ -253,30 +264,34 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
 
-    img = img.to(device)
+    dset = dset.to(device)
     psf = psf.to(device)
     best_lambda = None
     best_obj = None
     best_whiteness = float('inf')
     
     # Ensure correct shapes of PSF w.r.t. dataset
-    if psf.ndim == img.ndim: # PSF has z but not channel dim
-        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
-        img = img.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
+    if dset.ndim <= 2:
+        raise Exception('The dataset should have at least 3 dimension: Nx x Ny x K, where K are noise repetitions')
+    
+    if psf.ndim == dset.ndim -1: # PSF has not Nz dim
+        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My (x Ch)
         
     if psf.ndim == 3:
-        psf = psf.unsqueeze(0)  # Add a z dimension #1 x Mx x My
+        psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
+    if dset.ndim == 3:
+        dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
     
     if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
         num_axis_to_conv = 2
-        sz = tuple(img.shape[:num_axis_to_conv])
+        sz = tuple(dset.shape[:num_axis_to_conv])
         psf_fft = compute_otf_from_psf(psf, target_shape=sz)
     elif torch.is_complex(psf):
         psf_fft = psf
     else:
         raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
     
-    if return_all:
+    if return_all_solutions:
         obj_list = []
         whiteness_measures_list = []
 
@@ -293,14 +308,14 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                           backend='loky',
                           verbose=10 if verbose else 0)(
             delayed(_evaluate_single_lambda)(
-                lam, solver_fn, img.cpu(), psf_fft.cpu(), 
+                lam, solver_fn, dset.cpu(), psf_fft.cpu(), 
                 masked, torch.device('cpu'), return_all_iters, False
             ) for lam in lambdas
         )
         
         # Process results
         for lam, obj_lam_full, whiteness_measure, obj_lam_last in results:
-            if return_all:
+            if return_all_solutions:
                 obj_list.append(obj_lam_last.numpy())
                 whiteness_measures_list.append([whiteness_measure])
             
@@ -321,15 +336,14 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                 print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
             obj_lam, _ = solver_fn(lam)
-            z = compute_z_variable(obj_lam[-1].to(device), psf_fft, img.to(device), masked=masked)
-            whiteness_measure = compute_whiteness_measure(z) * z.numel()
-            
+            z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked)
+            whiteness_measure = compute_whiteness_measure(z) * z[...,0].numel()
             if return_all_iters:
                 obj_lam_all = []
-                obj_lam_all.append(obj_lam.cpu().numpy())
+                obj_lam_all.append(obj_lam[:,1,...].cpu().numpy())
                 
-            if return_all:
-                obj_list.append(obj_lam[-1].cpu().numpy())
+            if return_all_solutions:
+                obj_list.append(obj_lam[-1,1].cpu().numpy())
                 whiteness_measures_list.append([whiteness_measure])
                 
             if verbose:
@@ -344,7 +358,7 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
 
     if best_lambda is None:
         raise ValueError('No lambdas were provided or evaluation failed.')
-    if return_all:
+    if return_all_solutions:
         return (float(best_lambda), best_obj, float(best_whiteness), obj_list, whiteness_measures_list)
     else:
         return float(best_lambda), best_obj, float(best_whiteness)
