@@ -1,13 +1,15 @@
 """Public package API for BrightEyes FLIM utilities."""
 
-from .alignment import Alignment
-from .flism_data import FlimData
-from .h5_data_calibrator import (
+from brighteyes_mcs_file import (
+    Alignment,
     H5DataCalibrator,
     calibrate_h5_file,
+    mcs,
     show_h5_structure,
     show_h5_structure_html,
 )
+
+from .flism_data import FlimData
 from .graph_tools import (
     normalize_histogram,
     plot_calibration_fit_traces,
@@ -37,7 +39,6 @@ from .tools_phasor import (
     plot_universal_circle,
     calculate_phasor,
 )
-from brighteyes_ism.dataio import mcs
 
 
 IRF_from_data_deconvolution = Alignment.IRF_from_data_deconvolution
