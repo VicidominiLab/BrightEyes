@@ -5,7 +5,7 @@ import warnings
 import h5py
 import numpy as np
 
-import brighteyes_ism.dataio.mcs as mcs
+from brighteyes_mcs_file import mcs
 
 from .tools_phasor import calculate_phasor
 

@@ -1,1 +1,8 @@
-brighteyes-ism>=1.4.3
+brighteyes-mcs-file>=0.1.1
+h5py
+joblib
+matplotlib
+numpy
+scipy
+scikit-image
+tqdm
