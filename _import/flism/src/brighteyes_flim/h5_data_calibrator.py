@@ -446,6 +446,35 @@ class H5DataCalibrator:
         return fingerprint
 
     @staticmethod
+    def _normalize_stack_to_fingerprint(stack, fingerprint):
+        stack = np.asarray(stack, dtype=np.float64)
+        fingerprint = np.asarray(fingerprint, dtype=np.float64)
+
+        if stack.ndim != 2:
+            raise ValueError(f"stack must have shape (t, ch), got {stack.shape}")
+        if fingerprint.ndim != 1 or fingerprint.shape[0] != stack.shape[1]:
+            raise ValueError(
+                "fingerprint must be 1D with one entry per stack channel "
+                f"(got {fingerprint.shape} for stack shape {stack.shape})"
+            )
+
+        column_sums = np.sum(stack, axis=0, keepdims=True)
+        weighted = np.divide(
+            stack,
+            column_sums,
+            out=np.zeros_like(stack, dtype=np.float64),
+            where=np.isfinite(column_sums) & (column_sums > 0),
+        )
+        weighted *= fingerprint[np.newaxis, :]
+        total = float(np.sum(weighted))
+        if np.isfinite(total) and total > 0:
+            weighted /= total
+        else:
+            weighted.fill(0.0)
+
+        return weighted
+
+    @staticmethod
     def _prepare_attr_value(value):
         if value is None:
             return "None"
@@ -1097,6 +1126,9 @@ class H5DataCalibrator:
                     stacked_channel_used_for_reference_in_time_skew,
                     dtype=int,
                 )
+                reference_fingerprint_for_output_channels = reference_fingerprint[
+                    channel_used_for_reference_in_time_skew_array
+                ]
                 fit_param_C_array = np.asarray(stacked_fit_param_C, dtype=float)
                 fit_param_C_err_array = np.asarray(stacked_fit_param_C_err, dtype=float)
                 tau_ns_array = np.asarray(stacked_tau_ns, dtype=float)
@@ -1118,6 +1150,10 @@ class H5DataCalibrator:
                 irf_common_delay_realigned_stack = np.stack(
                     stacked_irf_common_delay_realigned,
                     axis=-1,
+                )
+                irf_common_delay_realigned_stack = self._normalize_stack_to_fingerprint(
+                    irf_common_delay_realigned_stack,
+                    reference_fingerprint_for_output_channels,
                 )
                 data_fitted_stack = np.stack(stacked_data_fitted, axis=-1)
 
@@ -1187,6 +1223,10 @@ class H5DataCalibrator:
                     ref_common_delay_realigned_stack = np.stack(
                         stacked_ref_common_delay_realigned,
                         axis=-1,
+                    )
+                    ref_common_delay_realigned_stack = self._normalize_stack_to_fingerprint(
+                        ref_common_delay_realigned_stack,
+                        reference_fingerprint_for_output_channels,
                     )
                     self._replace_dataset(
                         target_group,
