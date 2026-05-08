@@ -432,6 +432,20 @@ class H5DataCalibrator:
         return histogram
 
     @staticmethod
+    def _sum_dataset_over_non_channel_axes(dataset):
+        channel_count = int(dataset.shape[-1])
+        fingerprint = np.zeros(channel_count, dtype=np.float64)
+
+        for repetition_index in range(int(dataset.shape[0])):
+            for z_index in range(int(dataset.shape[1])):
+                fingerprint += np.asarray(
+                    dataset[repetition_index, z_index, :, :, :, :],
+                    dtype=np.float64,
+                ).sum(axis=(0, 1, 2))
+
+        return fingerprint
+
+    @staticmethod
     def _prepare_attr_value(value):
         if value is None:
             return "None"
@@ -883,6 +897,10 @@ class H5DataCalibrator:
                         "fit_error_metric": "rmse_normalized_histograms",
                     },
                 )
+                reference_fingerprint = self._sum_dataset_over_non_channel_axes(reference_dataset)
+                self._replace_dataset(target_group, "irf_fingerprint", reference_fingerprint)
+                if self.reference_type == "ref":
+                    self._replace_dataset(target_group, "ref_fingerprint", reference_fingerprint)
 
                 stacked_channel_index = []
                 stacked_channel_used_for_reference_in_time_skew = []
