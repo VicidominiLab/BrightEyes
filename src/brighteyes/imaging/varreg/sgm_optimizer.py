@@ -260,7 +260,7 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, regularizer_norm, initialization,
-            normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, save_memory, verbose=False):
+            normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, return_pointwise_sol=False, verbose=False):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -296,8 +296,8 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     psf_m_fft = torch.conj(psf_fft)
 
     # Initialization
-    if save_memory:
-        size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny
+    if return_pointwise_sol:
+        size = list( psf.shape[:-1] ) # Nz x Nx x Ny
     else:
         size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
         
@@ -307,7 +307,12 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         size = [max_iter + 1] + size
         
     obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
-    obj_all[0] = init.initialize(dset, psf_norm, method = initialization, device = None)
+    obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
+    if return_pointwise_sol:
+        obj_all[0] = obj_set.sum(-1) #sum over K
+    else:
+        obj_all[0] = obj_set
+        
     #Control check parameter stepsize
     if isinstance(step_size_search, (float, int)):
         if step_size_search <= 0:
@@ -315,13 +320,14 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         initial_step_size = step_size_search
         step_size_search = 'fixed'
     else:
-        initial_step_size = 1*torch.ones(obj_all.shape[-1]).to(device)
+        initial_step_size = 1*torch.ones(obj_set.shape[-1]).to(device)
 
     idx = 0
     step_size = []
     # Reconstruction loop
     for m in tqdm(range(max_iter), desc=method):
-        obj_set, initial_step_size = update_fft(dset, obj_all[idx], psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer_norm, normalize, 
+        previous_obj_set = obj_set.clone()
+        obj_set, initial_step_size = update_fft(dset, previous_obj_set, psf_fft, psf_m_fft, lam, alpha, weight, eps, m, method, regularizer_norm, normalize, 
                                                 step_size_search=step_size_search, initial_step_size=initial_step_size, line_search_params=line_search_params, verbose=verbose)
 
         step_size.append(initial_step_size)
@@ -336,14 +342,20 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         else:
             raise ValueError("rec_to_save must be 'last' or 'all'.")
         
-        obj_all[idx] = obj_set
+        if return_pointwise_sol:
+            obj_all[idx] = obj_set.sum(-1)
+        else:
+            obj_all[idx] = obj_set
 
         if stop_tol is not None:
             if stop_criteria == 'rel_diff':
-                criteria = (abs(obj_all[idx] - obj_all[previous_idx])).sum() / (abs(obj_all[previous_idx])).sum()
+                criteria = ( abs(obj_set[0] - previous_obj_set[0]) / (previous_obj_set[0] + eps) ).sum()
             elif stop_criteria == 'step_size':
-                criteria = step_size[previous_idx].min()
-            if criteria.item() < stop_tol:
+                criteria = step_size[previous_idx].max()
+            else:
+                raise ValueError("stop_criteria must be 'rel_diff' or 'step_size'.")
+            
+            if criteria < stop_tol:
                 obj_all = obj_all[:idx]
                 break
             
@@ -352,7 +364,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
                             regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', stop_criteria='rel_diff',
-                            rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, verbose=False):
+                            rec_to_save='last', return_pointwise_sol=False, step_size_search: str = 'fixed', line_search_params=None, verbose=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
 
@@ -424,7 +436,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         
     # Run reconstruction
     obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,
-                            initialization, normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, verbose)
+                            initialization, normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, return_pointwise_sol, verbose)
     
     # if rec_to_save == 'last':
     #     return obj_all[-1]

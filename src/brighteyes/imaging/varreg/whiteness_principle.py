@@ -41,7 +41,6 @@ class VarianceReconstructor:
                  normalize: bool = True,
                  process: str = 'gpu',
                  rec_to_save: str = 'last',
-                 binomial: bool = False,
                  step_size_search: str = 'fixed',
                  line_search_params=None,
                  verbose=False):
@@ -242,6 +241,7 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                          device: Optional[torch.device] = None,
                          return_all_iters: bool = False,
                          return_all_solutions: bool = False,
+                         idx_in_focus: Optional[int] = 0,
                          verbose: bool = False,
                          parallel: bool = False,
                          max_workers: Optional[int] = None):
@@ -340,10 +340,10 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
             whiteness_measure = compute_whiteness_measure(z) * z[...,0].numel()
             if return_all_iters:
                 obj_lam_all = []
-                obj_lam_all.append(obj_lam[:,1,...].cpu().numpy())
+                obj_lam_all.append(obj_lam[:,idx_in_focus,...].cpu().numpy())
                 
             if return_all_solutions:
-                obj_list.append(obj_lam[-1,1].cpu().numpy())
+                obj_list.append(obj_lam[-1,idx_in_focus].cpu().numpy())
                 whiteness_measures_list.append([whiteness_measure])
                 
             if verbose:
