@@ -39,6 +39,7 @@ from .tools_phasor import (
     plot_universal_circle,
     calculate_phasor,
 )
+from ._fit_maps import generate_fit_maps
 
 
 IRF_from_data_deconvolution = Alignment.IRF_from_data_deconvolution
@@ -55,7 +56,7 @@ centroid = Alignment.centroid
 clean_irf = Alignment.clean_irf
 clean_irf_stack = Alignment.clean_irf_stack
 fit_maps_to_stack = Alignment.fit_maps_to_stack
-generate_fit_maps = Alignment.generate_fit_maps
+Alignment.generate_fit_maps = staticmethod(generate_fit_maps)
 
 __all__ = [
     "Alignment",
