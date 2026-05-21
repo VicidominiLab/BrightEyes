@@ -13,7 +13,7 @@ import numpy as np
 from scipy.ndimage import median_filter, shift
 from scipy.signal import savgol_filter
 from skimage.registration import phase_cross_correlation
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm 
 
 try:
     import brighteyes_ism.analysis.Graph_lib as gra
