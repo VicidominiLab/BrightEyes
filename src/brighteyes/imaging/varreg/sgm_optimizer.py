@@ -391,7 +391,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     # Ensure tensors are on the correct device
     if process == 'gpu' and torch.cuda.is_available():
-        device = torch.device("cuda:1")
+        device = torch.device("cuda:0")
         torch.cuda.empty_cache()
     else:
         device = torch.device("cpu")
