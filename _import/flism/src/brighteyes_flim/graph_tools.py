@@ -1,5 +1,6 @@
 """Common plotting helpers for BrightEyes FLIM notebooks."""
 
+import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
@@ -13,6 +14,8 @@ except ImportError:  # pragma: no cover - optional dependency
 
 __all__ = [
     "crop_2d",
+    "load_calibration_fit_traces",
+    "load_calibration_summary",
     "normalize_histogram",
     "threshold_lifetime_map",
     "weighted_lifetime_stats",
@@ -138,6 +141,121 @@ def _column(table, name):
     raise TypeError("table must provide column access by name")
 
 
+def _column_any(table, names):
+    errors = []
+    for name in names:
+        try:
+            return _column(table, name)
+        except (KeyError, IndexError, ValueError) as exc:
+            errors.append(str(exc))
+    joined = ", ".join(names)
+    raise KeyError(f"table must provide one of these columns: {joined}") from None
+
+
+def _calibration_group(handle, product="spad"):
+    product = str(product).strip("/") or "spad"
+    product = {
+        "data": "spad",
+        "spad": "spad",
+        "raw/spad": "spad",
+        "data_channels_extra": "aux",
+        "aux": "aux",
+        "raw/aux": "aux",
+    }.get(product, product)
+    candidates = [
+        f"calibration/results/{product}",
+    ]
+
+    for candidate in candidates:
+        if candidate in handle:
+            return handle[candidate]
+    tried = ", ".join(candidates)
+    raise KeyError(f"could not find calibration product {product!r}; tried {tried}")
+
+
+def _read_dataset_any(group, paths, default=None):
+    for path in paths:
+        key = str(path).strip("/")
+        if key in group:
+            return np.asarray(group[key][...])
+    if default is not None:
+        return default
+    tried = ", ".join(paths)
+    raise KeyError(f"could not find any dataset under {group.name}: {tried}")
+
+
+def load_calibration_summary(file_path, product="spad"):
+    """Load a calibration summary table from canonical BrightEyes HDF5 groups."""
+    with h5py.File(file_path, "r") as handle:
+        group = _calibration_group(handle, product)
+        channel = _read_dataset_any(group, ("channels/index",))
+        channel_skew = _read_dataset_any(group, ("timing/channel_skew_bins",))
+        channel_skew_err = _read_dataset_any(
+            group,
+            ("timing/channel_skew_err_bins",),
+            default=np.full_like(channel_skew, np.nan, dtype=float),
+        )
+        delay_correction_ns = _read_dataset_any(group, ("timing/delay_correction_ns",))
+        delay_correction_err_ns = _read_dataset_any(
+            group,
+            ("timing/delay_correction_err_ns",),
+            default=np.full_like(delay_correction_ns, np.nan, dtype=float),
+        )
+        tau_ns = _read_dataset_any(group, ("fit/tau_ns",))
+        tau_err_ns = _read_dataset_any(group, ("fit/tau_err_ns",))
+        tau_reference_ns = _read_dataset_any(group, ("fit/tau_reference_ns",))
+        residual_error = _read_dataset_any(group, ("fit/residual_error",))
+
+    return {
+        "channel": channel,
+        "index": channel,
+        "channel_skew": channel_skew,
+        "channel_skew_bins": channel_skew,
+        "channel_skew_err": channel_skew_err,
+        "channel_skew_err_bins": channel_skew_err,
+        "delay_correction_ns": delay_correction_ns,
+        "delay_correction_err_ns": delay_correction_err_ns,
+        "tau_ns": tau_ns,
+        "tau_err_ns": tau_err_ns,
+        "tau_reference_ns": tau_reference_ns,
+        "residual_error": residual_error,
+    }
+
+
+def load_calibration_fit_traces(file_path, product="spad", channel=None, channel_position=None):
+    """Load per-channel calibration traces from canonical BrightEyes HDF5 groups."""
+    with h5py.File(file_path, "r") as handle:
+        group = _calibration_group(handle, product)
+        channel_index = _read_dataset_any(group, ("channels/index",))
+        if channel_position is None:
+            if channel is None:
+                channel_position = 0
+            else:
+                matches = np.flatnonzero(channel_index == int(channel))
+                if matches.size == 0:
+                    raise KeyError(f"channel {channel!r} is not present in {group.name}")
+                channel_position = int(matches[0])
+        channel_position = int(channel_position)
+
+        trace_paths = {
+            "measured_trace": ("fit/measured_trace",),
+            "reference_trace": ("fit/reference_trace",),
+            "aligned_reference_trace": ("aligned/reference_trace",),
+            "irf_trace": ("fit/irf_trace",),
+            "aligned_irf_trace": ("aligned/irf_trace",),
+            "fitted_trace": ("fit/fitted_trace",),
+        }
+        traces = {}
+        for name, paths in trace_paths.items():
+            try:
+                stack = _read_dataset_any(group, paths)
+            except KeyError:
+                continue
+            traces[name] = np.asarray(stack[:, channel_position], dtype=float)
+
+    return traces
+
+
 def _plot_vertical_value_histogram(
     values,
     ax,
@@ -194,11 +312,11 @@ def _plot_vertical_value_histogram(
 
 def plot_calibration_lifetime_summary(summary_table, fig=None, histogram_lifetime_axis="y"):
     """Plot fitted calibration lifetime and reference lifetime by channel."""
-    channels = _column(summary_table, "channel")
+    channels = _column_any(summary_table, ("channel", "index"))
     tau = _column(summary_table, "tau_ns").astype(float)
     tau_err = _column(summary_table, "tau_err_ns").astype(float)
-    tau_ref = _column(summary_table, "tau_ref_ns").astype(float)
-    fit_error = _column(summary_table, "fit_error").astype(float)
+    tau_ref = _column(summary_table, "tau_reference_ns").astype(float)
+    residual_error = _column(summary_table, "residual_error").astype(float)
 
     if fig is None:
         fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -247,16 +365,16 @@ def plot_calibration_lifetime_summary(summary_table, fig=None, histogram_lifetim
         ax_hist.tick_params(axis="y", labelleft=False, labelright=False)
         ax_hist.set_ylabel("")
 
-    ax_error.plot(channels, fit_error, "o-", color="tab:red", linewidth=1.8, markersize=5)
+    ax_error.plot(channels, residual_error, "o-", color="tab:red", linewidth=1.8, markersize=5)
     ax_error.set_xlabel("Channel")
     ax_error.set_ylabel("Fit RMSE")
     ax_error.grid(True, alpha=0.3)
 
-    fit_error_bins = min(20, max(5, np.count_nonzero(np.isfinite(fit_error))))
+    residual_error_bins = min(20, max(5, np.count_nonzero(np.isfinite(residual_error))))
     _plot_vertical_value_histogram(
-        fit_error,
+        residual_error,
         ax_error_hist,
-        bins=fit_error_bins,
+        bins=residual_error_bins,
         color="tab:red",
     )
     ax_error_hist.set_xlabel("Channel count")
@@ -308,11 +426,14 @@ def plot_calibration_shift_summary(summary_tables, labels=None, reference_channe
             ax_delay_hist = fig.add_subplot(gs[1, 1], sharey=ax_delay)
 
     for table, label in zip(summary_tables, labels):
-        channels = _column(table, "channel")
-        channel_skew = _column(table, "channel_skew").astype(float)
-        channel_skew_err = _column(table, "channel_skew_est_err").astype(float)
-        common_delay = _column(table, "common_delay_in_ns").astype(float)
-        common_delay_err = _column(table, "common_delay_err_in_ns").astype(float)
+        channels = _column_any(table, ("channel", "index"))
+        channel_skew = _column_any(table, ("channel_skew", "channel_skew_bins")).astype(float)
+        channel_skew_err = _column_any(
+            table,
+            ("channel_skew_err", "channel_skew_err_bins"),
+        ).astype(float)
+        delay_correction = _column(table, "delay_correction_ns").astype(float)
+        delay_correction_err = _column(table, "delay_correction_err_ns").astype(float)
 
         shift_container = ax_shift.errorbar(
             channels,
@@ -326,8 +447,8 @@ def plot_calibration_shift_summary(summary_tables, labels=None, reference_channe
         )
         delay_container = ax_delay.errorbar(
             channels,
-            common_delay,
-            yerr=common_delay_err,
+            delay_correction,
+            yerr=delay_correction_err,
             fmt="o--",
             linewidth=2,
             markersize=5,
@@ -337,7 +458,7 @@ def plot_calibration_shift_summary(summary_tables, labels=None, reference_channe
         shift_color = shift_container.lines[0].get_color()
         delay_color = delay_container.lines[0].get_color()
         shift_bins = min(20, max(5, np.count_nonzero(np.isfinite(channel_skew))))
-        delay_bins = min(20, max(5, np.count_nonzero(np.isfinite(common_delay))))
+        delay_bins = min(20, max(5, np.count_nonzero(np.isfinite(delay_correction))))
         _plot_vertical_value_histogram(
             channel_skew,
             ax_shift_hist,
@@ -348,7 +469,7 @@ def plot_calibration_shift_summary(summary_tables, labels=None, reference_channe
             show_stats=True,
         )
         _plot_vertical_value_histogram(
-            common_delay,
+            delay_correction,
             ax_delay_hist,
             bins=delay_bins,
             color=delay_color,
@@ -377,8 +498,8 @@ def plot_calibration_shift_summary(summary_tables, labels=None, reference_channe
 
     ax_delay.axhline(0, color="0.85", linestyle="--", linewidth=1)
     ax_delay.set_xlabel("Channel")
-    ax_delay.set_ylabel("Common delay (ns)")
-    ax_delay.set_title("Fitted common delay")
+    ax_delay.set_ylabel("Delay correction (ns)")
+    ax_delay.set_title("Delay correction")
     ax_delay.grid(True, alpha=0.3)
     ax_delay.legend(loc="best")
     ax_delay_hist.axhline(0, color="0.85", linestyle="--", linewidth=1)
@@ -401,12 +522,12 @@ def plot_calibration_fit_traces(t, traces, title=None, ax=None, log_scale=True):
     t = np.asarray(t, dtype=float)
 
     default_styles = {
-        "data_for_fit": ("tab:blue", 1.0, 2.0),
-        "ref_for_fit": ("tab:purple", 0.35, 1.5),
-        "ref_common_delay_realigned": ("tab:purple", 0.9, 1.8),
-        "irf_for_fit": ("tab:green", 0.35, 1.5),
-        "irf_common_delay_realigned": ("tab:green", 0.9, 1.8),
-        "data_fitted": ("tab:red", 1.0, 2.0),
+        "measured_trace": ("tab:blue", 1.0, 2.0),
+        "reference_trace": ("tab:purple", 0.35, 1.5),
+        "aligned_reference_trace": ("tab:purple", 0.9, 1.8),
+        "irf_trace": ("tab:green", 0.35, 1.5),
+        "aligned_irf_trace": ("tab:green", 0.9, 1.8),
+        "fitted_trace": ("tab:red", 1.0, 2.0),
     }
 
     for name, values in traces.items():

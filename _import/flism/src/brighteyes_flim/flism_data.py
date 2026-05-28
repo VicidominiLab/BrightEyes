@@ -15,6 +15,11 @@ __all__ = ["FlimData"]
 class FlimData:
     """Container for global FLIM histograms and phasor-based calibration helpers."""
 
+    SPAD_DATA_KEYS = ("raw/spad", "data")
+    AUX_DATA_KEYS = ("raw/aux", "data_channels_extra")
+    PRIMARY_DATA_KEYS = SPAD_DATA_KEYS
+    EXTRA_DATA_KEYS = AUX_DATA_KEYS
+
     def __init__(self, data_path: str = None, data_path_irf: str = None,
                  freq_exc: float = 41.48e6, correction_coeff: complex = None, step_size: int = None,
                  sub_image_dim: int = 100, pre_filter: str = None):
@@ -28,17 +33,13 @@ class FlimData:
         self.data_irf = None
         self.sliced_data = None
         self.bin_number = 81
+        self.channel_number = 25
 
         if data_path is not None:
             with h5py.File(data_path, "r") as hf:
-                if "data" in hf.keys():
-                    img = hf["data"]
-                    self.bin_number = img.shape[-2]
-                    self.channel_number = img.shape[-1]
-                elif "dataset_1" in hf.keys():
-                    img = hf["dataset_1"]
-                    self.bin_number = img.shape[-2]
-                    self.channel_number = img.shape[-1]
+                img = self._first_dataset(hf, self.SPAD_DATA_KEYS, "SPAD data")
+                self.bin_number = img.shape[-2]
+                self.channel_number = img.shape[-1]
 
         self.data_hist = np.zeros((self.bin_number, self.channel_number))
         self.data_hist_irf = np.zeros((self.bin_number, self.channel_number))
@@ -92,23 +93,50 @@ class FlimData:
             if isinstance(correction_coeff, complex):
                 self.correction_coeff = correction_coeff
 
+    @staticmethod
+    def _first_dataset(handle, candidates, label):
+        for key in candidates:
+            if key in handle and isinstance(handle[key], h5py.Dataset):
+                return handle[key]
+        tried = ", ".join(candidates)
+        raise KeyError(f"could not find {label} dataset; tried {tried}")
+
+    @staticmethod
+    def _sum_to_time_channel(dataset):
+        if dataset.ndim < 2:
+            raise ValueError(f"dataset must have time and channel as final axes, got {dataset.shape}")
+        axes = tuple(range(dataset.ndim - 2))
+        return np.asarray(dataset[...], dtype=np.float64).sum(axis=axes)
+
+    @classmethod
+    def _load_aux_laser_histogram(cls, handle, bin_number):
+        try:
+            aux_data = cls._first_dataset(handle, cls.AUX_DATA_KEYS, "aux data")
+        except KeyError:
+            return np.zeros(bin_number, dtype=np.float64)
+        if aux_data.shape[-1] <= 1:
+            return np.zeros(int(aux_data.shape[-2]), dtype=np.float64)
+        aux_hist = cls._sum_to_time_channel(aux_data)
+        return aux_hist[:, 1]
+
+    _load_extra_laser_histogram = _load_aux_laser_histogram
+
     def load_data(self, data_path: str):
         self.data = h5py.File(data_path)
         self.metadata = mcs.metadata_load(data_path)
-        data_extra, _ = mcs.load(data_path, key="data_channels_extra")
-        data_laser = data_extra[:, :, :, :, :, 1]
-        image = self.data["data"]
-        self.data_laser_hist = np.sum(data_laser, axis=(0, 1, 2, 3))
-        self.data_hist = np.sum(image, axis=(0, 1, 2, 3))
+        image = self._first_dataset(self.data, self.SPAD_DATA_KEYS, "SPAD data")
+        self.data_hist = self._sum_to_time_channel(image)
+        self.data_laser_hist = self._load_aux_laser_histogram(self.data, self.data_hist.shape[0])
 
     def load_data_irf(self, data_path_irf: str):
         self.data_irf = h5py.File(data_path_irf)
         self.metadata_irf = mcs.metadata_load(data_path_irf)
-        data_extra_irf, _ = mcs.load(data_path_irf, key="data_channels_extra")
-        data_laser_irf = data_extra_irf[:, :, :, :, :, 1]
-        image_irf = self.data_irf["data"]
-        self.data_hist_irf = np.sum(image_irf, axis=(0, 1, 2, 3))
-        self.data_laser_hist_irf = np.sum(data_laser_irf, axis=(0, 1, 2, 3))
+        image_irf = self._first_dataset(self.data_irf, self.SPAD_DATA_KEYS, "SPAD IRF data")
+        self.data_hist_irf = self._sum_to_time_channel(image_irf)
+        self.data_laser_hist_irf = self._load_aux_laser_histogram(
+            self.data_irf,
+            self.data_hist_irf.shape[0],
+        )
 
     def calculate_phasor_global(self):
         self.phasors_global = calculate_phasor(data_hist=self.data_hist)

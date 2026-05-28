@@ -3,6 +3,9 @@
 from brighteyes_mcs_file import (
     Alignment,
     H5DataCalibrator,
+    H5OutputBuilder,
+    add_output_to_h5_file,
+    build_h5_output,
     calibrate_h5_file,
     mcs,
     show_h5_structure,
@@ -11,6 +14,8 @@ from brighteyes_mcs_file import (
 
 from .flism_data import FlimData
 from .graph_tools import (
+    load_calibration_fit_traces,
+    load_calibration_summary,
     normalize_histogram,
     plot_calibration_fit_traces,
     plot_calibration_lifetime_summary,
@@ -62,8 +67,11 @@ __all__ = [
     "Alignment",
     "FlimData",
     "H5DataCalibrator",
+    "H5OutputBuilder",
     "IRF_from_data_deconvolution",
+    "add_output_to_h5_file",
     "apply_lifetime_equalizer",
+    "build_h5_output",
     "build_lifetime_equalizer",
     "calculate_m_phi_tau_phi_tau_m",
     "calculate_tau_m",
@@ -83,6 +91,8 @@ __all__ = [
     "generate_fit_maps",
     "hist_for_plot",
     "linear_shift",
+    "load_calibration_fit_traces",
+    "load_calibration_summary",
     "mcs",
     "model_data",
     "normalize_histogram",
