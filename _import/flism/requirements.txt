@@ -1,4 +1,4 @@
-brighteyes-mcs-file>=0.1.5
+brighteyes-mcs-file>=0.1.6
 h5py
 joblib
 matplotlib
