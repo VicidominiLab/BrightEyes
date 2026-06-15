@@ -148,7 +148,7 @@ def V_func(y: torch.Tensor) -> torch.Tensor:
     return V
     
 
-def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Tensor, masked: bool = False) -> torch.Tensor:
+def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Tensor, masked: bool = False, remove_border: bool = False) -> torch.Tensor:
     """
     Compute the z-transform of the reconstructed object.
     obj: reconstructed object (Nx, Ny, Nch, K)
@@ -158,18 +158,31 @@ def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Ten
     
     eps = 1e-10  # torch.finfo(torch.float32).eps
     
-    y_pred = forward_model(psf_fft, obj).sum(0) + eps  # predicted data, summing over z
+    y_pred = forward_model(psf_fft, obj).sum(0)  # predicted data, summing over z
+    if remove_border is True:
+        # Remove border effects by cropping the predicted data and the dataset
+        crop = 5
+    elif remove_border is False:
+        crop = 0
+    elif isinstance(remove_border, int):
+        crop = remove_border
+    else:
+        raise ValueError("remove_border must be a boolean or an integer.")
+    
+    y_pred = y_pred[crop:-crop, crop:-crop, ...]
+    dset = dset[crop:-crop, crop:-crop, ...]
+    
     
     if masked:
-        idx_pos = dset > eps
         num = dset - y_pred * T_func(y_pred)
         den = torch.sqrt(y_pred * V_func(y_pred))
-        z_var = torch.where(idx_pos & (den > eps), num / den, 0.0)
+        z_var = num / (den + eps)
+        #z_var = torch.where((dset > eps) & (den > eps), num / den, 0.0)
     else:
         num = dset - y_pred
         den = torch.sqrt(y_pred)
-        #z_var = num / (den + eps)
-        z_var = torch.where(den > eps, num / den, 0.0)
+        z_var = num / (den + eps)
+        #z_var = torch.where(den > eps, num / den, 0.0)
     
     return z_var
 
@@ -180,10 +193,10 @@ def compute_whiteness_measure(z: torch.Tensor) -> float:
     """
     
     #energy = torch.sum(torch.abs(z)**2, axis=(0,1))
-    corr_axis = (0,1,2) # autocorrelation over x,y, channel, and k axes
+    corr_axis = (0,1,2) # autocorrelation over x,y, channel
     zhat = fftn(z, dim=corr_axis)  # Compute the Fourier transform along the x,y,c axes
-    num = torch.sum(torch.abs(zhat)**4, dim=corr_axis) # sum over x,y, channel, and k axes
-    energy = torch.sum(torch.abs(zhat)**2, dim=corr_axis) # sum over x,y, channel, and k axes
+    num = torch.sum(torch.abs(zhat)**4, dim=corr_axis) # sum over x,y, channel
+    energy = torch.sum(torch.abs(zhat)**2, dim=corr_axis) # sum over x,y, channel
     denom = energy**2
     autocor = (num / denom).real.sum() #sum over k axis
     return float(autocor)
@@ -238,13 +251,13 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                          dset: torch.Tensor,
                          psf: torch.Tensor,
                          masked: bool = False,
+                         remove_border: bool = False,
                          device: Optional[torch.device] = None,
                          return_all_iters: bool = False,
                          return_all_solutions: bool = False,
+                         return_z_variables: bool = False,
                          idx_in_focus: Optional[int] = 0,
-                         verbose: bool = False,
-                         parallel: bool = False,
-                         max_workers: Optional[int] = None):
+                         verbose: bool = False):
     """
     Search over candidate lambdas and pick the one minimizing the whiteness measure.
     solver_fn(λ) -> reconstructed object o(λ)
@@ -281,7 +294,7 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         psf = psf.unsqueeze(-1)  # Add a channel dimension at the end # Mz x Mx x My x 1 
     if dset.ndim == 3:
         dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
-    
+        
     if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
         num_axis_to_conv = 2
         sz = tuple(dset.shape[:num_axis_to_conv])
@@ -295,59 +308,38 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         obj_list = []
         whiteness_measures_list = []
 
-    if parallel:
-        if not JOBLIB_AVAILABLE:
-            raise ImportError("joblib is required for parallel execution. Install with: pip install joblib")
-        
-        # Parallel execution using joblib (better handling of Python objects)
-        if verbose:
-            print(f'Running in parallel with n_jobs={max_workers if max_workers else -1}')
-        
-        # Use joblib's Parallel with 'loky' backend (works well on Windows)
-        results = Parallel(n_jobs=max_workers if max_workers else -1, 
-                          backend='loky',
-                          verbose=10 if verbose else 0)(
-            delayed(_evaluate_single_lambda)(
-                lam, solver_fn, dset.cpu(), psf_fft.cpu(), 
-                masked, torch.device('cpu'), return_all_iters, False
-            ) for lam in lambdas
-        )
-        
-        # Process results
-        for lam, obj_lam_full, whiteness_measure, obj_lam_last in results:
-            if return_all_solutions:
-                obj_list.append(obj_lam_last.numpy())
-                whiteness_measures_list.append([whiteness_measure])
-            
-            if verbose:
-                print(f'Lambda={lam}: Whiteness={whiteness_measure:.6g}')
-            
-            if abs(whiteness_measure) < best_whiteness:
-                best_whiteness = whiteness_measure
-                best_lambda = lam
-                if return_all_iters:
-                    best_obj = obj_lam_full
-                else:
-                    best_obj = obj_lam_last
-    else:
-        # Sequential execution (original code)
-        for idx_n, lam in enumerate(lambdas):
-            if verbose:
-                print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
-            obj_lam, _ = solver_fn(lam)
-            z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked)
-            whiteness_measure = compute_whiteness_measure(z) * z[...,0].numel()
-            if return_all_iters:
-                obj_lam_all = []
-                obj_lam_all.append(obj_lam[:,idx_in_focus,...].cpu().numpy())
-                
-            if return_all_solutions:
-                obj_list.append(obj_lam[-1,idx_in_focus].cpu().numpy())
-                whiteness_measures_list.append([whiteness_measure])
-                
-            if verbose:
-                print(f'  Whiteness={whiteness_measure:.6g}')
+    z_list = []
+    y_pred_list = []
+    obj_lam_all = []
+
+    for idx_n, lam in enumerate(lambdas):
+        if verbose:
+            print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
+
+        obj_lam, _ = solver_fn(lam)
+        y_pred = forward_model(psf_fft, obj_lam[-1].to(device)).sum(0)
+        y_pred_list.append(y_pred)
+        z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked, remove_border=remove_border)
+
+        whiteness_measure = compute_whiteness_measure(z)
+        
+        if masked is False:
+            whiteness_measure = whiteness_measure * z[...,0].numel()
+        if return_all_iters:
+            obj_lam_all.append(obj_lam[:,idx_in_focus,...].cpu().numpy())
+            
+        if return_all_solutions:
+            obj_list.append(obj_lam[-1,idx_in_focus].cpu().numpy())
+            whiteness_measures_list.append([whiteness_measure])
+            
+        if return_z_variables:
+            z_list.append(z.cpu().numpy().squeeze())
+            
+        if verbose:
+            print(f'  Whiteness={whiteness_measure:.6g}')
+            
+        if return_all_solutions is False and return_all_iters is False and return_z_variables is False:    
             if abs(whiteness_measure) < best_whiteness:
                 best_whiteness = whiteness_measure
                 best_lambda = lam
@@ -355,10 +347,14 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                     best_obj = obj_lam
                 else:
                     best_obj = obj_lam[-1]
-
-    if best_lambda is None:
-        raise ValueError('No lambdas were provided or evaluation failed.')
+    
     if return_all_solutions:
-        return (float(best_lambda), best_obj, float(best_whiteness), obj_list, whiteness_measures_list)
+        results = ( obj_list, whiteness_measures_list )
+    if return_all_iters:
+        results = ( obj_lam_all, whiteness_measures_list )
+    if return_z_variables:
+        results = (obj_list, whiteness_measures_list, z_list, y_pred_list)
     else:
-        return float(best_lambda), best_obj, float(best_whiteness)
+        results = (float(best_lambda), best_obj, float(best_whiteness))
+    
+    return results

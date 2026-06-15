@@ -305,13 +305,21 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         size = [2] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
-        
-    obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
+    
+    # obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
+    # obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
+    # if return_pointwise_sol:
+    #     obj_all[0] = obj_set.sum(-1) #sum over K
+    # else:
+    #     obj_all[0] = obj_set
+    
+    history_device = torch.device('cpu') if rec_to_save == 'all' else device
+    obj_all = torch.empty(size, device=history_device)  # keep saved iterates off-GPU when storing the full history
     obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
     if return_pointwise_sol:
-        obj_all[0] = obj_set.sum(-1) #sum over K
+        obj_all[0] = obj_set.sum(-1).detach().to(history_device) #sum over K
     else:
-        obj_all[0] = obj_set
+        obj_all[0] = obj_set.detach().to(history_device)
         
     #Control check parameter stepsize
     if isinstance(step_size_search, (float, int)):
@@ -343,9 +351,9 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
             raise ValueError("rec_to_save must be 'last' or 'all'.")
         
         if return_pointwise_sol:
-            obj_all[idx] = obj_set.sum(-1)
+            obj_all[idx] = obj_set.sum(-1).detach().to(history_device)
         else:
-            obj_all[idx] = obj_set
+            obj_all[idx] = obj_set.detach().to(history_device)
 
         if stop_tol is not None:
             if stop_criteria == 'rel_diff':
@@ -381,6 +389,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         initialization (str): Initialization method for the object estimate ('flat' or 'data').
         normalize (bool): Whether to normalize the flux at each iteration.
         process (str): Processing mode ('cpu' or 'gpu').
+        stop_criteria (str): Criteria for stopping the iterations ('rel_diff' or 'step_size').
         rec_to_save (str): 'last' to return last iteration, 'all' to return all iterations.
         step_size_search (str): Step size search method ('fixed' or 'adaptive').
         line_search_params (dict): Parameters for line search.
@@ -417,7 +426,10 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     if np.ndim(weight_map) == 2:
         weight_map = torch.tensor(weight_map).float().to(device)
         weight_map = weight_map.unsqueeze(0).unsqueeze(-1)  # Add z and K dimensions #1 x Nx x Ny x 1
-        
+    elif np.ndim(weight_map) == 3:
+        weight_map = torch.tensor(weight_map).float().to(device)
+        weight_map = weight_map.unsqueeze(0)  # Add z dimension #1 x Nx x Ny x K
+    
     spatial_dims = 3
     
     # Ensure dataset has odd numbers of pixels for convolution

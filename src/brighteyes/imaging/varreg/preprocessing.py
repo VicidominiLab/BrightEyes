@@ -115,5 +115,63 @@ def binomial_split(x: torch.tensor, n_splits: int = 2, p: float = 0.5, device: s
     # Convert back to integer type
     return splits.to(torch.int32)
 
+import numpy as np
 
+def make_noisy_dataset(data, bins_to_sum, K, L, seed=None, replace=False):
+    """
+    Build a dataset with shape (Nx, Ny, Ch, K, L) from input data of shape
+    (Nx, Ny, Ch, Nbin), by summing bins_to_sum temporal bins for each of K
+    noise realizations, repeated L times.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input array with shape (Nx, Ny, Ch, Nbin).
+    bins_to_sum : int
+        Number of temporal bins to sum for each realization.
+    K : int
+        Number of noise realizations per repetition.
+    L : int
+        Number of repetitions of the experiment.
+    seed : int or None
+        Random seed for reproducibility.
+    replace : bool
+        If False, each realization samples bins without replacement.
+        If True, bins may repeat within a realization.
+
+    Returns
+    -------
+    out : np.ndarray
+        Array with shape (Nx, Ny, Ch, K, L).
+    bins_used : np.ndarray
+        Integer array with shape (L, K, bins_to_sum) containing the sampled bins.
+    """
+    if data.ndim != 4:
+        raise ValueError(f"Expected data with shape (Nx, Ny, Ch, Nbin), got {data.shape}")
+
+    Nx, Ny, Ch, Nbin = data.shape
+    if not replace and K * bins_to_sum > Nbin:
+        raise ValueError(
+            f"Need K*bins_to_sum <= Nbin when sampling without replacement, "
+            f"but got K={K}, bins_to_sum={bins_to_sum}, Nbin={Nbin}"
+        )
+
+    rng = np.random.default_rng(seed)
+    out = np.empty((Nx, Ny, Ch, K, L), dtype=data.dtype)
+    bins_used = np.empty((L, K, bins_to_sum), dtype=int)
+
+    for l in range(L):
+        if replace:
+            for k in range(K):
+                idx = rng.integers(0, Nbin, size=bins_to_sum)
+                bins_used[l, k] = idx
+                out[..., k, l] = data[..., idx].sum(axis=-1)
+        else:
+            perm = rng.permutation(Nbin)
+            selected = perm[:K * bins_to_sum].reshape(K, bins_to_sum)
+            bins_used[l] = selected
+            for k in range(K):
+                out[..., k, l] = data[..., selected[k]].sum(axis=-1)
+
+    return out, bins_used
 
