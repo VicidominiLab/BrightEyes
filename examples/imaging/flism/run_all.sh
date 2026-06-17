@@ -18,20 +18,32 @@ while IFS= read -r pattern || [ -n "$pattern" ]; do
     for notebook in "${notebooks[@]}"; do
         # Skip directories, just in case
         [[ -f "$notebook" ]] || continue
+        
+        echo "================================"
+        echo "Running notebook: $notebook"
+        echo "================================"
 
         name="$(basename "$notebook" .ipynb)"
         executed="executed/${name}.ipynb"
 
         papermill "$notebook" "$executed" --log-output
+
+        echo "================================"
+        echo "Done: $notebook"
+        echo "================================"
+        echo ""
+        echo ""
+        
     done
 done <<'EOF'
 # List of notebooks to run, one per line. You can use glob patterns to match multiple notebooks.
-APR_Fit.ipynb
 APR_Phasors.ipynb
-CLSM_Fit.ipynb
 CLSM_Phasors.ipynb
-S2ISM_Fit.ipynb
 S2ISM_Phasors.ipynb
+
+APR_Fit.ipynb
+CLSM_Fit.ipynb
+S2ISM_Fit.ipynb
 
 # Run all notebooks in the current directory
 #*.ipynb
