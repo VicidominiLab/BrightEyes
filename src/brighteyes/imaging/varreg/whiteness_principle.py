@@ -165,24 +165,26 @@ def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Ten
     elif remove_border is False:
         crop = 0
     elif isinstance(remove_border, int):
-        crop = remove_border
+        if remove_border > 0:
+            crop = remove_border
+        else:
+            raise ValueError("remove_border must be a positive integer.")
     else:
         raise ValueError("remove_border must be a boolean or an integer.")
     
     y_pred = y_pred[crop:-crop, crop:-crop, ...]
     dset = dset[crop:-crop, crop:-crop, ...]
-    
-    
+        
     if masked:
         num = dset - y_pred * T_func(y_pred)
         den = torch.sqrt(y_pred * V_func(y_pred))
-        z_var = num / (den + eps)
+        z_var = torch.where((dset > eps), num / (den + eps), 0.0)
         #z_var = torch.where((dset > eps) & (den > eps), num / den, 0.0)
     else:
         num = dset - y_pred
         den = torch.sqrt(y_pred)
-        z_var = num / (den + eps)
-        #z_var = torch.where(den > eps, num / den, 0.0)
+        z_var = torch.where((dset > eps), num / (den + eps), 0.0)
+        #z_var = torch.where((dset > eps) & (den > eps), num / den, 0.0)
     
     return z_var
 
@@ -198,8 +200,10 @@ def compute_whiteness_measure(z: torch.Tensor) -> float:
     num = torch.sum(torch.abs(zhat)**4, dim=corr_axis) # sum over x,y, channel
     energy = torch.sum(torch.abs(zhat)**2, dim=corr_axis) # sum over x,y, channel
     denom = energy**2
-    autocor = (num / denom).real.sum() #sum over k axis
-    return float(autocor)
+    autocor = num / denom
+    whiteness = autocor.real.sum() #sum over k axis
+    
+    return float(whiteness)
 
 def _evaluate_single_lambda(lam: float, 
                            solver_fn: Callable[[float], torch.Tensor],
@@ -308,24 +312,23 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         obj_list = []
         whiteness_measures_list = []
 
-
-    z_list = []
-    y_pred_list = []
     obj_lam_all = []
+    y_pred_list = []
+    z_list = []
+    autocorr_list = []
 
     for idx_n, lam in enumerate(lambdas):
         if verbose:
             print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
         obj_lam, _ = solver_fn(lam)
-        y_pred = forward_model(psf_fft, obj_lam[-1].to(device)).sum(0)
-        y_pred_list.append(y_pred)
         z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked, remove_border=remove_border)
-
-        whiteness_measure = compute_whiteness_measure(z)
+        whiteness_measure = compute_whiteness_measure(z) * z[..., 0].numel()
         
-        if masked is False:
-            whiteness_measure = whiteness_measure * z[...,0].numel()
+        if return_z_variables:
+            y_pred = forward_model(psf_fft, obj_lam[-1].to(device)).sum(0) #sum over z
+            y_pred_list.append(y_pred)
+                    
         if return_all_iters:
             obj_lam_all.append(obj_lam[:,idx_in_focus,...].cpu().numpy())
             
