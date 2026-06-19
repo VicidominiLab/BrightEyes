@@ -156,6 +156,8 @@ def make_noisy_dataset(data, bins_to_sum, K, L, seed=None, replace=False):
             f"but got K={K}, bins_to_sum={bins_to_sum}, Nbin={Nbin}"
         )
 
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     out = np.empty((Nx, Ny, Ch, K, L), dtype=data.dtype)
     bins_used = np.empty((L, K, bins_to_sum), dtype=int)

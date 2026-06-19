@@ -99,7 +99,7 @@ def forward_model(otf, obj):
     str_otf = alphabet[:otf.ndim]       # 'abcd' for 4D OTF
     axis_str = alphabet[1:conv_dims+1]  # 'bc' for 2D convolution
     
-    if obj.shape[0] == otf.shape[0] and obj.shape[-1] != otf.shape[-1]:         # PSF * object
+    if obj.shape[0] == otf.shape[0]:         # and obj.shape[-1] != otf.shape[-1] PSF * object
         str_obj = alphabet[:conv_dims+1] + alphabet[otf.ndim] # 'abce' for 4D object with K dimension
     else:                                                                       # PSF^T * fraction    
         str_obj = alphabet[1:obj.ndim+1]
@@ -199,7 +199,7 @@ def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
     return snr
 
 
-def calculate_weight_map(dset, smooth_sigma: float = 0):
+def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
     """
     Calculate a weight map based on the SNR of the dataset.
 
@@ -214,14 +214,20 @@ def calculate_weight_map(dset, smooth_sigma: float = 0):
     if not isinstance(dset, torch.Tensor):
         dset = torch.tensor(dset, dtype=torch.float32)
 
-    snr = calculate_snr(dset, smooth_sigma)
+    snr = calculate_snr(dset)
 
     weight_map = 1 / snr
 
     max_weight = torch.max(weight_map[torch.isfinite(weight_map)])
     weight_map = torch.clip(weight_map, 0, max_weight)
+    
+    if smooth_sigma > 0:
+        weight_map = torch.tensor(gaussian_filter(weight_map.numpy(), sigma=smooth_sigma))
 
     weight_map = einops.repeat(weight_map, 'm n -> m n k', k=dset.shape[-1])
+    
+    if normalize:
+        weight_map = weight_map / torch.max(weight_map)
 
     return weight_map
 
@@ -397,3 +403,16 @@ def forward_fill_nan(tensor):
     filled = torch.where(cumsum_valid > 0, cumsum_tensor / cumsum_valid, torch.zeros_like(tensor))
 
     return filled
+
+def autocorrelation2d(image, normalize=True):
+    image = np.asarray(image, dtype=float)
+    image = image - image.mean()
+
+    f = np.fft.fftn(image)
+    ac = np.fft.ifftn(np.abs(f)**2).real
+    ac = np.fft.fftshift(ac)
+
+    if normalize:
+        ac /= ac.max()
+
+    return ac

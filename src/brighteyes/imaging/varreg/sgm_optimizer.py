@@ -287,6 +287,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
 
     # Normalize PSF
     num_axis_to_conv = 2
+    Nz = psf.shape[0]
     axis_to_conv = tuple(np.arange(1, num_axis_to_conv+1))
     norm_axis = tuple(np.arange(1, psf.ndim))
     psf_norm = psf / psf.sum(axis=norm_axis, keepdim=True)
@@ -302,7 +303,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
         
     if rec_to_save == 'last':
-        size = [2] + size
+        size = [Nz] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
     
@@ -316,6 +317,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     history_device = torch.device('cpu') if rec_to_save == 'all' else device
     obj_all = torch.empty(size, device=history_device)  # keep saved iterates off-GPU when storing the full history
     obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
+    
     if return_pointwise_sol:
         obj_all[0] = obj_set.sum(-1).detach().to(history_device) #sum over K
     else:
@@ -344,7 +346,7 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
             idx = m + 1
             previous_idx = m
         elif rec_to_save == 'last':
-            idx = 1
+            idx = 0
             previous_idx = 0
             obj_all[previous_idx] = obj_all[idx]    # copy last estimate to the first position to save memory
         else:

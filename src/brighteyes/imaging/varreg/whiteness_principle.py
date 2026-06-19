@@ -99,8 +99,7 @@ def make_variance_reconstructor(dset: np.ndarray,
                                 rec_to_save: str = 'last',
                                 step_size_search: str = 'fixed',
                                 line_search_params=None,
-                                verbose=False,
-                                device: Optional[torch.device] = None) -> Callable[[float], torch.Tensor]:
+                                verbose=False) -> Callable[[float], torch.Tensor]:
     """
     Create a callable that takes `lambda_value` and returns the reconstructed object
     using the `variance_reconstruction` function in this repo.
@@ -151,14 +150,15 @@ def V_func(y: torch.Tensor) -> torch.Tensor:
 def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Tensor, masked: bool = False, remove_border: bool = False) -> torch.Tensor:
     """
     Compute the z-transform of the reconstructed object.
-    obj: reconstructed object (Nx, Ny, Nch, K)
+    obj: reconstructed object (Nz, Nx, Ny, Nch, K)
     psf_fft: precomputed FFT of the PSF in frequency domain
     Returns: z-transform
     """
     
     eps = 1e-10  # torch.finfo(torch.float32).eps
     
-    y_pred = forward_model(psf_fft, obj).sum(0)  # predicted data, summing over z
+    y_pred = forward_model(psf_fft, obj).sum(axis=0)  # predicted data, summing over z
+        
     if remove_border is True:
         # Remove border effects by cropping the predicted data and the dataset
         crop = 5
@@ -229,7 +229,7 @@ def _evaluate_single_lambda(lam: float,
     
     obj_lam, _ = solver_fn(lam)
     z = compute_z_variable(obj_lam[-1].to(device), psf_fft, img.to(device), masked=masked)
-    whiteness_measure = compute_whiteness_measure(z) * z.numel()
+    whiteness_measure = compute_whiteness_measure(z) * z[..., 0].numel()
     
     if verbose:
         print(f'  Whiteness={whiteness_measure:.6g}')
@@ -321,7 +321,7 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         if verbose:
             print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
-        obj_lam, _ = solver_fn(lam)
+        obj_lam, _ = solver_fn(lam) # obj_lam shape: (num_iters, Nz, Nx, Ny, Nch, K)
         z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked, remove_border=remove_border)
         whiteness_measure = compute_whiteness_measure(z) * z[..., 0].numel()
         
