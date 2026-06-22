@@ -229,7 +229,7 @@ def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
     if normalize:
         weight_map = weight_map / torch.max(weight_map)
 
-    return weight_map
+    return weight_map.numpy()
 
 def calculate_noise_variance(obj):
     """ Compute the noise variance of an object tensor.
