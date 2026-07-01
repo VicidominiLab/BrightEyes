@@ -1,4 +1,4 @@
-"""Common plotting helpers for BrightEyes FLIM notebooks."""
+"""Common plotting helpers for BrightEyes FLISM notebooks."""
 
 import h5py
 import numpy as np

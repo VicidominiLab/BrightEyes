@@ -1,4 +1,4 @@
-"""Public package API for BrightEyes FLIM utilities."""
+"""Public package API for BrightEyes FLISM utilities."""
 
 from brighteyes_mcs_file import (
     Alignment,

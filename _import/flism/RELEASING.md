@@ -5,11 +5,11 @@ Publishing.
 
 ## One-time setup on PyPI
 
-1. Open the `brighteyes-flim` project on PyPI.
+1. Open the `brighteyes-flism` project on PyPI.
 2. Go to `Manage -> Publishing`.
 3. Add a GitHub trusted publisher with:
    - Owner: `VicidominiLab`
-   - Repository: `BrightEyes-Flim`
+   - Repository: `BrightEyes-Flism`
    - Workflow file: `.github/workflows/release.yml`
    - Environment: `pypi`
 

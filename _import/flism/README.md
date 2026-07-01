@@ -1,20 +1,20 @@
-BrightEyes-FLIM
+BrightEyes-FLISM
 ---------------
 
 ## Installation
 
-Install `brighteyes-flim` from PyPI:
+Install `brighteyes-flism` from PyPI:
 
-    pip install brighteyes-flim
+    pip install brighteyes-flism
 
 You can also install the latest development version directly from GitHub:
 
-    pip install git+https://github.com/VicidominiLab/BrightEyes-Flim
+    pip install git+https://github.com/VicidominiLab/BrightEyes-Flism
 
 In case of local development:
     
-    git clone https://github.com/VicidominiLab/BrightEyes-Flim.git
-    cd BrightEyes-Flim
+    git clone https://github.com/VicidominiLab/BrightEyes-Flism.git
+    cd BrightEyes-Flism
     pip install -e .
 
 `brighteyes_flim` re-exports the fitting and calibration helpers from
