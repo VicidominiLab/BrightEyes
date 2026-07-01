@@ -1,4 +1,4 @@
-"""Fit-map helpers exported by :mod:`brighteyes_flim`."""
+"""Fit-map helpers exported by :mod:`brighteyes_flism`."""
 
 from __future__ import annotations
 
