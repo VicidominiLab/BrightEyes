@@ -198,6 +198,12 @@ def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
 
     return snr
 
+def normalization(x, vmin, vmax):
+    x_min = x.min()
+    x_max = x.max()
+
+    x_norm = vmin + (x - x_min) * (vmax - vmin) / (x_max - x_min + 1e-18)
+    return x_norm
 
 def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
     """
@@ -215,11 +221,12 @@ def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
         dset = torch.tensor(dset, dtype=torch.float32)
 
     snr = calculate_snr(dset)
-
+    snr = torch.clamp(snr, max=torch.quantile(snr, 0.9999)) 
+    
     weight_map = 1 / snr
 
     max_weight = torch.max(weight_map[torch.isfinite(weight_map)])
-    weight_map = torch.clip(weight_map, 0, max_weight)
+    weight_map = torch.clamp(weight_map, min=0, max=max_weight)
     
     if smooth_sigma > 0:
         weight_map = torch.tensor(gaussian_filter(weight_map.numpy(), sigma=smooth_sigma))
@@ -227,7 +234,7 @@ def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
     weight_map = einops.repeat(weight_map, 'm n -> m n k', k=dset.shape[-1])
     
     if normalize:
-        weight_map = weight_map / torch.max(weight_map)
+        weight_map = normalization(weight_map, vmin=torch.min(weight_map), vmax=1)
 
     return weight_map.numpy()
 
@@ -304,6 +311,32 @@ def compute_radial_noise_variance(obj):
         radial_variance.append(dato)
     return torch.tensor(radial_variance)
 
+def root_mean_square_error(img_ref, img):
+    """
+    Compute the Root Mean Square Error (RMSE) between two images.
+
+    Parameters:
+        img (Tensor): Input image of shape Num_iter x Nx x Ny.
+        img_ref (Tensor): Reference image of shape Nx x Ny.
+
+    Returns:
+        rmse (Tensor): RMSE value.
+    """
+
+    img = torch.tensor(img, dtype=torch.float32) if not isinstance(img, torch.Tensor) else img.float()
+    img_ref = torch.tensor(img_ref, dtype=torch.float32) if not isinstance(img_ref, torch.Tensor) else img_ref.float()
+
+    diff_dim = img.ndim - img_ref.ndim
+
+    if diff_dim > 0:
+        img_ref = img_ref.unsqueeze(0)
+
+    axis_to_sum = tuple(range(diff_dim, img.ndim))
+
+    mse = torch.mean((img - img_ref) ** 2, dim=axis_to_sum)
+    rmse = torch.sqrt(mse)
+
+    return torch.squeeze(rmse).numpy()
 
 def peak_signal_to_noise_ratio(img_ref, img, normalize_entries = True):
     """

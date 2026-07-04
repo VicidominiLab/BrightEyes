@@ -260,7 +260,8 @@ def update_fft(img, obj, psf_fft, psf_m_fft, lam, alpha, weight, eps, m,
 
 
 def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, regularizer_norm, initialization,
-            normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, return_pointwise_sol=False, verbose=False):
+            normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, idx_in_focus=0,
+            return_pointwise_sol=False, verbose=False):
     """
     Performs a single iteration update for the reconstruction process.
 
@@ -303,19 +304,13 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         size = list( tuple(psf.shape[:-1]) + (dset.shape[-1],) ) # Nz x Nx x Ny x K
         
     if rec_to_save == 'last':
-        size = [Nz] + size
+        size = [1] + size
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
     
-    # obj_all = torch.empty(size).to(device)  # max_iter + 1 x Nz x Nx x Ny x K
-    # obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
-    # if return_pointwise_sol:
-    #     obj_all[0] = obj_set.sum(-1) #sum over K
-    # else:
-    #     obj_all[0] = obj_set
     
     history_device = torch.device('cpu') if rec_to_save == 'all' else device
-    obj_all = torch.empty(size, device=history_device)  # keep saved iterates off-GPU when storing the full history
+    obj_all = torch.empty(size, device=history_device)  ## max_iter + 1 x Nz x Nx x Ny x K  keep saved iterates off-GPU when storing the full history 
     obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
     
     if return_pointwise_sol:
@@ -343,15 +338,9 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
         step_size.append(initial_step_size)
         
         if rec_to_save == 'all':
-            idx = m + 1
-            previous_idx = m
-        elif rec_to_save == 'last':
-            idx = 0
-            previous_idx = 0
-            obj_all[previous_idx] = obj_all[idx]    # copy last estimate to the first position to save memory
-        else:
-            raise ValueError("rec_to_save must be 'last' or 'all'.")
-        
+            idx =  m + 1
+        previous_idx = m
+
         if return_pointwise_sol:
             obj_all[idx] = obj_set.sum(-1).detach().to(history_device)
         else:
@@ -359,21 +348,22 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
 
         if stop_tol is not None:
             if stop_criteria == 'rel_diff':
-                criteria = ( abs(obj_set[0] - previous_obj_set[0]) / (previous_obj_set[0] + eps) ).sum()
+                criteria = ( abs(obj_set[idx_in_focus] - previous_obj_set[idx_in_focus]) / (previous_obj_set[idx_in_focus] + eps) ).sum()
             elif stop_criteria == 'step_size':
                 criteria = step_size[previous_idx].max()
             else:
                 raise ValueError("stop_criteria must be 'rel_diff' or 'step_size'.")
             
             if criteria < stop_tol:
-                obj_all = obj_all[:idx]
+                if rec_to_save == 'all':
+                    obj_all = obj_all[:idx]
                 break
             
     return obj_all, step_size
 
 
 def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
-                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', stop_criteria='rel_diff',
+                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', stop_criteria='rel_diff', idx_in_focus=0,
                             rec_to_save='last', return_pointwise_sol=False, step_size_search: str = 'fixed', line_search_params=None, verbose=False):
     """
     Full reconstruction using variance-regularized iterative update with automatic padding, GPU check, and flexible initialization.
@@ -412,7 +402,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
-    
+        
     # Ensure correct shapes of PSF w.r.t. dataset
     if dset.ndim <= 2:
         raise Exception('The dataset should have at least 3 dimension: Nx x Ny x K, where K are noise repetitions')
@@ -425,6 +415,9 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     if dset.ndim == 3:
         dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
 
+    # psf = psf / psf.sum(dim=tuple(range(1, psf.ndim)), keepdim=True)  # Normalize PSF
+    # print('No PSF normalization')
+    
     if np.ndim(weight_map) == 2:
         weight_map = torch.tensor(weight_map).float().to(device)
         weight_map = weight_map.unsqueeze(0).unsqueeze(-1)  # Add z and K dimensions #1 x Nx x Ny x 1
@@ -449,8 +442,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     psf_pad = centered_pad(psf, target_shape=sz)  # Centered padding of PSF to match dataset shape
         
     # Run reconstruction
-    obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm,
-                            initialization, normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, return_pointwise_sol, verbose)
+    obj_all, step_size = iterate(dset, psf_pad, max_iter, lambda_value, alpha_value, weight_map, stop_tol, method, device, regularizer_norm, 
+                            initialization, normalize, stop_criteria, rec_to_save, step_size_search, line_search_params, idx_in_focus, return_pointwise_sol, verbose)
     
     # if rec_to_save == 'last':
     #     return obj_all[-1]
@@ -464,8 +457,8 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
     
 def batch_reconstruction(dset: np.ndarray, psf: np.ndarray, batch_size: list, overlap: int,
                          lambda_value, alpha_value=1, weight_map=1, max_iter=100, stop_tol=None, method='sgp',
-                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', 
-                            rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, verbose=False):
+                            regularizer_norm='l2', initialization='flat', normalize=True, process='gpu', stop_criteria='rel_diff', return_pointwise_sol=False,
+                            rec_to_save='last', step_size_search: str = 'fixed', line_search_params=None, idx_in_focus=0, verbose=False):
     """
 
     Parameters
@@ -533,10 +526,12 @@ def batch_reconstruction(dset: np.ndarray, psf: np.ndarray, batch_size: list, ov
 
             crop_dset = dset[indx, indy]
 
-            recon, *_ = variance_reconstruction(crop_dset, psf, lambda_value, alpha_value, weight_map, max_iter, stop_tol, method,
-                            regularizer_norm, initialization, normalize, process, 
-                            rec_to_save, step_size_search, line_search_params, verbose)
+            recon, *_ = variance_reconstruction(crop_dset, psf, lambda_value, alpha_value,
+                            weight_map, max_iter, stop_tol, method,
+                            regularizer_norm, initialization, normalize, process, stop_criteria, idx_in_focus,
+                            rec_to_save, return_pointwise_sol, step_size_search, line_search_params, verbose)
 
+    
             recon = recon.cpu().numpy() if isinstance(recon, torch.Tensor) else recon
 
             indx = np.s_[i * (wx - overlap_x) + overlap_x // 2: (i + 1) * wx - i * overlap_x]
