@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import numpy as np
 from tqdm.auto import tqdm
 
-from brighteyes_mcs_file import Alignment
+from brighteyes_mcs_dataprep import Alignment
 
 
 def _fit_map_pixel_chunk(indices, histograms, **worker_kwargs):
@@ -84,7 +84,7 @@ def generate_fit_maps(
     """
     Fit every pixel histogram in a ``(y, x, t)`` image and return fit maps.
 
-    This mirrors ``brighteyes_mcs_file.Alignment.generate_fit_maps`` but fixes
+    This mirrors ``brighteyes_mcs_dataprep.Alignment.generate_fit_maps`` but fixes
     progress reporting for parallel runs. The upstream implementation wraps
     joblib's submission iterator, so tqdm reports queued chunks rather than
     completed work. Here tqdm is updated when pixels actually finish.

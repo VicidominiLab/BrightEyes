@@ -1,7 +1,9 @@
-brighteyes-mcs-file[full]>=0.3.2
+brighteyes-mcs-dataprep>=0.1.0
+brighteyes-mcs-reader>=0.1.0
 h5py
 joblib
 matplotlib
+matplotlib-scalebar
 numpy
 scipy
 scikit-image

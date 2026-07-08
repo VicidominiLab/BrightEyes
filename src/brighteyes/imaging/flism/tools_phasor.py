@@ -4,6 +4,7 @@ import math
 import os
 
 import h5py
+import matplotlib as mpl
 from matplotlib import colors
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.pyplot import gca
@@ -110,7 +111,7 @@ def sum_adjacent_pixel(data, n=4):
 
 
 def _require_torch():
-    from brighteyes_mcs_file import Alignment
+    from brighteyes_mcs_dataprep import Alignment
     Alignment._require_torch()
 
 
@@ -139,7 +140,7 @@ def pad_tensor(x, pad_left: int, pad_right: int, dim: int, mode: str = "reflect"
     """
     Pad a torch tensor along one dimension.
     """
-    from brighteyes_mcs_file import Alignment
+    from brighteyes_mcs_dataprep import Alignment
     return Alignment.pad_tensor(x, pad_left, pad_right, dim, mode=mode)
 
 
@@ -147,7 +148,7 @@ def torch_median_filter(x, window_size=3, dims=None, mode="reflect"):
     """
     Apply a median filter to a torch tensor along selected dimensions.
     """
-    from brighteyes_mcs_file import Alignment
+    from brighteyes_mcs_dataprep import Alignment
     return Alignment.median_filter(x, window_size=window_size, dims=dims, mode=mode)
 
 
@@ -156,7 +157,7 @@ def partial_convolution_fft(volume, kernel, dim1: str = "ijk", dim2: str = "jkl"
     """
     Convolution through FFT with einsum-based dimension bookkeeping.
     """
-    from brighteyes_mcs_file import Alignment
+    from brighteyes_mcs_dataprep import Alignment
     return Alignment.partial_convolution_fft(
         volume,
         kernel,
@@ -994,7 +995,7 @@ def equalized_lifetime_tick_values(reference_lifetime, lifetime_bounds, weights=
 
 
 def _equal_luminance_colormap_array(colormap):
-    cmap = plt.get_cmap(colormap)
+    cmap = mpl.colormaps[colormap]
     colors = cmap(np.linspace(0.0, 1.0, cmap.N))[:, :3].copy()
     luminance = (299 * colors[:, 0] + 587 * colors[:, 1] + 114 * colors[:, 2]) / 1000.0
     max_luminance = np.max(luminance)

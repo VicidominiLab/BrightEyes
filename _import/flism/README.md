@@ -18,7 +18,7 @@ In case of local development:
     pip install -e .
 
 `brighteyes_flism` re-exports the fitting and calibration helpers from
-`brighteyes_mcs_file`, including the optional `model_fn`, `p0`, `bounds`, and
+`brighteyes_mcs_dataprep`, including the optional `model_fn`, `p0`, `bounds`, and
 `parameter_names` arguments for custom multi-parameter fit models. This includes
 `perform_fit_data`, `fit_data_with_ref_or_irf`, `calibrate_h5_file`, and
 `generate_fit_maps`.

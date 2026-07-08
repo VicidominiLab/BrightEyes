@@ -1,6 +1,6 @@
 """Public package API for BrightEyes FLISM utilities."""
 
-from brighteyes_mcs_file import (
+from brighteyes_mcs_dataprep import (
     Alignment,
     H5DataCalibrator,
     H5OutputBuilder,
@@ -8,15 +8,16 @@ from brighteyes_mcs_file import (
     add_output_to_h5_file,
     build_h5_output,
     calibrate_h5_file,
+    show_h5_structure,
+    show_h5_structure_html,
+    write_h5_output_run,
+)
+from brighteyes_mcs_reader import (
     load_default_irf,
     load_default_output_spad,
     load_default_ref,
     load_raw,
     load_virtual_channel,
-    mcs,
-    show_h5_structure,
-    show_h5_structure_html,
-    write_h5_output_run,
 )
 
 from .flism_data import FlimData
@@ -106,7 +107,6 @@ __all__ = [
     "load_default_ref",
     "load_raw",
     "load_virtual_channel",
-    "mcs",
     "model_data",
     "normalize_histogram",
     "perform_fit_data",

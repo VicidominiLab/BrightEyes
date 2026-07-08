@@ -5,7 +5,7 @@ import warnings
 import h5py
 import numpy as np
 
-from brighteyes_mcs_file import mcs
+from brighteyes_mcs_reader import reader_legacy
 
 from .tools_phasor import calculate_phasor
 
@@ -123,14 +123,14 @@ class FlimData:
 
     def load_data(self, data_path: str):
         self.data = h5py.File(data_path)
-        self.metadata = mcs.metadata_load(data_path)
+        self.metadata = reader_legacy.metadata_load(data_path)
         image = self._first_dataset(self.data, self.SPAD_DATA_KEYS, "SPAD data")
         self.data_hist = self._sum_to_time_channel(image)
         self.data_laser_hist = self._load_aux_laser_histogram(self.data, self.data_hist.shape[0])
 
     def load_data_irf(self, data_path_irf: str):
         self.data_irf = h5py.File(data_path_irf)
-        self.metadata_irf = mcs.metadata_load(data_path_irf)
+        self.metadata_irf = reader_legacy.metadata_load(data_path_irf)
         image_irf = self._first_dataset(self.data_irf, self.SPAD_DATA_KEYS, "SPAD IRF data")
         self.data_hist_irf = self._sum_to_time_channel(image_irf)
         self.data_laser_hist_irf = self._load_aux_laser_histogram(
