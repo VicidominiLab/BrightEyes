@@ -1,3 +1,1 @@
-from .adam_optimizer import adam_optimize_obj
-
 from .sgm_optimizer import variance_reconstruction, batch_reconstruction

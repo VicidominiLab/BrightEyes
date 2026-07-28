@@ -131,9 +131,10 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
     flux = dset.sum(axis_to_sum, keepdim=True)
 
     if method == 'flat':
-        if dset.ndim - conv_dims == 2: #if I have channels
-            dset = dset.sum(dim=-2)  # Sum over channels, output Nz x Nx x Ny x K
-        init_shape = (psf.shape[0],) + tuple(dset.squeeze().shape)
+        # if dset.ndim - conv_dims == 2: #if I have channels
+        #     dset = dset.sum(dim=-2)  # Sum over channels, output Nx x Ny x K
+        dset = dset.sum(dim=-2)  # Sum over channels, output Nx x Ny x K
+        init_shape = (psf.shape[0],) + tuple(dset.shape) #dset.squeeze().shape
         init = flat(init_shape, flux, device)
     elif method == 'data':
         init = data(dset, flux, device)

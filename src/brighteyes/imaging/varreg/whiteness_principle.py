@@ -163,6 +163,7 @@ def compute_z_variable(obj: torch.Tensor, psf_fft: torch.Tensor, dset: torch.Ten
     
     y_pred = forward_model(psf_fft, obj).sum(axis=0)  # predicted data, summing over z
         
+    #Sum over channels
     y_pred = y_pred.sum(-2)
     dset = dset.sum(-2)
             
@@ -207,8 +208,7 @@ def compute_whiteness_measure(z: torch.Tensor) -> float:
     energy = torch.sum(torch.abs(zhat)**2, dim=corr_axis) # sum over x,y
     denom = energy**2
     autocor = num / denom 
-    whiteness = autocor.real.sum()  # sum over k and c axis 
-    
+    whiteness = autocor.real.sum()  # sum over k
     return float(whiteness)
 
 

@@ -308,7 +308,6 @@ def iterate(dset, psf, max_iter, lam, alpha, weight, stop_tol, method, device, r
     elif rec_to_save == 'all':
         size = [max_iter + 1] + size
     
-    
     history_device = torch.device('cpu') if rec_to_save == 'all' else device
     obj_all = torch.empty(size, device=history_device)  ## max_iter + 1 x Nz x Nx x Ny x K  keep saved iterates off-GPU when storing the full history 
     obj_set = init.initialize(dset, psf_norm, method = initialization, device = device)
@@ -402,7 +401,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
 
     dset = torch.from_numpy(dset).float().to(device)
     psf = torch.from_numpy(psf).float().to(device)
-        
+            
     # Ensure correct shapes of PSF w.r.t. dataset
     if dset.ndim <= 2:
         raise Exception('The dataset should have at least 3 dimension: Nx x Ny x K, where K are noise repetitions')
@@ -416,7 +415,7 @@ def variance_reconstruction(dset, psf, lambda_value, alpha_value=1, weight_map=1
         dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
 
     # psf = psf / psf.sum(dim=tuple(range(1, psf.ndim)), keepdim=True)  # Normalize PSF
-    # print('No PSF normalization')
+    # print('PSF normalization')
     
     if np.ndim(weight_map) == 2:
         weight_map = torch.tensor(weight_map).float().to(device)
