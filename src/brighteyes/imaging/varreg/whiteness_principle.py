@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import gc
 from typing import Callable, Optional, Tuple
 from functools import partial
 
@@ -222,6 +223,7 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
                          return_all_iters: bool = False,
                          return_all_solutions: bool = False,
                          return_z_variables: bool = False,
+                         return_whiteness_list: bool = False,
                          idx_in_focus: Optional[int] = 0,
                          verbose: bool = False):
     """
@@ -274,10 +276,8 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
     else:
         raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
     
-    if return_all_solutions:
-        obj_list = []
-        whiteness_measures_list = []
-
+    obj_list = []
+    whiteness_measures_list = []
     obj_lam_all = []
     y_pred_list = []
     z_list = []
@@ -286,43 +286,67 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
         if verbose:
             print(f'{idx_n+1}/{len(lambdas)}: Testing lambda={lam}')
 
-        obj_lam, _ = solver_fn(lam) # obj_lam shape: (num_iters, Nz, Nx, Ny, Nch, K)
-        z = compute_z_variable(obj_lam[-1].to(device), psf_fft, dset.to(device), masked=masked, remove_border=remove_border)
-        whiteness_measure = compute_whiteness_measure(z) * z[..., 0].numel()
-        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        with torch.inference_mode():
+            obj_lam, _ = solver_fn(lam) # obj_lam shape: (num_iters, Nz, Nx, Ny, Nch, K)
+
+            if return_all_iters:
+                # If the user explicitly requests all iterations, keep the full tensor.
+                obj_lam_all.append(obj_lam[:, idx_in_focus, ...].detach().cpu().numpy())
+                obj_last = obj_lam[-1].detach().to(device)
+            else:
+                # Keep only the last iterate and release the full solver output ASAP.
+                # clone() detaches storage from obj_lam so deleting obj_lam can free memory.
+                obj_last = obj_lam[-1].detach().clone().to(device)
+
+            if return_all_solutions or return_z_variables:
+                obj_list.append(obj_last[idx_in_focus].detach().cpu().numpy())
+
+            # Release solver output early to reduce peak memory for WP computations.
+            del obj_lam
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            z = compute_z_variable(obj_last, psf_fft, dset, masked=masked, remove_border=remove_border)
+            whiteness_measure = compute_whiteness_measure(z) * z[..., 0].numel()
+
+            if return_whiteness_list or return_all_solutions or return_all_iters or return_z_variables:
+                whiteness_measures_list.append([whiteness_measure])
+
+            if return_z_variables:
+                y_pred = forward_model(psf_fft, obj_last).sum(0) #sum over z
+                y_pred_list.append(y_pred.detach().cpu().numpy())
+
         if return_z_variables:
-            y_pred = forward_model(psf_fft, obj_lam[-1].to(device)).sum(0) #sum over z
-            y_pred_list.append(y_pred)
-                    
-        if return_all_iters:
-            obj_lam_all.append(obj_lam[:,idx_in_focus,...].cpu().numpy())
-            
-        if return_all_solutions:
-            obj_list.append(obj_lam[-1,idx_in_focus].cpu().numpy())
-            whiteness_measures_list.append([whiteness_measure])
-            
-        if return_z_variables:
-            z_list.append(z.cpu().numpy().squeeze())
+            z_list.append(z.detach().cpu().numpy().squeeze())
             
         if verbose:
             print(f'  Whiteness={whiteness_measure:.8g}')
             
-        if return_all_solutions is False and return_all_iters is False and return_z_variables is False:    
+        if return_all_solutions is False and return_all_iters is False and return_z_variables is False:
             if abs(whiteness_measure) < best_whiteness:
                 best_whiteness = whiteness_measure
                 best_lambda = lam
-                if return_all_iters:
-                    best_obj = obj_lam
-                else:
-                    best_obj = obj_lam[-1]
-    
-    if return_all_solutions:
-        results = ( obj_list, whiteness_measures_list )
-    if return_all_iters:
-        results = ( obj_lam_all, whiteness_measures_list )
+                best_obj = obj_last.detach().cpu() if device.type == 'cpu' else obj_last.detach().clone()
+
+        # Release per-lambda intermediates to avoid cross-lambda CUDA accumulation.
+        del obj_last, z
+        if return_z_variables:
+            del y_pred
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     if return_z_variables:
-        results = (obj_list, whiteness_measures_list, z_list, y_pred_list)
-    else:
-        results = (float(best_lambda), best_obj, float(best_whiteness))
-    
-    return results
+        return obj_list, whiteness_measures_list, z_list, y_pred_list
+    if return_all_iters:
+        return obj_lam_all, whiteness_measures_list
+    if return_all_solutions:
+        return obj_list, whiteness_measures_list
+    if return_whiteness_list:
+        return whiteness_measures_list
+
+    return float(best_lambda), best_obj, float(best_whiteness)

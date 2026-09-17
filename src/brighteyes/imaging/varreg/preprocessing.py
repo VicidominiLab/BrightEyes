@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 import math
+from typing import Optional, Sequence, Union
+
 
 def divisors(n):
     """
@@ -115,7 +117,180 @@ def binomial_split(x: torch.tensor, n_splits: int = 2, p: float = 0.5, device: s
     # Convert back to integer type
     return splits.to(torch.int32)
 
-import numpy as np
+
+def multinomial_split(
+    x,
+    n_splits=None,
+    probabilities=None,
+    device=None,
+    dtype=torch.int64,
+    generator=None,
+):
+
+    if isinstance(x, np.ndarray):
+        if x.dtype == np.uint64:
+            if np.any(x > np.iinfo(np.int64).max):
+                raise OverflowError(
+                    "x contiene valori UInt64 non rappresentabili come int64."
+                )
+
+            x = x.astype(np.int64, copy=False)
+
+        x = torch.from_numpy(x)
+
+    elif not isinstance(x, torch.Tensor):
+        x = torch.as_tensor(x)
+
+    # Gestione anche di input torch.uint64
+    if x.dtype == torch.uint64:
+        if x.device.type != "cpu":
+            x_cpu = x.cpu()
+        else:
+            x_cpu = x
+
+        if np.any(x_cpu.numpy() > np.iinfo(np.int64).max):
+            raise OverflowError(
+                "x contiene valori UInt64 non rappresentabili come int64."
+            )
+
+        x = x.to(torch.int64)
+
+    if device is None:
+        device = x.device
+    else:
+        device = torch.device(device)
+
+    x = x.to(device)
+
+    if x.is_complex():
+        raise TypeError("x deve contenere conteggi reali.")
+
+    if not torch.all(torch.isfinite(x)):
+        raise ValueError("x contiene valori NaN o infiniti.")
+
+    if torch.any(x < 0):
+        raise ValueError("x deve contenere valori non negativi.")
+
+    if x.is_floating_point():
+        if not torch.all(x == torch.round(x)):
+            raise ValueError("x deve contenere conteggi interi.")
+
+    x_integer = torch.round(x).to(torch.int64)
+
+
+    # ------------------------------------------------------------
+    # Costruzione delle probabilità
+    # ------------------------------------------------------------
+    if probabilities is None:
+        if n_splits is None:
+            n_splits = 2
+
+        if not isinstance(n_splits, int) or n_splits < 1:
+            raise ValueError("n_splits deve essere un intero positivo.")
+
+        probs = torch.full(
+            (n_splits,),
+            fill_value=1.0 / n_splits,
+            dtype=torch.float64,
+            device=device,
+        )
+
+    else:
+        probs = torch.as_tensor(
+            probabilities,
+            dtype=torch.float64,
+            device=device,
+        )
+
+        if probs.ndim != 1:
+            raise ValueError("probabilities deve essere un vettore 1D.")
+
+        if probs.numel() < 1:
+            raise ValueError("probabilities non può essere vuoto.")
+
+        if n_splits is not None and n_splits != probs.numel():
+            raise ValueError(
+                "n_splits non coincide con len(probabilities): "
+                f"{n_splits} != {probs.numel()}."
+            )
+
+        n_splits = probs.numel()
+
+        if not torch.all(torch.isfinite(probs)):
+            raise ValueError(
+                "probabilities contiene valori NaN o infiniti."
+            )
+
+        if torch.any(probs < 0):
+            raise ValueError(
+                "Le probabilità devono essere non negative."
+            )
+
+        prob_sum = probs.sum()
+
+        if prob_sum <= 0:
+            raise ValueError(
+                "La somma delle probabilità deve essere positiva."
+            )
+
+        probs = probs / prob_sum
+
+    # Caso banale
+    if n_splits == 1:
+        return x_integer.unsqueeze(-1).to(dtype)
+
+    # ------------------------------------------------------------
+    # Splitting multinomiale tramite binomiali sequenziali
+    # ------------------------------------------------------------
+    output_shape = (*x_integer.shape, n_splits)
+
+    splits = torch.zeros(
+        output_shape,
+        dtype=torch.int64,
+        device=device,
+    )
+
+    remaining_counts = x_integer.clone()
+    remaining_probability = torch.tensor(
+        1.0,
+        dtype=torch.float64,
+        device=device,
+    )
+
+    for idx in range(n_splits - 1):
+        current_probability = probs[idx]
+
+        if current_probability <= 0:
+            sampled = torch.zeros_like(remaining_counts)
+
+        else:
+            # Probabilità condizionata fra le categorie ancora disponibili
+            conditional_probability = (
+                current_probability / remaining_probability
+            ).clamp(0.0, 1.0)
+
+            # torch.binomial richiede un input floating point.
+            # float64 evita la perdita di precisione di float32 per
+            # conteggi interi relativamente grandi.
+            sampled = torch.binomial(
+                remaining_counts.to(torch.float64),
+                torch.full_like(
+                    remaining_counts,
+                    fill_value=conditional_probability.item(),
+                    dtype=torch.float64,
+                ),
+                generator=generator,
+            ).to(torch.int64)
+
+        splits[..., idx] = sampled
+        remaining_counts = remaining_counts - sampled
+        remaining_probability = remaining_probability - current_probability
+
+    # L'ultima categoria riceve esattamente i conteggi residui
+    splits[..., -1] = remaining_counts
+
+    return splits.to(dtype)
+
 
 def make_noisy_dataset(data, bins_to_sum, K, L, seed=None, replace=False):
     """
