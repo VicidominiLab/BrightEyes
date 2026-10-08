@@ -57,6 +57,8 @@ from matplotlib.patches import Rectangle
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
+from matplotlib.gridspec import GridSpec
+
 
 
 
@@ -2859,6 +2861,342 @@ def plot_rotated_images_with_zoom(
 
     return fig, axes
 
+def plot_rbn_sparsity_rl_normalized(
+    results, pair_centers_um, spacings_nm, col_range, zoom_spacing_nm,
+    rbn_name="RL-RbN", sparsity_name="Sparsity_RL", colors=None,
+    zoom_half_width_um=None, cmap="bone", full_aspect_ratio=3.0,
+    figsize=(10, 6)
+):
+    """Compare RbN and Sparsity_RL, normalizing full image and zoom to the corresponding RbN maximum."""
+
+    names = [rbn_name, sparsity_name]
+    pair_centers_um = np.asarray(pair_centers_um, dtype=float)
+    spacings_nm = np.asarray(spacings_nm, dtype=float)
+
+    x_um = np.asarray(results[rbn_name]["x_um"])
+    dx_um = np.median(np.diff(x_um))
+    pair_pitch_um = np.median(np.diff(pair_centers_um))
+
+    if zoom_half_width_um is None:
+        zoom_half_width_um = pair_pitch_um / 2
+    zoom_width_um = 2 * zoom_half_width_um
+
+    target_x_min = pair_centers_um[0] - pair_pitch_um / 2
+    target_x_max = pair_centers_um[-1] + pair_pitch_um / 2
+    rows = np.where((x_um >= target_x_min) & (x_um <= target_x_max))[0]
+
+    if len(rows) == 0:
+        raise ValueError("Argolight target range not found.")
+
+    row_start, row_stop = rows[0], rows[-1] + 1
+    full_width_um = x_um[row_stop - 1] + dx_um - x_um[row_start]
+
+    col_left, col_right = col_range
+    available_width_px = col_right - col_left
+    available_height_um = available_width_px * dx_um
+
+    full_height_um = min(max(full_width_um / full_aspect_ratio, zoom_width_um),
+                         available_height_um)
+    full_height_px = int(round(full_height_um / dx_um))
+    full_height_px = max(1, min(full_height_px, available_width_px))
+
+    col_center = (col_left + col_right) // 2
+    display_col_left = col_center - full_height_px // 2
+    display_col_right = display_col_left + full_height_px
+
+    if display_col_left < col_left:
+        display_col_left, display_col_right = col_left, col_left + full_height_px
+    if display_col_right > col_right:
+        display_col_right = col_right
+        display_col_left = col_right - full_height_px
+
+    actual_height_um = (display_col_right - display_col_left) * dx_um
+
+    zoom_idx = int(np.argmin(np.abs(spacings_nm - zoom_spacing_nm)))
+    zoom_spacing = spacings_nm[zoom_idx]
+    zoom_center_x = pair_centers_um[zoom_idx]
+
+    zoom_x_min = zoom_center_x - zoom_half_width_um
+    zoom_x_max = zoom_center_x + zoom_half_width_um
+    zoom_center_y = actual_height_um / 2
+    zoom_y_min = zoom_center_y - zoom_width_um / 2
+    zoom_y_max = zoom_center_y + zoom_width_um / 2
+
+    x_display = x_um[row_start:row_stop]
+    y_display = np.arange(display_col_right - display_col_left) * dx_um
+    x_mask = (x_display >= zoom_x_min) & (x_display <= zoom_x_max)
+    y_mask = (y_display >= zoom_y_min) & (y_display <= zoom_y_max)
+
+    # RbN reference maxima
+    rbn_roi = np.asarray(results[rbn_name]["analysis_roi"])
+    rbn_full = rbn_roi[row_start:row_stop, display_col_left:display_col_right].T
+    rbn_zoom = rbn_full[np.ix_(y_mask, x_mask)]
+
+    rbn_full_max = np.nanmax(rbn_full)
+    rbn_zoom_max = np.nanmax(rbn_zoom)
+
+    print(f"RbN full max : {rbn_full_max:.2f}")
+    print(f"RbN zoom max : {rbn_zoom_max:.2f}")
+
+    fig, axes = plt.subplots(
+        2, 2, figsize=figsize,
+        gridspec_kw={"width_ratios": [3, 1], "wspace": 0.10},
+        constrained_layout=True
+    )
+
+    extent = [x_um[row_start], x_um[row_stop - 1] + dx_um, 0, actual_height_um]
+
+    for row, name in enumerate(names):
+        roi = np.asarray(results[name]["analysis_roi"])
+        display = roi[row_start:row_stop, display_col_left:display_col_right].T
+
+        full_norm = display / rbn_full_max
+        zoom_norm = display / rbn_zoom_max
+
+        ax_full, ax_zoom = axes[row]
+
+        ax_full.imshow(full_norm, cmap=cmap, origin="lower", interpolation="nearest",
+                       extent=extent, vmin=0, vmax=1)
+        ax_full.set_aspect("equal", adjustable="box")
+
+        im_zoom = ax_zoom.imshow(zoom_norm, cmap=cmap, origin="lower",
+                                 interpolation="nearest", extent=extent,
+                                 vmin=0, vmax=1)
+        ax_zoom.set_xlim(zoom_x_min, zoom_x_max)
+        ax_zoom.set_ylim(zoom_y_min, zoom_y_max)
+        ax_zoom.set_aspect("equal", adjustable="box")
+
+        color = colors[name] if colors is not None else "tab:red"
+        rect = Rectangle((zoom_x_min, zoom_y_min), zoom_width_um, zoom_width_um,
+                         fill=False, edgecolor=color, linewidth=1.8)
+        ax_full.add_patch(rect)
+
+        divider = make_axes_locatable(ax_zoom)
+        cax = divider.append_axes("right", size="4%", pad=0.06)
+        cbar = fig.colorbar(im_zoom, cax=cax)
+        cbar.set_label("Normalized intensity")
+
+        label = "RL-RbN" if name == rbn_name else "Sparsity RL"
+        ax_full.set_ylabel(label, color=color, fontsize=12, fontweight="bold")
+        ax_full.set_yticks([])
+        ax_zoom.set_yticks([])
+
+        ax_full.set_xticks(pair_centers_um)
+        ax_full.set_xticklabels([f"{s:.0f}" for s in spacings_nm],
+                                rotation=45, ha="right")
+        ax_zoom.set_xlabel(r"Position ($\mu$m)")
+
+    axes[0, 0].set_title("Full Argolight target")
+    axes[0, 1].set_title(f"Zoom: {zoom_spacing:.0f} nm")
+    axes[0, 0].set_xlabel("")
+    axes[1, 0].set_xlabel("Spacing (nm)")
+
+    return fig, axes
+
+def plot_contrast_rbn_sparsity_rl(
+    results, spacings_nm, colors,
+    rbn_name="RL-RbN", sparsity_name="Sparsity_RL",
+    figsize=(4.2, 3.0), ylim=None
+):
+    """Plot contrast for RbN and Sparsity_RL using lines only."""
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for name, label in [(rbn_name, "RL-RbN"), (sparsity_name, "Sparsity RL")]:
+        contrast = np.asarray(results[name]["contrast_mean"], dtype=float)
+        ax.plot(spacings_nm, contrast, "-", color=colors[name], lw=2, label=label)
+
+    ax.set_xlabel("Spacing (nm)")
+    ax.set_ylabel("Contrast")
+    ax.set_xticks(spacings_nm)
+    ax.set_ylim(*ylim) if ylim is not None else ax.set_ylim(bottom=0)
+    ax.grid(alpha=0.2)
+    ax.legend(frameon=False)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_std_rbn_sparsity_rl(
+    metric_data, spacings_nm, colors,
+    rbn_name="RL-RbN", sparsity_name="Sparsity_RL",
+    figsize=(4.2, 3.0), ylim=None
+):
+    """Plot longitudinal normalized STD for RbN and Sparsity_RL using lines only."""
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for name, label in [(rbn_name, "RL-RbN"), (sparsity_name, "Sparsity RL")]:
+        values = np.array(
+            [metric_data[name][float(s)]["std"] for s in spacings_nm],
+            dtype=float
+        )
+        ax.plot(spacings_nm, values, "-", color=colors[name], lw=2, label=label)
+
+    ax.set_xlabel("Spacing (nm)")
+    ax.set_ylabel("Longitudinal normalized std")
+    ax.set_xticks(spacings_nm)
+    ax.set_ylim(*ylim) if ylim is not None else ax.set_ylim(bottom=0)
+    ax.grid(alpha=0.2)
+    ax.legend(frameon=False)
+
+    fig.tight_layout()
+    return fig, ax
+
+def plot_argolight_metric_schematic(seed=4, figsize=(7.0, 5.2)):
+    """Simple simulated schematic for contrast and continuity metrics."""
+
+    rng = np.random.default_rng(seed)
+
+    # Simulated Argolight-like image
+    nx, ny = 300, 240
+    x, y = np.linspace(0, 1, nx), np.linspace(0, 1, ny)
+    line_centers = [0.15, 0.40, 0.53, 0.82]
+    sigma_x = 0.025
+    image = np.zeros((ny, nx))
+
+    for i, center in enumerate(line_centers):
+        noise = rng.normal(size=ny)
+        noise = np.convolve(np.pad(noise, 3, mode="reflect"), np.ones(7)/7, mode="valid")
+        modulation = 1 + (0.010 if i == 0 else 0.006) * noise
+        line = np.exp(-0.5 * ((x - center) / sigma_x)**2)
+        image += modulation[:, None] * line[None, :]
+
+    image += 0.001 * rng.normal(size=image.shape)
+    image = np.clip(image, 0, None)
+    image_display = 1 - image / image.max()
+
+    # Sampling positions
+    y_contrast = 0.55
+    x_continuity = line_centers[0]
+    iy = np.argmin(np.abs(y - y_contrast))
+    ix = np.argmin(np.abs(x - x_continuity))
+
+    # Contrast profile across central pair
+    mask = (x >= 0.31) & (x <= 0.62)
+    x_profile = x[mask]
+    contrast_profile = image[iy, mask]
+    contrast_profile = np.convolve(np.pad(contrast_profile, 2, mode="reflect"),
+                                   np.ones(5)/5, mode="valid")
+
+    middle = (line_centers[1] + line_centers[2]) / 2
+    left_mask, right_mask = x_profile < middle, x_profile > middle
+    p1 = np.where(left_mask)[0][np.argmax(contrast_profile[left_mask])]
+    p2 = np.where(right_mask)[0][np.argmax(contrast_profile[right_mask])]
+    valley = p1 + np.argmin(contrast_profile[p1:p2 + 1])
+
+    I1, I2 = contrast_profile[p1], contrast_profile[p2]
+    Idip = contrast_profile[valley]
+    Ipeak = (I1 + I2) / 2
+
+    # Continuity profile
+    continuity = image[:, ix]
+    continuity /= np.median(continuity)
+    continuity -= np.mean(continuity)
+    continuity_plot = np.convolve(np.pad(continuity, 2, mode="reflect"),
+                                  np.ones(5)/5, mode="valid")
+    sigma = np.std(continuity)
+
+    # Figure layout
+    fig = plt.figure(figsize=figsize)
+    gs = GridSpec(2, 2, figure=fig, width_ratios=[1, 1.2],
+                  height_ratios=[1, 1], wspace=0.10, hspace=0.18)
+
+    ax_img_c = fig.add_subplot(gs[0, 0])
+    ax_contrast = fig.add_subplot(gs[0, 1])
+    ax_img_s = fig.add_subplot(gs[1, 0])
+    ax_continuity = fig.add_subplot(gs[1, 1])
+
+    # Top-left: contrast zoom
+    ax_img_c.imshow(image_display, cmap="gray", origin="lower",
+                    extent=[0, 1, 0, 1], interpolation="bilinear")
+
+    contrast_line_pad = 0.035
+    ax_img_c.plot(
+        [line_centers[1] - contrast_line_pad, line_centers[2] + contrast_line_pad],
+        [y_contrast, y_contrast],
+        color="tab:red", lw=2
+    )
+
+    ax_img_c.set_xlim(0.05, 0.92)
+    ax_img_c.set_ylim(0.08, 0.92)
+    ax_img_c.set_box_aspect(1)
+    ax_img_c.set_xticks([])
+    ax_img_c.set_yticks([])
+
+    # Top-right: contrast profile
+    ax_contrast.plot(x_profile, contrast_profile, color="tab:red", lw=2.2)
+    ax_contrast.scatter([x_profile[p1], x_profile[p2]], [I1, I2],
+                        color="black", s=18, zorder=3)
+    ax_contrast.scatter(x_profile[valley], Idip, color="black", s=18, zorder=3)
+
+    arrow_x = x_profile[valley]
+    ax_contrast.annotate(
+        "", xy=(arrow_x, Ipeak), xytext=(arrow_x, Idip),
+        arrowprops=dict(arrowstyle="<->", color="tab:blue", lw=1.6)
+    )
+    ax_contrast.text(arrow_x + 0.012, (Ipeak + Idip)/2, "C",
+                     color="tab:blue", fontsize=12, va="center", fontweight="bold")
+
+    ax_contrast.set_xticks([])
+    ax_contrast.set_yticks([])
+    ax_contrast.set_ylabel("Intensity", fontsize=10)
+    ax_contrast.set_title("Contrast", fontsize=11)
+
+    # Bottom-left: continuity zoom
+    ax_img_s.imshow(image_display, cmap="gray", origin="lower",
+                    extent=[0, 1, 0, 1], interpolation="bilinear")
+    ax_img_s.axvline(x_continuity, color="tab:blue", lw=2)
+
+    ax_img_s.set_xlim(0.05, 0.92)
+    ax_img_s.set_ylim(0.08, 0.92)
+    ax_img_s.set_box_aspect(1)
+    ax_img_s.set_xticks([])
+    ax_img_s.set_yticks([])
+
+    # Bottom-right: continuity profile
+    ax_continuity.plot(y, continuity_plot, color="tab:blue", lw=1.8)
+
+    ylim = max(4*sigma, 1.15*np.max(np.abs(continuity_plot)))
+    ax_continuity.set_ylim(-ylim, ylim)
+
+    arrow_x = 0.88
+    sigma_visual = 2.5 * sigma
+
+    ax_continuity.annotate(
+        "", xy=(arrow_x, sigma_visual), xytext=(arrow_x, -sigma_visual),
+        arrowprops=dict(arrowstyle="<->", color="tab:red", lw=2.0)
+    )
+    ax_continuity.text(arrow_x + 0.025, 0, r"$\sigma$",
+                       color="tab:red", fontsize=12, va="center", fontweight="bold")
+
+    ax_continuity.set_xticks([])
+    ax_continuity.set_yticks([])
+    ax_continuity.set_ylabel("Intensity", fontsize=10)
+    ax_continuity.set_title("Continuity", fontsize=11)
+
+    # Arrow-style axes for the two plots on the right
+    for ax in [ax_contrast, ax_continuity]:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+
+        ax.annotate(
+            "", xy=(1.02, 0), xytext=(0, 0),
+            xycoords=("axes fraction", "axes fraction"),
+            arrowprops=dict(arrowstyle="->", color="black", lw=1.0),
+            annotation_clip=False
+        )
+
+        ax.annotate(
+            "", xy=(0, 1.02), xytext=(0, 0),
+            xycoords=("axes fraction", "axes fraction"),
+            arrowprops=dict(arrowstyle="->", color="black", lw=1.0),
+            annotation_clip=False
+        )
+
+    return fig
+
 #%%
 plt.rcParams['ps.fonttype'] = 42
 plt.rcParams['pdf.fonttype'] = 42
@@ -2914,9 +3252,12 @@ if data_3D:
 else:
     dset = data
 
-dset = data.sum(axis=-2)  # taking the last bin
-raw_img = data[...,-1,:].sum(axis=(-1))  # sum over the bins and channels
-raw_close_img = data[..., -1, 12]  # select the close pinhole channel
+# dset = data.sum(axis=-2)  # taking the last bin
+# raw_img = data[...,-1,:].sum(axis=(-1))  # sum over the bins and channels
+# raw_close_img = data[..., -1, 12]  # select the close pinhole channel
+dset = data.sum(axis=-2)  #
+raw_img = data.sum(axis=(-1, -2))  # sum over the bins and channels
+raw_close_img = data[...,12].sum(-1)  # select the close pinhole channel
 
 
 print(f'Dataset shape {dset.shape}, Confocal shape {raw_img.shape}')
@@ -2943,7 +3284,7 @@ if save_figures:
 gra.ShowFingerprint(dset)
 
 #%%
-results_rl = np.load(os.path.join(save_path_server, 'Argolight_LessPh_RL_results.npz'))
+results_rl = np.load(os.path.join(save_path_server, 'Argolight_RL_results.npz'))
 conf_rl = results_rl['conf_rl']
 whiteness_rl = results_rl['whiteness_measure_rl']
 
@@ -2963,16 +3304,16 @@ idx_close_rl = np.argmin(whiteness_close_rl)
 # idx_close_rl = 7
 idx_s2ism = 20
 idx_sparsity_rl = np.argmin(whiteness_sparsity_rl)
-idx_sparsity_rl = 23
+idx_sparsity_rl = 15
 
 #%%
 sparsity = tifffile.imread(path_argo_sparsity)
 
 #%%
-# results_rl_RbN_56_2000 = np.load(os.path.join(save_path_server, 'Argolight_RL_RbN_result4_K56_2000.npz'))
-# RL_RbN_rec_56_2000 = results_rl_RbN_56_2000['RL_RbN_rec']
-results_rl_RbN_8_5000 = np.load(os.path.join(save_path_server, 'Argolight_RL_RbN_result28_K8_5000.npz'))
-RL_RbN_rec_8_5000 = results_rl_RbN_8_5000['RL_RbN_rec']
+results_rl_RbN_56_2000 = np.load(os.path.join(save_path_server, 'Argolight_RL_RbN_result4_K56_2000.npz'))
+RL_RbN_rec_56_2000 = results_rl_RbN_56_2000['RL_RbN_rec']
+# results_rl_RbN_8_5000 = np.load(os.path.join(save_path_server, 'Argolight_RL_RbN_result28_K8_5000.npz'))
+# RL_RbN_rec_8_5000 = results_rl_RbN_8_5000['RL_RbN_rec']
 
 #%%
 results_rl_RbN_close_4 = np.load(os.path.join(save_path_server, 'Argolight_RL_RbN_close_result22_K4_4000.npz')) 
@@ -2990,7 +3331,7 @@ s2ism_RbN = result_s2ism['recon']
 
 border = 10
 
-RbN_image = RL_RbN_rec_8_5000
+RbN_image = RL_RbN_rec_56_2000
 RbN_close_image = RL_RbN_rec_close_4
 S2ISM_RbN_image = s2ism_RbN
 
@@ -3003,8 +3344,8 @@ images = {
     "RL-RbN": crop_border(RbN_image, border),
     "RL late": crop_border(conf_rl[-1], border),
     
-    # "Sparsity": crop_border(sparsity, border),
-    # "Sparsity_RL": crop_border(conf_sparsity_rl[idx_sparsity_rl], border),
+    "Sparsity": crop_border(sparsity, border),
+    "Sparsity_RL": crop_border(conf_sparsity_rl[idx_sparsity_rl], border),
     
     "Raw close": crop_border(raw_close_img, border),
     "RL close": crop_border(conf_close_rl[idx_close_rl], border),
@@ -3017,7 +3358,7 @@ images = {
 }
 
 PLOT_GROUPS = {
-    "Open confocal": ["Raw", "RL", "RL-RbN", "RL late"], # "Sparsity", "Sparsity_RL"],
+    "Open confocal": ["Raw", "RL", "RL-RbN", "RL late", "Sparsity", "Sparsity_RL"],
     "Closed confocal": ["Raw close", "RL close", "RL-RbN close", "RL close late"],
     "s2ISM": ["Raw", "s2ISM", "s2ISM-RbN", "s2ISM late"],
 }
@@ -3039,8 +3380,8 @@ METHOD_LABELS = {
     "s2ISM-RbN": "s2ISM-RbN",
     "s2ISM late": "s2ISM late",
     
-    # "Sparsity": "Sparsity",
-    # "Sparsity_RL": "Sparsity RL",
+    "Sparsity": "Sparsity",
+    "Sparsity_RL": "Sparsity RL",
 }
 
 
@@ -3056,8 +3397,8 @@ COLORS = {
     "s2ISM": "#0393F9",
     "s2ISM-RbN": "#FA7E02",
     "s2ISM late": "#FA05CD",
-    # "Sparsity": "#02D995",
-    # "Sparsity_RL": "#EA1111",
+    "Sparsity": "#02D995",
+    "Sparsity_RL": "#EA1111",
 }
 
 SPACINGS_NM = np.arange(0, 391, 30, dtype=float)
@@ -3148,8 +3489,8 @@ DISPLAY_IMAGES = {
     "RL-RbN": crop_border(rbn_clean_display, border),
     "RL late": crop_border(conf_rl[-1], border),
     
-    # "Sparsity": crop_border(sparsity, border),
-    # "Sparsity_RL": crop_border(conf_sparsity_rl[idx_sparsity_rl], border),
+    "Sparsity": crop_border(sparsity, border),
+    "Sparsity_RL": crop_border(conf_sparsity_rl[idx_sparsity_rl], border),
 
     "Raw close": crop_border(raw_close_img, border),
     "RL close": crop_border(conf_close_rl[idx_close_rl], border),
@@ -3356,6 +3697,34 @@ if save_figures:
     
 #%%
 # ============================================================
+# ROTATED IMAGES WITH ZOOM SPARSITY - OPEN CONFOCAL
+# ============================================================
+
+fig, axes = plot_rbn_sparsity_rl_normalized(
+    results=results,
+    pair_centers_um=PAIR_CENTERS_UM,
+    spacings_nm=SPACINGS_NM,
+    col_range=TARGET_COL_RANGE,
+    zoom_spacing_nm=IMAGE_ZOOM_SPACING_NM["Open confocal"],
+    rbn_name="RL-RbN",
+    sparsity_name="Sparsity_RL",
+    colors=COLORS,
+    cmap=IMAGE_CMAP,
+    figsize=(10, 6)
+)
+
+plt.show()
+
+if save_figures:
+    fig.savefig(
+        os.path.join(save_path, "Argolight_rotated_zoom_open_sparsity.pdf"),
+        bbox_inches="tight",
+        pad_inches=0.1,
+    )
+
+    
+#%%
+# ============================================================
 # ROTATED IMAGES WITH ZOOM - CLOSED CONFOCAL
 # ============================================================
 
@@ -3504,7 +3873,18 @@ plt.show()
 if save_figures:
     fig.savefig(os.path.join(save_path, "Argolight_contrast_full.pdf"), bbox_inches="tight", pad_inches=0.1)
     
+#%%
+fig, ax = plot_contrast_rbn_sparsity_rl(
+    results=results,
+    spacings_nm=SPACINGS_NM,
+    colors=COLORS,
+)
+plt.show()
+
+if save_figures:
+    fig.savefig(os.path.join(save_path, "Argolight_contrast_sparsity_rbn.pdf"), bbox_inches="tight", pad_inches=0.1)
     
+
 #%%
 # ============================================================
 # 11. PLOT VALID PAIR FRACTION
@@ -3627,7 +4007,19 @@ plt.show()
 
 if save_figures:
     fig.savefig(os.path.join(save_path, 'Argolight_longitudinal_std_full.pdf'), bbox_inches="tight", pad_inches=0.1)
-    
+
+#%%
+fig, ax = plot_std_rbn_sparsity_rl(
+    metric_data=LONGITUDINAL_METRICS,
+    spacings_nm=SPACINGS_NM,
+    colors=COLORS,
+)
+plt.show()
+
+if save_figures:
+    fig.savefig(os.path.join(save_path, 'Argolight_longitudinal_std_sparsity_rbn.pdf'), bbox_inches="tight", pad_inches=0.1)
+
+
 #%%
 # ============================================================
 # 17. LONGITUDINAL HOLE RMS
@@ -3741,3 +4133,8 @@ ax.legend(
 fig.tight_layout()
 plt.show()
 fig.savefig(os.path.join(save_path, "Argolight_contrast_vs_NA.pdf"), bbox_inches="tight", pad_inches=0.1)
+
+#%%
+fig = plot_argolight_metric_schematic()
+plt.show()
+fig.savefig(os.path.join(save_path, "Argolight_metric_schematic.pdf"), bbox_inches="tight", pad_inches=0.1)

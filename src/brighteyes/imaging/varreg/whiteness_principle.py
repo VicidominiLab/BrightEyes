@@ -264,9 +264,6 @@ def choose_lambda_by_WP(solver_fn: Callable[[float], torch.Tensor],
     if dset.ndim == 3:
         dset = dset.unsqueeze(-2)  # Add a channel dimension at the end # Nx x Ny x 1 x K
         
-    # psf = psf / psf.sum(dim=tuple(range(1, psf.ndim)), keepdim=True)  # Normalize PSF
-    # print(f'sum of psf: {psf.sum().item()}')
-        
     if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
         num_axis_to_conv = 2
         sz = tuple(dset.shape[:num_axis_to_conv])

@@ -81,11 +81,11 @@ def generate_disk_phantom(shape, num, radius, value_range=(0.1, 1.0), smooth: bo
 
     return phantom
 
-def IIT_G2DFit_gaussian2D(x, y, sx, sy, ux, uy, K):
+def Fit_gaussian2D(x, y, sx, sy, ux, uy, K):
     result = K / (2.0 * np.pi * sx * sy) * np.exp(-((x - ux)**2 / (2.0 * sx**2)) - ((y - uy)**2 / (2.0 * sy**2)))
     return result
 
-def IIT_G2DFit_gaussian2DDraw(w, h, sx, sy, ux, uy, theta, K, pixelSize):
+def Fit_gaussian2DDraw(w, h, sx, sy, ux, uy, theta, K, pixelSize):
     result = np.zeros((h, w))
     for y in range(h):
         for x in range(w):
@@ -93,7 +93,7 @@ def IIT_G2DFit_gaussian2DDraw(w, h, sx, sy, ux, uy, theta, K, pixelSize):
             yp = y * pixelSize - uy
             xpp = xp * np.cos(theta) - yp * np.sin(theta)
             ypp = xp * np.sin(theta) + yp * np.cos(theta)
-            result[y, x] = IIT_G2DFit_gaussian2D(xpp, ypp, sx, sy, 0, 0, K)
+            result[y, x] = Fit_gaussian2D(xpp, ypp, sx, sy, 0, 0, K)
     return result
 
 def Nucleus(shape, noOfGauss, value_range, std_range, ellipse_axes, background_noise=0.01, seed=None):

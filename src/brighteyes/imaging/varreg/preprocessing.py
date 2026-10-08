@@ -179,7 +179,7 @@ def multinomial_split(
 
 
     # ------------------------------------------------------------
-    # Costruzione delle probabilità
+    # Probabilities
     # ------------------------------------------------------------
     if probabilities is None:
         if n_splits is None:
@@ -240,7 +240,7 @@ def multinomial_split(
         return x_integer.unsqueeze(-1).to(dtype)
 
     # ------------------------------------------------------------
-    # Splitting multinomiale tramite binomiali sequenziali
+    # Multinomial Splitting
     # ------------------------------------------------------------
     output_shape = (*x_integer.shape, n_splits)
 
