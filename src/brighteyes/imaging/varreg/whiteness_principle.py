@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import gc
 from typing import Callable, Optional, Tuple
-from functools import partial
 
 from .loss import fidelity_loss
 from .sgm_optimizer import variance_reconstruction
@@ -13,12 +12,6 @@ import torch.nn as nn
 from torch.optim import Adam
 from tqdm import tqdm
 
-try:
-    from joblib import Parallel, delayed
-    JOBLIB_AVAILABLE = True
-except ImportError:
-    JOBLIB_AVAILABLE = False
-    print("Warning: joblib not available. Install with 'pip install joblib' for parallel execution.")
 
 # Reconstructor class for serialization compatibility with multiprocessing
 class VarianceReconstructor:
