@@ -1,3 +1,12 @@
+# Array-dimension conventions used throughout this module:
+# Nx, Ny   : lateral image dimensions
+# Mx, My   : unpadded kernel or PSF dimensions
+# Nz       : axial object/PSF planes
+# Nch      : detector or measurement channels
+# K        : independent noise realizations
+# Niter    : saved reconstruction iterations
+# L        : repeated experiments or reconstruction runs
+
 import torch
 import einops
 import string
@@ -9,16 +18,60 @@ from torch.nn import functional
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 from torch import real, einsum
 
-def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: str = 'ijk', dim2: str = 'jkl',
+
+def _axis_indices(dimensions, axis):
+    """Return the positions of named FFT axes after validating all labels."""
+    missing = [(label, dims) for dims in dimensions for label in axis if label not in dims]
+    if missing:
+        details = ', '.join(f"'{label}' in '{dims}'" for label, dims in missing)
+        raise ValueError(f"FFT axis labels are missing from dimension strings: {details}.")
+    return [[dims.index(label) for label in axis] for dims in dimensions]
+
+def partial_convolution_fft(volume: torch.Tensor, kernel: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl',
                         axis: str = 'jk', fourier: tuple = (False, False)):
 
+    """Convolve two tensors along named axes using full complex FFTs.
+
+    Each character in ``dim1`` and ``dim2`` labels one tensor axis and is used
+    directly in the Einstein summation. The characters listed in ``axis`` are
+    the spatial axes transformed by the FFT. Output axes follow the first
+    occurrence of each label in ``dim1 + dim2``.
+
+    Parameters
+    ----------
+    volume : torch.Tensor
+        First input tensor, with one axis for each character in ``dim1``.
+    kernel : torch.Tensor
+        Second input tensor, with one axis for each character in ``dim2``.
+    dim1, dim2 : str
+        Axis labels for ``volume`` and ``kernel``. Shared labels identify axes
+        that must have compatible lengths.
+    axis : str, default='jk'
+        Labels of the axes on which to apply the forward and inverse FFTs.
+    fourier : tuple[bool, bool], default=(False, False)
+        Whether ``volume`` and ``kernel``, respectively, are already in the
+        Fourier domain.
+
+    Returns
+    -------
+    torch.Tensor
+        Real-valued convolution result. Its axis order is printed and follows
+        the ordered union of ``dim1`` and ``dim2``.
+
+    Notes
+    -----
+    No explicit zero-padding is applied. The transformed axes must therefore
+    already have compatible sampled sizes, and the operation follows the
+    same-size circular-convolution convention.
+    """
     dim3 = dim1 + dim2
     dim3 = ''.join(sorted(set(dim3), key=dim3.index))
     print(f'Final dim: {dim3}')
 
     dims = [dim1, dim2, dim3]
 
-    axis_list = [[d.find(c) for c in axis] for d in dims]
+    axis_list = _axis_indices(dims, axis)
+    # axis_list = [[d.find(c) for c in axis] for d in dims]
 
     if fourier[0] == False:
         volume_fft = fftn(volume, dim=axis_list[0])
@@ -32,9 +85,9 @@ def partial_convolution_fft(volume: torch.tensor, kernel: torch.tensor, dim1: st
 
     conv = torch.einsum(f'{dim1},{dim2}->{dim3}', volume_fft, kernel_fft)
 
-    conv = ifftn(conv, dim=axis_list[2])  # inverse FFT of the product
-    conv = ifftshift(conv, dim=axis_list[2])  # Rotation of 180 degrees of the phase of the FFT
-    conv = torch.real(conv)  # Clipping to zero the residual imaginary part
+    conv = ifftn(conv, dim=axis_list[2])  # Transform the Fourier-domain product back to real space
+    conv = ifftshift(conv, dim=axis_list[2])  # Move the spatial origin to the centered-array convention
+    conv = torch.real(conv)  # Discard residual imaginary values from numerical round-off
 
     return conv
 
@@ -42,6 +95,43 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
                              axis: str = 'jk',  dim3: str = None, fourier: tuple = (False, False),
                              padding: list = None):
 
+    """Convolve real tensors along named axes using real-valued FFTs.
+
+    The axis-label strings are passed to ``torch.einsum`` after transforming
+    the labels listed in ``axis``. This supports partial convolutions while
+    preserving non-convolved axes such as axial planes, detector channels, or
+    independent noise realizations.
+
+    Parameters
+    ----------
+    kernel : torch.Tensor or array-like
+        First input, with one axis for each character in ``dim1``.
+    volume : torch.Tensor or array-like
+        Second input, with one axis for each character in ``dim2``.
+    dim1, dim2 : str
+        Axis labels for ``kernel`` and ``volume``.
+    axis : str, default='jk'
+        Labels of the real-space axes to transform and convolve.
+    dim3 : str or None, default=None
+        Output axis labels. When omitted, the ordered union of ``dim1`` and
+        ``dim2`` is used.
+    fourier : tuple[bool, bool], default=(False, False)
+        Whether ``kernel`` and ``volume``, respectively, are already in the
+        Fourier domain.
+    padding : list or tuple or None, default=None
+        Real-space lengths passed as ``s`` to ``rfftn`` and ``irfftn``. By
+        default, lengths are read from the transformed axes of ``volume``.
+
+    Returns
+    -------
+    torch.Tensor
+        Real-valued convolution result with axes ordered according to ``dim3``.
+
+    Notes
+    -----
+    With the default padding taken from ``volume``, the result follows a
+    same-size circular-convolution convention.
+    """
     kernel = torch.as_tensor(kernel)
     volume = torch.as_tensor(volume)
 
@@ -53,131 +143,202 @@ def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: s
 
     dims = [dim1, dim2, dim3]
 
-    axis_list = [[d.find(c) for c in axis] for d in dims]
+    axis_list = _axis_indices(dims, axis)
 
     if padding is None:
         padding = [volume.size(d) for d in axis_list[1]]
 
     if fourier[0] == False:
-        #kernel_shifted = ifftshift(kernel, dim=axis_list[0])  # Centra il kernel
+        # kernel_shifted = ifftshift(kernel, dim=axis_list[0])  # Optional kernel centering
         kernel_fft = rfftn(kernel, dim=axis_list[0], s=padding)
     else:
         kernel_fft = kernel
 
     if fourier[1] == False:
-        #volume_shifted = ifftshift(volume, dim=axis_list[1])  # Centra il volume
+        # volume_shifted = ifftshift(volume, dim=axis_list[1])  # Optional volume centering
         volume_fft = rfftn(volume, dim=axis_list[1], s=padding)
     else:
         volume_fft = volume
 
     conv = einsum(f'{dim1},{dim2}->{dim3}', kernel_fft, volume_fft)
     
-    conv = irfftn(conv, dim=axis_list[2], s=padding)  # inverse FFT of the product
-    conv = ifftshift(conv, dim=axis_list[2])  # Rotation of 180 degrees of the phase of the FFT
-    conv = real(conv)  # Clipping to zero the residual imaginary part
+    conv = irfftn(conv, dim=axis_list[2], s=padding)  # Transform the Fourier-domain product back to real space
+    conv = ifftshift(conv, dim=axis_list[2])  # Move the spatial origin to the centered-array convention
+    conv = real(conv)  # Discard residual imaginary values from numerical round-off
 
     return conv
 
 
 def forward_model(otf, obj):
+    """Apply the repository's 2D forward or back-projection convolution.
+
+    The first OTF axis is the object/PSF axial axis, axes 1 and 2 are the
+    lateral Fourier axes, and the optional final OTF axis is the detector
+    channel axis. The last object/data axis is the realization axis ``K``.
+
+    Typical forward-projection shapes are::
+
+        otf : (Nz, Nx, Ny_rfft, Nch)
+        obj : (Nz, Nx, Ny, K)
+        out : (Nz, Nx, Ny, Nch, K)
+
+    Typical back-projection shapes are::
+
+        otf : (Nz, Nx, Ny_rfft, Nch)
+        obj : (Nx, Ny, Nch, K)
+        out : (Nz, Nx, Ny, Nch, K)
+
+    Callers subsequently sum over ``Nz`` for forward projection or over
+    ``Nch`` for back-projection. Channel-free OTFs follow the analogous shape
+    convention without ``Nch``.
+
+    Parameters
+    ----------
+    otf : torch.Tensor
+        Fourier-domain PSF, usually generated with ``compute_otf_from_psf``.
+    obj : torch.Tensor
+        Object estimates for forward projection or data-space ratios for
+        back-projection.
+
+    Returns
+    -------
+    torch.Tensor
+        Partially convolved tensor before summation over axial planes or
+        detector channels.
+
+    Notes
+    -----
+    Back-projection is identified first from the data-space layout. This
+    resolves the otherwise ambiguous case ``Nz == Nx == Ny`` without changing
+    the standard forward/back-projection conventions used by the package.
     """
-    Performs the convolution between the OTF and an array with the same dimensionality or less (object or dataset).
-    The dimension K is optional.
-
-    Parameters:
-        obj (Tensor): Object (Nz x Nx x Ny x K) or fraction (Nz x Nx x Ny x K) or (Nx x Ny x K x Nch).
-        otf (Tensor): Fourier transform of the PSF (Nz x Nx x Ny x Nch) or (Nx x Ny x K x Nch).
-
-    Returns:
-        Tensor: Result of the convolution (Nx x Ny x K) or (Nx x Ny x K x Nch).
-    """
-
-    conv_dims = 2  
-
+    conv_dims = 2
     alphabet = string.ascii_lowercase
 
-    str_otf = alphabet[:otf.ndim]       # 'abcd' for 4D OTF
-    axis_str = alphabet[1:conv_dims+1]  # 'bc' for 2D convolution
-    
-    if obj.shape[0] == otf.shape[0]:         # and obj.shape[-1] != otf.shape[-1] PSF * object
-        str_obj = alphabet[:conv_dims+1] + alphabet[otf.ndim] # 'abce' for 4D object with K dimension
-    else:                                                                       # PSF^T * fraction    
-        str_obj = alphabet[1:obj.ndim+1]
-    
-    #print(f'OTF shape: {otf.shape}, Object shape: {obj.shape}, str_otf: {str_otf}, str_obj: {str_obj}, axis_str: {axis_str}')
-    dset = partial_convolution_rfft(otf, obj, dim1=str_otf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
+    str_otf = alphabet[:otf.ndim]       # 'abcd' for (Nz, Nx, Ny_rfft, Nch)
+    axis_str = alphabet[1:conv_dims+1]  # 'bc': always convolve lateral axes 1 and 2
 
+    is_forward = obj.ndim >= 3 and obj.shape[0] == otf.shape[0] and obj.shape[1] == otf.shape[1]
+    is_backprojection = obj.ndim == otf.ndim and obj.shape[0] == otf.shape[1]
+    if otf.ndim >= 4:
+        is_backprojection = is_backprojection and obj.shape[-2] == otf.shape[-1]
+
+    if is_backprojection:
+        str_obj = alphabet[1:obj.ndim+1]  # 'bcde' for (Nx, Ny, Nch, K)
+    elif is_forward:
+        str_obj = alphabet[:conv_dims+1] + alphabet[otf.ndim]  # 'abce' for (Nz, Nx, Ny, K)
+    else:
+        raise ValueError(f"Incompatible OTF and object shapes: {tuple(otf.shape)} and {tuple(obj.shape)}.")
+
+    dset = partial_convolution_rfft(otf, obj, dim1=str_otf, dim2=str_obj, axis=axis_str, fourier=(1, 0))
     return dset
 
 
 def centered_pad(arr: torch.Tensor, target_shape: tuple) -> torch.Tensor:
+    """Zero-pad the two square spatial axes around the input center.
+
+    The supported layouts are ``(Mx, My)``, ``(Mx, My, Nch)``,
+    ``(Nz, Mx, My)``, and ``(Nz, Mx, My, Nch)``. For tensors with at least
+    three axes, equal dimensions at positions 1 and 2 are interpreted as the
+    lateral PSF axes. This gives the 3D PSF convention priority when
+    ``Nz == Mx == My``. Otherwise, equal dimensions at positions 0 and 1 are
+    interpreted as a 2D spatial pair.
+
+    Parameters
+    ----------
+    arr : torch.Tensor
+        Tensor containing square spatial dimensions ``(Mx, My)`` in axes
+        ``(0, 1)`` or ``(1, 2)``.
+    target_shape : tuple
+        Target lateral size; only ``target_shape[:2] = (Nx, Ny)`` is used.
+
+    Returns
+    -------
+    torch.Tensor
+        Zero-padded tensor with unchanged non-spatial axes and lateral size
+        ``(Nx, Ny)``. For odd padding differences, the extra pixel is placed
+        on the right or bottom side.
     """
-    Pads a tensor to match the target shape by centering the original data.
-
-    Parameters:
-        arr (Tensor): input tensor of shape (Mx, My).
-        target_shape (tuple): Target shape (Nx, Ny).
-
-    Returns:
-        Tensor: Padded tensor of shape (Nx, Ny) with the input centered.
-    """
-
     conv_dims = 2
-    if arr.shape[0] == arr.shape[1]:
-        Mx, My = arr.shape[:conv_dims]
-        axis_to_move = (0,1)
-    elif arr.shape[1] == arr.shape[2]:
+    if arr.ndim >= 3 and arr.shape[1] == arr.shape[2]:
         Mx, My = arr.shape[1:conv_dims+1]
         axis_to_move = (1, 2)
+    elif arr.ndim >= 2 and arr.shape[0] == arr.shape[1]:
+        Mx, My = arr.shape[:conv_dims]
+        axis_to_move = (0, 1)
     else:
-        raise ValueError("Input tensor must have the same size in the first two dimensions or in the second and third dimensions.")
-    
-    Nx, Ny = target_shape[:conv_dims]
+        raise ValueError("Input tensor must contain a square spatial pair in axes (0, 1) or (1, 2).")
 
+    Nx, Ny = target_shape[:conv_dims]
     if Nx < Mx or Ny < My:
         raise ValueError("Target shape must be larger than or equal to the input shape in both dimensions.")
 
     pad_x_total = Nx - Mx
     pad_y_total = Ny - My
-
     pad_left = pad_y_total // 2
     pad_right = pad_y_total - pad_left
     pad_top = pad_x_total // 2
     pad_bottom = pad_x_total - pad_top
-    pad = (pad_left, pad_right, pad_top, pad_bottom)
-    
-    # Move axes (1,2) to the last two positions, pad them, then move back
+
+    # Move the inferred spatial axes to the end, pad them, and restore the original order.
     arr_moved = torch.movedim(arr, axis_to_move, (-2, -1))
     arr_moved = functional.pad(arr_moved, (pad_left, pad_right, pad_top, pad_bottom))
-    padded_arr = torch.movedim(arr_moved, (-2, -1), axis_to_move)
-    
-    #pad_extended = (0,) * (2 * (arr.ndim - 2)) + pad
-    #padded_arr = functional.pad(arr, pad_extended)
+    return torch.movedim(arr_moved, (-2, -1), axis_to_move)
 
-
-    return padded_arr
 
 def compute_otf_from_psf(psf, target_shape):
+    """Pad, normalize, and Fourier-transform a PSF over its lateral axes.
+
+    The repository convention is ``psf.shape = (Nz, Mx, My, Nch)``. A common
+    confocal case is ``(1, Mx, My, 1)``. The PSF is padded to ``(Nx, Ny)``,
+    normalized independently for every first-axis entry over all remaining
+    axes, and transformed over axes ``(1, 2)``.
+
+    Parameters
+    ----------
+    psf : torch.Tensor
+        Real-space PSF, typically shaped ``(Nz, Mx, My, Nch)``.
+    target_shape : tuple
+        Target lateral image size. The first two values are interpreted as
+        ``(Nx, Ny)``.
+
+    Returns
+    -------
+    torch.Tensor
+        Complex OTF with typical shape ``(Nz, Nx, Ny // 2 + 1, Nch)``.
+    """
     num_axis_to_conv = 2
     axis_to_conv = tuple(torch.arange(1, num_axis_to_conv+1))
-    psf_pad = centered_pad(psf, target_shape=target_shape) # Centered padding of PSF to match dataset shape
-    # Normalize PSF
+    psf_pad = centered_pad(psf, target_shape=target_shape)  # (Nz, Nx, Ny, Nch)
+    # Normalize each first-axis PSF entry over all remaining axes
     norm_axis = tuple(np.arange(1, psf.ndim))
     psf_norm = psf_pad / psf_pad.sum(axis=norm_axis, keepdim=True)
-    psf_fft = rfftn(psf_norm, dim=axis_to_conv) # FFT of the PSF
+    psf_fft = rfftn(psf_norm, dim=axis_to_conv)  # (Nz, Nx, Ny // 2 + 1, Nch)
     
     return psf_fft
 
 def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
-    """
-    Calculate pixel-wise the Signal-to-Noise Ratio (SNR) of a dataset.
+    """Compute a pixel-wise signal-to-noise ratio across realizations.
 
-    Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x K.
-        smooth_sigma (float): Standard deviation for Gaussian smoothing. Default is 0 (no smoothing).
+    The last input axis is interpreted as ``K``, the number of independent
+    noise realizations. Signal and noise are the sample mean and PyTorch sample
+    standard deviation across that axis.
 
-    Returns:
-        float: SNR value.
+    Parameters
+    ----------
+    dset : torch.Tensor or np.ndarray
+        Dataset shaped ``(..., K)``; in current usage this is ``(Nx, Ny, K)``.
+    smooth_sigma : float, default=0
+        Standard deviation of an optional SciPy Gaussian filter. Smoothing is
+        CPU-only and adds the legacy offset ``0.1`` after filtering.
+    eps : float or None, default=None
+        Positive denominator offset. The float32 machine epsilon is used when
+        omitted.
+
+    Returns
+    -------
+    torch.Tensor
+        SNR map with shape ``dset.shape[:-1]``.
     """
     
     if eps is None:
@@ -199,6 +360,22 @@ def calculate_snr(dset, smooth_sigma: float = 0, eps = None):
     return snr
 
 def normalization(x, vmin, vmax):
+    """Linearly map the global input range to ``[vmin, vmax]``.
+
+    Parameters
+    ----------
+    x : torch.Tensor or np.ndarray
+        Input array of arbitrary shape.
+    vmin, vmax : scalar
+        Requested output values corresponding to the global minimum and
+        maximum of ``x``.
+
+    Returns
+    -------
+    torch.Tensor or np.ndarray
+        Rescaled array with the same shape and backend as ``x``. Constant
+        inputs evaluate to ``vmin`` because of the fixed denominator offset.
+    """
     x_min = x.min()
     x_max = x.max()
 
@@ -206,15 +383,28 @@ def normalization(x, vmin, vmax):
     return x_norm
 
 def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
-    """
-    Calculate a weight map based on the SNR of the dataset.
+    """Build an inverse-SNR weight map and repeat it over realizations.
 
-    Parameters:
-        dset (ndarray): Input dataset of shape Nx x Ny x K.
-        smooth_sigma (float): Standard deviation for Gaussian smoothing. Default is 0 (no smoothing).
+    Parameters
+    ----------
+    dset : torch.Tensor or np.ndarray
+        CPU dataset shaped ``(Nx, Ny, K)``. The last axis contains independent
+        noise realizations.
+    smooth_sigma : float, default=0
+        Standard deviation of the optional spatial Gaussian smoothing.
+    normalize : bool, default=True
+        If true, linearly map the weight range from its current minimum to 1.
 
-    Returns:
-        Tensor: Weight map of shape Nx x Ny.
+    Returns
+    -------
+    np.ndarray
+        Weight array shaped ``(Nx, Ny, K)``. The same 2D inverse-SNR map is
+        repeated along ``K``.
+
+    Notes
+    -----
+    The SNR is clipped at its 99.99th percentile before inversion. This helper
+    converts through NumPy and is therefore intended for CPU tensors.
     """
 
     if not isinstance(dset, torch.Tensor):
@@ -239,42 +429,58 @@ def calculate_weight_map(dset, smooth_sigma: float = 0, normalize: bool = True):
     return weight_map.numpy()
 
 def calculate_noise_variance(obj):
-    """ Compute the noise variance of an object tensor.
+    """Compute Fourier-domain statistics across repeated reconstructions.
 
-    Parameters:
-        obj (Tensor): Input object tensor of shape N_iter x Nx x Ny x L.
+    Parameters
+    ----------
+    obj : torch.Tensor
+        Reconstruction collection shaped ``(Niter, Nx, Ny, L)``, where ``L``
+        indexes repeated experiments or reconstruction realizations.
 
-    Returns:
-        noise mean (Tensor): Mean of the power spectrum across L dimension shape (N_iter, Nx, Ny).
-        noise variance (Tensor): Variance of the power spectrum across L dimension shape (N_iter, Nx, Ny).
+    Returns
+    -------
+    noise_mean : torch.Tensor
+        Squared magnitude of the mean complex Fourier spectrum across ``L``,
+        shaped ``(Niter, Nx, Ny)``.
+    noise_variance : torch.Tensor
+        Magnitude of the variance of the complex Fourier coefficients across
+        ``L``, shaped ``(Niter, Nx, Ny)``.
+
+    Notes
+    -----
+    The FFT is unnormalized and ``torch.var`` uses its default correction.
     """
 
     obj_fft = fftn(obj, dim=(1,2))
-    obj_fftshifted = fftshift(obj_fft, dim=(1,2))  # Shift the zero frequency component to the center
-    mean = obj_fftshifted.mean(dim=-1, keepdim=False)  # Average over L dimension
+    obj_fftshifted = fftshift(obj_fft, dim=(1,2))  # Place the zero-frequency component at the array center
+    mean = obj_fftshifted.mean(dim=-1, keepdim=False)  # Average complex Fourier coefficients over repeated runs L
     variance = obj_fftshifted.var(dim=-1, keepdim=False)
-    noise_mean = torch.abs(mean) ** 2  # Power spectrum mean
-    noise_variance = torch.abs(variance) # Power spectrum variance
+    noise_mean = torch.abs(mean) ** 2  # Squared magnitude of the mean complex spectrum
+    noise_variance = torch.abs(variance) # Magnitude of the Fourier-coefficient variance
     
     return noise_mean, noise_variance
 
 def radial_profile(data, center):
-    """
-    Calculation of the radial profile of an image
+    """Sum a 2D image into integer-radius annular bins.
 
     Parameters
     ----------
-    data : np.array(Nx x Ny)
-        image
-    center : np.array(2)
-        indices of the center of the image
+    data : array-like
+        Two-dimensional real or complex image shaped ``(Nx, Ny)``. Only the
+        real part contributes to the profile.
+    center : sequence of length 2
+        Radial origin in ``(x, y)`` index order.
 
     Returns
     -------
-    radialprofile : np.array( np.sqrt(Nx**2 + Ny**2) )
-        sum of the data over the angular coordinate
-    nr : int
-        number of pixels in the angular bin
+    radialprofile : np.ndarray
+        Sum of image values in each integer-radius bin, shaped ``(Nr,)``.
+    nr : np.ndarray
+        Number of pixels contributing to each radius, also shaped ``(Nr,)``.
+
+    Notes
+    -----
+    This function returns annular sums, not annular means.
     """
     
     y, x = np.indices((data.shape))
@@ -290,13 +496,18 @@ def radial_profile(data, center):
     return radialprofile, nr
 
 def compute_radial_noise_variance(obj):
-    """ Compute the radial noise variance of an object tensor.
+    """Compute radial profiles of Fourier variance for each iteration.
 
-    Parameters:
-        obj (Tensor): Input object tensor of shape N_iter x Nx x Ny x K.
+    Parameters
+    ----------
+    obj : torch.Tensor
+        CPU tensor shaped ``(Niter, Nx, Ny, L)``. ``L`` indexes repeated
+        reconstructions used to estimate the Fourier variance.
 
-    Returns:
-        Tensor: Radial noise variance of shape (N_iter, Nx, Ny).
+    Returns
+    -------
+    torch.Tensor
+        Radial variance profiles shaped ``(Niter, Nr)``.
     """
     n_iter, Nx, Ny, _ = obj.shape
     cx = int((Nx + np.mod(Nx, 2)) / 2)
@@ -309,18 +520,25 @@ def compute_radial_noise_variance(obj):
     for n in range(n_iter):
         dato, _ = radial_profile(noise_variance[n], center=center)
         radial_variance.append(dato)
-    return torch.tensor(radial_variance)
+    return torch.from_numpy(np.stack(radial_variance))
 
 def root_mean_square_error(img_ref, img):
-    """
-    Compute the Root Mean Square Error (RMSE) between two images.
+    """Compute RMSE between a reference image and one or more estimates.
 
-    Parameters:
-        img (Tensor): Input image of shape Num_iter x Nx x Ny.
-        img_ref (Tensor): Reference image of shape Nx x Ny.
+    Parameters
+    ----------
+    img_ref : torch.Tensor or np.ndarray
+        Reference image shaped ``(Nx, Ny)`` or with the same trailing shape as
+        ``img``.
+    img : torch.Tensor or np.ndarray
+        Estimate shaped ``(Nx, Ny)`` or ``(..., Nx, Ny)``. Leading axes are
+        retained in the output.
 
-    Returns:
-        rmse (Tensor): RMSE value.
+    Returns
+    -------
+    np.ndarray
+        Scalar RMSE or an array over the leading axes of ``img`` after
+        singleton dimensions are squeezed.
     """
 
     img = torch.tensor(img, dtype=torch.float32) if not isinstance(img, torch.Tensor) else img.float()
@@ -339,15 +557,24 @@ def root_mean_square_error(img_ref, img):
     return torch.squeeze(rmse).numpy()
 
 def peak_signal_to_noise_ratio(img_ref, img, normalize_entries = True):
-    """
-    Compute the Peak Signal-to-Noise Ratio (PSNR) between two images.
+    """Compute peak signal-to-noise ratio for one or more estimates.
 
-    Parameters:
-        img (Tensor): Input image of shape Nx x Ny.
-        img_ref (Tensor): Reference image of shape Nx x Ny.
+    Parameters
+    ----------
+    img_ref : torch.Tensor or np.ndarray
+        Reference image shaped ``(Nx, Ny)`` or matching the trailing image
+        dimensions of ``img``.
+    img : torch.Tensor or np.ndarray
+        Estimate shaped ``(Nx, Ny)`` or ``(..., Nx, Ny)``.
+    normalize_entries : bool, default=True
+        Normalize each image by its sum over the compared image axes before
+        computing the mean-squared error.
 
-    Returns:
-        psnr (Tensor): PSNR value in decibels (dB).
+    Returns
+    -------
+    np.ndarray
+        PSNR in decibels, with leading estimate axes retained and singleton
+        dimensions squeezed.
     """
 
     img = torch.tensor(img, dtype=torch.float32) if not isinstance(img, torch.Tensor) else img.float()
@@ -371,73 +598,78 @@ def peak_signal_to_noise_ratio(img_ref, img, normalize_entries = True):
     return torch.squeeze(psnr).numpy()
 
 def kl_divergence(img_ref, img, normalize_entries=True, eps=None, full_KL=False, k_loss=False):
-    """
-    Compute the Kullback-Leibler divergence (KL divergence) between two images.
+    """Compute a reduced Poisson Kullback--Leibler data fidelity.
 
-    Parameters:
-        img (Tensor): Input image of shape Nx x Ny.
-        img_ref (Tensor): Reference image of shape Nx x Ny.
+    Parameters
+    ----------
+    img_ref : torch.Tensor or np.ndarray
+        Reference photon-count data ``a`` with shape ``(Nx, Ny, ...)``.
+    img : torch.Tensor or np.ndarray
+        Predicted data ``b`` with the same shape or one additional leading
+        iteration axis, commonly ``(Niter, Nx, Ny, Nch, K)``.
+    normalize_entries : bool, default=True
+        Normalize both inputs by their sums over the reduction axes.
+    eps : float or None, default=None
+        Positive offset used inside divisions and logarithms.
+    full_KL : bool, default=False
+        Include the linear term ``b - a`` and compute
+        ``b - a + a * log(a / b)``. When false, only the logarithmic term is
+        returned; this is equivalent after summation when flux is conserved.
+    k_loss : bool, default=False
+        Preserve the last axis ``K`` instead of reducing it.
 
-    Returns:
-        kl_div (Array): KL divergence value.
+    Returns
+    -------
+    torch.Tensor
+        Reduced fidelity values on the same device as the tensor input, with
+        singleton dimensions squeezed.
     """
+    device = img.device if isinstance(img, torch.Tensor) else img_ref.device if isinstance(img_ref, torch.Tensor) else None
+    img = torch.as_tensor(img, dtype=torch.float32, device=device)
+    img_ref = torch.as_tensor(img_ref, dtype=torch.float32, device=device)
 
     if eps is None:
-        eps = torch.finfo(torch.float32).eps
-    img = torch.tensor(img, dtype=torch.float32) if not isinstance(img, torch.Tensor) else img.float()
-    img_ref = torch.tensor(img_ref, dtype=torch.float32) if not isinstance(img_ref, torch.Tensor) else img_ref.float()
+        eps = torch.finfo(img.dtype).eps
 
     diff_dim = img.ndim - img_ref.ndim
-
+    if diff_dim < 0:
+        raise ValueError("img cannot have fewer dimensions than img_ref.")
     if diff_dim > 0:
-        img_ref = img_ref.unsqueeze(0)
+        img_ref = img_ref.reshape((1,) * diff_dim + tuple(img_ref.shape))
 
     if k_loss is True:
-        axis_to_sum = tuple(range(diff_dim, img.ndim-1))  # Sum over all but the first dimension (num_iter) and last (K)
+        axis_to_sum = tuple(range(diff_dim, img.ndim-1))  # Preserve Niter and the final realization axis K
     else:
-        axis_to_sum = tuple(range(diff_dim, img.ndim))  # Sum over all but the first dimension (num_iter)
+        axis_to_sum = tuple(range(diff_dim, img.ndim))  # Preserve only leading iteration axes
 
     if normalize_entries is True:
         img = img / torch.sum(img, dim=axis_to_sum, keepdim=True)
         img_ref = img_ref / torch.sum(img_ref, dim=axis_to_sum, keepdim=True)
-    
-    arg = img_ref / (img + eps)
-    fidelity = img_ref * torch.log( arg + eps )
-    
+
+    fidelity = img_ref * torch.log((img_ref + eps) / (img + eps))
     if full_KL:
-        fidelity = fidelity + img_ref - img
+        fidelity = fidelity + img - img_ref
 
-    kl_div = torch.sum(fidelity, dim=axis_to_sum)
+    return torch.squeeze(torch.sum(fidelity, dim=axis_to_sum))
 
-    return torch.squeeze(kl_div).cpu().numpy()
-
-def forward_fill_nan(tensor):
-    
-    tensor = torch.tensor(tensor)
-    
-    # mask True dove ci sono NaN
-    mask = torch.isnan(tensor)
-    
-    # Sostituisco i NaN con 0 temporaneamente
-    tensor = torch.where(mask, torch.zeros_like(tensor), tensor)
-
-    # Creiamo un indicatore cumulativo dei valori non-NaN
-    # Questo ci permette di propagare l'ultimo valore valido
-    # step 1: indice booleano per i valori validi
-    valid = (~mask).float()
-
-    # step 2: cumulative sum per contare quante volte abbiamo valori validi
-    cumsum_valid = valid.cumsum(dim=0)
-
-    # step 3: somma cumulativa dei valori
-    cumsum_tensor = tensor.cumsum(dim=0)
-
-    # step 4: calcolo della media cumulativa * numero di valori validi → ultimo valore valido
-    filled = torch.where(cumsum_valid > 0, cumsum_tensor / cumsum_valid, torch.zeros_like(tensor))
-
-    return filled
 
 def autocorrelation2d(image, normalize=True):
+    """Compute a centered circular autocorrelation of a 2D image.
+
+    Parameters
+    ----------
+    image : array-like
+        Two-dimensional image shaped ``(Nx, Ny)``. It is converted to a float
+        NumPy array and mean-centered before the FFT.
+    normalize : bool, default=True
+        Divide the autocorrelation by its global maximum.
+
+    Returns
+    -------
+    np.ndarray
+        Real, FFT-shifted circular autocorrelation with the same shape as the
+        input image.
+    """
     image = np.asarray(image, dtype=float)
     image = image - image.mean()
 
