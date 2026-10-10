@@ -10,42 +10,7 @@ import torch
 
 from scipy.ndimage import gaussian_filter
 
-from .utils import centered_pad
-
-
-def _as_float_tensor(array, device):
-    """Convert an array-like input to a float32 tensor on ``device``."""
-    return torch.as_tensor(array, dtype=torch.float32, device=device)
-
-
-def _standardize_dataset(dset: torch.Tensor) -> torch.Tensor:
-    """Return a dataset with canonical shape ``(Nx, Ny, Nch, K)``."""
-    if dset.ndim == 3:
-        return dset.unsqueeze(-2)  # (Nx, Ny, K) -> (Nx, Ny, 1, K)
-    if dset.ndim == 4:
-        return dset
-    raise ValueError("dset must have shape (Nx, Ny, K) or (Nx, Ny, Nch, K).")
-
-
-def _standardize_psf(psf: torch.Tensor, n_channels: int) -> torch.Tensor:
-    """Return a PSF with canonical shape ``(Nz, Mx, My, Nch)``."""
-    if psf.ndim == 2:
-        psf = psf.unsqueeze(0).unsqueeze(-1)  # (Mx, My) -> (1, Mx, My, 1)
-    elif psf.ndim == 3:
-        if psf.shape[1] == psf.shape[2]:
-            psf = psf.unsqueeze(-1)  # (Nz, Mx, My) -> (Nz, Mx, My, 1)
-        elif psf.shape[0] == psf.shape[1]:
-            psf = psf.unsqueeze(0)  # (Mx, My, Nch) -> (1, Mx, My, Nch)
-        else:
-            raise ValueError("A 3D PSF must have shape (Nz, Mx, My) or (Mx, My, Nch).")
-    elif psf.ndim != 4:
-        raise ValueError("psf must have shape (Mx, My), (Nz, Mx, My), (Mx, My, Nch), or (Nz, Mx, My, Nch).")
-
-    if psf.shape[1] != psf.shape[2]:
-        raise ValueError("The PSF must be square in its lateral dimensions Mx and My.")
-    if psf.shape[-1] != n_channels:
-        raise ValueError(f"PSF and dataset channel counts differ: {psf.shape[-1]} != {n_channels}.")
-    return psf
+from .utils import as_float_tensor, centered_pad, standardize_dataset, standardize_psf
 
 
 def flat(shape, flux, device):
@@ -68,7 +33,7 @@ def flat(shape, flux, device):
         ``Nx``, and ``Ny`` recovers the supplied flux for every realization.
     """
     shape = tuple(shape)
-    flux = _as_float_tensor(flux, device)
+    flux = as_float_tensor(flux, device, dtype=torch.float32)
     return torch.ones(shape, dtype=flux.dtype, device=device) * flux / np.prod(shape[:-1])
 
 
@@ -95,11 +60,11 @@ def data(dset, flux, device):
         Initialization shaped ``(1, Nx, Ny, K)``. The singleton leading axis
         is the axial object dimension ``Nz``.
     """
-    dset = _standardize_dataset(_as_float_tensor(dset, device)).sum(dim=-2)  # (Nx, Ny, K)
+    dset = standardize_dataset(dset, device, dtype=torch.float32).sum(dim=-2)  # (Nx, Ny, K)
     smoothed = gaussian_filter(dset.detach().cpu().numpy(), sigma=1, mode='constant', cval=0, truncate=4, axes=(0, 1))
     init = torch.as_tensor(smoothed, dtype=dset.dtype, device=device)
 
-    flux = _as_float_tensor(flux, device).reshape(-1)
+    flux = as_float_tensor(flux, device, dtype=torch.float32).reshape(-1)
     if flux.numel() != init.shape[-1]:
         raise ValueError(f"Flux and dataset realization counts differ: {flux.numel()} != {init.shape[-1]}.")
 
@@ -136,8 +101,7 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
     dset : torch.Tensor
         Dataset shaped ``(Nx, Ny, K)`` or ``(Nx, Ny, Nch, K)``.
     psf : torch.Tensor
-        PSF shaped ``(Mx, My)``, ``(Nz, Mx, My)``, ``(Mx, My, Nch)``, or
-        ``(Nz, Mx, My, Nch)``.
+        PSF shaped ``(Mx, My)``, ``(Mx, My, Nch)``, or ``(Nz, Mx, My, Nch)``.
     max_iter : int, default=5
         Number of RL iterations.
     epsilon : float or None, default=None
@@ -153,8 +117,8 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
         raise ValueError("max_iter must be a non-negative integer.")
 
     device = dset.device if isinstance(dset, torch.Tensor) else torch.device('cpu')
-    dset = _standardize_dataset(_as_float_tensor(dset, device))
-    psf = _standardize_psf(_as_float_tensor(psf, device), n_channels=dset.shape[-2])
+    dset = standardize_dataset(dset, device, dtype=torch.float32)
+    psf = standardize_psf(as_float_tensor(psf, device, dtype=torch.float32))
 
     image = dset.sum(dim=-1)  # (Nx, Ny, Nch): full-flux measurement
     spatial_shape = tuple(image.shape[:2])
@@ -190,7 +154,7 @@ def rl_deconvolution(dset: torch.Tensor, psf: torch.Tensor, max_iter: int = 5, e
     return obj.unsqueeze(-1).repeat(1, 1, 1, n_rep) / n_rep
 
 
-def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: int = 5):
+def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: int = 10):
     """Initialize the realization-specific reconstruction variables.
 
     Parameters
@@ -198,8 +162,7 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
     dset : torch.Tensor or np.ndarray
         Dataset shaped ``(Nx, Ny, K)`` or ``(Nx, Ny, Nch, K)``.
     psf : torch.Tensor or np.ndarray
-        PSF shaped ``(Mx, My)``, ``(Nz, Mx, My)``, ``(Mx, My, Nch)``, or
-        ``(Nz, Mx, My, Nch)``.
+        PSF shaped ``(Mx, My)``, ``(Mx, My, Nch)``, or ``(Nz, Mx, My, Nch)``.
     method : {'flat', 'data', 'rl'}, default='flat'
         Initialization strategy. ``flat`` distributes each realization flux
         uniformly, ``data`` smooths the corresponding measurement, and ``rl``
@@ -216,8 +179,8 @@ def initialize(dset, psf, method: str = 'flat', device: str = None, max_iter: in
         Initial object estimates shaped ``(Nz, Nx, Ny, K)``.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device is None else torch.device(device)
-    dset = _standardize_dataset(_as_float_tensor(dset, device))
-    psf = _standardize_psf(_as_float_tensor(psf, device), n_channels=dset.shape[-2])
+    dset = standardize_dataset(dset, device, dtype=torch.float32)
+    psf = standardize_psf(as_float_tensor(psf, device, dtype=torch.float32))
 
     flux = dset.sum(dim=(0, 1, 2), keepdim=True)  # (1, 1, 1, K)
     method = method.lower()

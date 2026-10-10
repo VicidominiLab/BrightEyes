@@ -1,1 +1,1 @@
-from .sgm_optimizer import variance_reconstruction, batch_reconstruction
+from .optimizer import variance_reconstruction, batch_reconstruction

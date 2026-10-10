@@ -1,168 +1,139 @@
+"""Data-fidelity and realization-consistency losses used by ``varreg``.
+
+Array convention
+----------------
+``Nx, Ny`` are the lateral image dimensions, ``Nz`` is the number of object
+planes, ``Nch`` the detector-channel axis, ``K`` the independent noise
+realizations, and ``Niter`` an optional leading reconstruction-history axis.
+"""
+
 import torch
-import string
-import einops
+from torch.fft import rfftn
 
-from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
+from .regularizers import compute_centroid
+from .utils import (
+    forward_model, kl_divergence, standardize_dataset, standardize_fidelity_weight,
+    standardize_object_history, standardize_psf,
+)
 
-from .utils import compute_otf_from_psf, forward_model, partial_convolution_rfft, centered_pad, kl_divergence
 
+def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.Tensor = 1, full_KL=False, k_loss=True):
+    """Compute Poisson data fidelity for one object or a reconstruction history.
 
-def fidelity_loss(dataset, obj_set, psf, eps=None, weight_map: torch.tensor = 1, full_KL=False, k_loss=False):
+    Parameters
+    ----------
+    dataset : torch.Tensor or array-like
+        Measured photon counts shaped ``(Nx, Ny, Nch, K)``. Singleton channel
+        or realization axes may be omitted.
+    obj_set : torch.Tensor or array-like
+        One reconstruction ``(Nz, Nx, Ny, K)`` or a history
+        ``(Niter, Nz, Nx, Ny, K)``. Reduced single-channel/single-realization
+        layouts are accepted and standardized internally.
+    psf : torch.Tensor or array-like
+        Real PSF ``(Nz, Mx, My, Nch)`` or precomputed complex OTF
+        ``(Nz, Nx, Ny_rfft, Nch)``. Reduced 2D and 3D layouts are accepted.
+    eps : float or None, default=None
+        Positive offset used in the KL division and logarithm.
+    weight_map : scalar or array-like, default=1
+        Optional point-wise fidelity weight broadcastable over ``Nx, Ny, Nch, K``.
+    full_KL : bool, default=False
+        Include the linear term ``prediction - data``. With per-realization
+        flux conservation, its spatial sum is zero and the logarithmic term is
+        equivalent up to numerical precision.
+    k_loss : bool, default=True
+        Preserve the realization axis ``K``. This is required by the package's
+        realization-wise Armijo line search; set to ``False`` to sum over ``K``.
+
+    Returns
+    -------
+    torch.Tensor
+        Per-realization losses shaped ``(Niter, K)`` when ``k_loss=True`` or
+        total losses shaped ``(Niter,)`` otherwise. Singleton axes are squeezed.
     """
-    Compute the fidelity loss between data and the forward value from predicted solution.
+    device = obj_set.device if isinstance(obj_set, torch.Tensor) else None
+    obj_probe = torch.as_tensor(obj_set, device=device)
+    dtype = obj_probe.dtype if obj_probe.is_floating_point() else torch.float32
 
-    Parameters:
-    dataset (Tensor): Input data tensor with dimensions Nx x Ny or Nx x Ny x K.
-    obj_set (Tensor): Predicted object tensor with dimensions num_iter x Nx x Ny or num_iter x Nx x Ny x K.
-    psf (Tensor): Point spread function with dimensions Mx x My or Mx x My x K or the corresponding otf.
-    full_KL (bool): Whether to use full KL divergence with normalization.
+    psf_fft = standardize_psf(psf, device=device, dtype=dtype, target_shape=torch.as_tensor(dataset).shape[:2])
+    obj_history = standardize_object_history(obj_probe, psf_fft.shape[0], device)
+    prediction = torch.stack([forward_model(psf_fft, obj).sum(dim=0) for obj in obj_history], dim=0)
+    dataset = standardize_dataset(dataset, device=prediction.device, dtype=prediction.dtype)
 
-    Returns:
-    Tensor: Computed fidelity loss.
-    """
-    
     if eps is None:
-        eps = 1e-8
+        eps = torch.finfo(prediction.dtype).eps
+    weight = standardize_fidelity_weight(weight_map, prediction)
+    if weight.ndim == 0 and weight.item() == 1:
+        return kl_divergence(dataset, prediction, normalize_entries=False, eps=eps, full_KL=full_KL, k_loss=k_loss)
 
-    psf = torch.as_tensor(psf)
-    num_axis_to_conv = 2 
-    
-    if obj_set.shape[1:num_axis_to_conv+1] == dataset.shape[:num_axis_to_conv]: #If I do not have num_iter
-        obj_set = obj_set.unsqueeze(0)  # Add a iter dimension
-        
-    if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
-        num_axis_to_conv = 2
-        sz = tuple(dataset.shape[:num_axis_to_conv])
-        psf_fft = compute_otf_from_psf(psf, target_shape=sz)
-    elif torch.is_complex(psf):
-        psf_fft = psf
-    else:
-        raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
-            
-    if psf.is_floating_point():         # If I have a PSF, I need to compute its FFT
-        axis_to_conv = tuple(torch.arange(1, num_axis_to_conv+1))
-        sz = dataset.shape[:num_axis_to_conv]
-        psf_pad = centered_pad(psf, target_shape=sz) # Centered padding of PSF to match dataset shape
-        psf_fft = rfftn(psf_pad, dim=axis_to_conv) # FFT of the PSF
-    elif torch.is_complex(psf):
-        psf_fft = psf
-    else:
-        raise ValueError(f"Unsupported PSF dtype: {psf.dtype}")
-
-    # alphabet = string.ascii_lowercase
-    
-    # str_psf = alphabet[1:psf_fft.ndim+1]   # 'bcd'
-    # str_obj = alphabet[:num_axis_to_conv+1] # 'abc'
-    # if len(str_obj) != obj_set.ndim:
-    #     str_obj += alphabet[dataset.ndim]  # 'abc e'
-        
-    # axis_str = alphabet[1:num_axis_to_conv+1] # 'bc'
-    # str_final = alphabet[:dataset.ndim + 1]  # 'abcde'
-
-    # if dataset.ndim == num_axis_to_conv or dataset.ndim == num_axis_to_conv + 1: # No K and no Ch dimension or no K but Ch dimension
-    #     axis_to_sum = tuple(range(1, dataset.ndim + 1))  # Sum over all but the first dimension (num_iter)
-    # else:
-    #     axis_to_sum = tuple(range(1, dataset.ndim))  # Sum over all but the first dimension (num_iter)
-    # forward = partial_convolution_rfft(psf_fft, obj_set, dim1=str_psf, dim2=str_obj, dim3=str_final, axis=axis_str, fourier=(1,0))
-    
-    forward_obj = None
-    for it in range(obj_set.shape[0]):
-        forward_it = forward_model(psf_fft, obj_set[it]).sum(0) #sum over z
-        if it == 0:
-            forward_obj = forward_it
-        else:
-            forward_obj = torch.cat((forward_obj, forward_it), dim=0)
-    
-    fidelity = kl_divergence(dataset, forward_obj, full_KL=full_KL, normalize_entries = False, k_loss=k_loss)
-    # fidelity = forward - dataset * torch.log(forward + eps)
-
-    # if full_KL:
-    #     fidelity = fidelity + dataset * torch.log( dataset + eps ) - dataset
-
-    # idx = ~torch.isfinite(fidelity)
-    # fidelity[ idx ] = 0
-
-    if torch.is_tensor(weight_map):
-        letters = ["x", "y", "z"][: weight_map.ndim]
-        lhs = " ".join(letters)
-        ein_str = f"b {lhs} ... , {lhs} -> b"
-        fidelity = einops.einsum(fidelity, weight_map, ein_str)
-    # else:
-    #     fidelity = fidelity.sum(axis=axis_to_sum) # Sum over all but the first dimension (num_iter if present) and last (K)
-        
-    return fidelity.squeeze()
+    data = dataset.unsqueeze(0)
+    fidelity = data * torch.log((data + eps) / (prediction + eps))
+    if full_KL:
+        fidelity = fidelity + prediction - data
+    fidelity = fidelity * weight
+    axes = (1, 2, 3) if k_loss else (1, 2, 3, 4)
+    return torch.squeeze(fidelity.sum(dim=axes))
 
 
-def regularization_loss(obj_set: torch.tensor, regularizer: str = 'l2', weight_map: torch.tensor = 1, otf = None,
+def regularization_loss(obj_set: torch.Tensor, regularizer: str = 'l2', weight_map: torch.Tensor = 1, otf=None,
                         iteration_axis: bool = False, eps: float = None, fourier: bool = False):
+    """Compute a realization-consistency penalty while preserving the ``K`` axis.
+
+    Parameters
+    ----------
+    obj_set : torch.Tensor
+        Reconstruction ensemble ``(..., Nx, Ny, K)``. When ``iteration_axis``
+        is true, the leading axis is interpreted as ``Niter``.
+    regularizer : {'l2', 'l1', 'kl'}, default='l2'
+        Point-wise distance from the centroid across ``K``. ``kl`` denotes the
+        generalized KL divergence and is available only in the spatial domain.
+    weight_map : scalar or array-like, default=1
+        Spatial regularization weight broadcastable with ``obj_set``.
+    otf : torch.Tensor or None, default=None
+        Optional Fourier-domain weight. Its magnitude must be broadcastable
+        with the Fourier-domain residuals.
+    iteration_axis : bool, default=False
+        Preserve the first axis as ``Niter`` when summing object dimensions.
+    eps : float or None, default=None
+        Positive numerical floor used by the KL branch and MTF normalization.
+    fourier : bool, default=False
+        Evaluate the L2 residual after an RFFT over the two lateral axes.
+
+    Returns
+    -------
+    torch.Tensor
+        Penalty per realization, shaped ``(K,)`` or ``(Niter, K)``.
     """
-    Compute the variance regularization term for a set of objects.
-
-    Parameters:
-    obj_set (Tensor): Input tensor of shape Nx x Ny x K.
-    regularizer (str): Type of regularization ('l1', 'l2', 'kl').
-
-    Returns:
-    float: Variance regularization value.
-    """
-
+    obj_set = torch.as_tensor(obj_set)
+    regularizer = regularizer.lower()
     if eps is None:
         eps = 1e-8
+    if eps <= 0:
+        raise ValueError("eps must be positive.")
+    if regularizer not in {'l1', 'l2', 'kl'}:
+        raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
 
-    if fourier is True:
-        ft_dim = (1, 2) if iteration_axis is True else (0, 1) # to generalize to 3D later
-        obj_set = rfftn(obj_set, norm = "forward", dim=ft_dim)
-        # obj_set = fftshift(obj_set, dim=ft_dim) # useful for visualization but not for computation
+    if fourier:
+        if regularizer != 'l2':
+            raise ValueError("Fourier-domain regularization currently supports only the L2 norm.")
+        obj_set = rfftn(obj_set, norm='forward', dim=(-3, -2))
 
-    if iteration_axis:
-        axis_to_sum = tuple(range(1, obj_set.ndim-1))
-    else:
-        axis_to_sum = tuple(range(0, obj_set.ndim-1))
+    axis_to_sum = tuple(range(1, obj_set.ndim-1)) if iteration_axis else tuple(range(obj_set.ndim-1))
+    centroid = compute_centroid(obj_set, regularizer, eps=eps)
 
-    centroid = compute_centroid(obj_set, regularizer)
-
-    if regularizer.lower() == 'l2':
+    if regularizer == 'l2':
         residuals = torch.abs(obj_set - centroid)**2
-    elif regularizer.lower() == 'l1':
+    elif regularizer == 'l1':
         residuals = torch.abs(obj_set - centroid)
-    elif regularizer.lower() == 'kl':
-        residuals = centroid * torch.log( (centroid + eps) / (obj_set + eps) )
     else:
-        raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
+        safe_obj = obj_set.clamp_min(eps)
+        residuals = safe_obj - centroid + centroid * torch.log(centroid / safe_obj)
 
-    residuals = residuals * weight_map
+    weight = torch.as_tensor(weight_map, dtype=residuals.real.dtype, device=residuals.device)
+    residuals = residuals * weight
 
-    if fourier is True and otf is not None:
-        mtf = torch.abs(otf)
-        mtf = mtf / mtf.max()
-        mtf[mtf < 1e-2] = 1e-2
-        weight = 1/mtf
-        #print(weight.shape, residuals.shape)
-        residuals = residuals * weight
+    if fourier and otf is not None:
+        mtf = torch.abs(torch.as_tensor(otf, device=residuals.device))
+        mtf = mtf / mtf.max().clamp_min(eps)
+        residuals = residuals / mtf.clamp_min(1e-2)
 
-    return residuals.sum(axis=axis_to_sum)
-
-
-def compute_centroid(obj_set: torch.tensor, regularizer: str = 'l2'):
-    """
-    Compute the centroid of a set of objects based on the specified regularization.
-
-    Parameters:
-    obj_set (Tensor): Input tensor of shape Nx x Ny x K.
-    regularizer (str): Type of regularization ('l1', 'l2', 'kl').
-
-    Returns:
-    Tensor: Computed centroid.
-    """
-
-    if regularizer.lower() == 'l2':
-        centroid = obj_set.mean(dim=-1, keepdim=True)
-    elif regularizer.lower() == 'l1':
-        centroid = obj_set.median(dim=-1, keepdim=True)
-    elif regularizer.lower() == 'kl':
-        eps = 1e-2
-        centroid = torch.exp( torch.log(obj_set + eps).mean(dim=-1, keepdim=True) ) / torch.e # Geometric mean scaled
-    else:
-        raise ValueError("Regularizer must be 'l1', 'l2', or 'kl'.")
-
-    return centroid
+    return residuals.sum(dim=axis_to_sum)
