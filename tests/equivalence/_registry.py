@@ -52,8 +52,24 @@ def _seed() -> None:
 
 def run(case: Case) -> None:
     """Call the old and the moved object with equal seeds and compare the results."""
+    old_object = resolve(case.old)
+    new_path_ = new_path(case.old)
+    new_object = resolve(new_path_)
+    if old_object is new_object:
+        raise AssertionError(f"{case.old} and {new_path_} resolve to the same object")
+    module_path, _, qualname = new_path_.partition(":")
+    owner = (
+        resolve(f"{module_path}:{qualname.rpartition('.')[0]}")
+        if "." in qualname
+        else new_object
+    )
+    module = getattr(owner, "__module__", None)
+    if isinstance(module, str) and not module.startswith("brighteyes."):
+        raise AssertionError(
+            f"{new_path_} is defined in {module}, outside the brighteyes package"
+        )
     _seed()
-    old = case.call(resolve(case.old))
+    old = case.call(old_object)
     _seed()
-    new = case.call(resolve(new_path(case.old)))
+    new = case.call(new_object)
     case.compare(old, new)
