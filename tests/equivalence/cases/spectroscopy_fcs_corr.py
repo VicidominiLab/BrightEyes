@@ -556,6 +556,13 @@ def _fcs_fit_2c_plot(f):
     return f(y, tau, "fitfun_2c", info, start, lower, upper, "central", 0, True)
 
 
+def _fcs_fit_all_fitted_plot(f):
+    tau, y, _, start, _, lower, upper = _fit_an(f)
+    info = np.ones(5, dtype=int)
+    result = f(y, tau, "fitfun_an", info, start, lower, upper, "central", 0, True)
+    return result, start
+
+
 def _fit_dualfocus_function(f):
     tau, curves, param = _fit_dualfocus_curves(f)
     info = np.array([1, 1, 0, 0, 0, 0, 0, 0, 0])
@@ -937,6 +944,7 @@ CASES: list[Case] = [
     Case(f"{FIT}:fcs_fit", lambda f: _fcs_fit_global_dual(f, "fcs_fit_dualfocus"), "function_fit_dualfocus_global"),
     Case(f"{FIT}:fcs_fit", _fcs_fit_dualfocus_string, "string_dualfocus"),
     Case(f"{FIT}:fcs_fit", lambda f: _error(_fcs_fit_2c_plot, f), "plot_single_curve"),
+    Case(f"{FIT}:fcs_fit", _fcs_fit_all_fitted_plot, "plot_all_fitted"),
     Case(f"{FIT}:fcs_fit_dualfocus", lambda f: _fcs_fit_dualfocus_global(f, False), "global_diffusion"),
     Case(f"{FIT}:fcs_fit_dualfocus", lambda f: _fcs_fit_dualfocus_global(f, True), "global_concentration"),
     Case(f"{FIT}:fcs_fit_dualfocus", _fcs_fit_dualfocus_single, "single_curve"),
