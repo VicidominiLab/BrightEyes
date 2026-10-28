@@ -71,6 +71,9 @@ explicit = true
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
 brighteyes = { workspace = true }
+brighteyes-ism = { git = "https://github.com/VicidominiLab/BrightEyes-ISM", rev = "d799720" }
+brighteyes-flism = { git = "https://github.com/VicidominiLab/BrightEyes-FLISM", rev = "85f0d96" }
+brighteyes-ffs = { git = "https://github.com/VicidominiLab/BrightEyes-FFS", rev = "f6d640d" }
 
 [dependency-groups]
 dev = [
@@ -81,6 +84,11 @@ dev = [
 examples = [
     "jupyterlab>=4.6.4",
     "nbformat==5.8.0",
+]
+reference = [
+    "brighteyes-ffs",
+    "brighteyes-flism",
+    "brighteyes-ism",
 ]
 
 [tool.uv]

@@ -320,6 +320,11 @@ examples = [
     { name = "jupyterlab" },
     { name = "nbformat" },
 ]
+reference = [
+    { name = "brighteyes-ffs" },
+    { name = "brighteyes-flism" },
+    { name = "brighteyes-ism" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -373,6 +378,90 @@ dev = [
 examples = [
     { name = "jupyterlab", specifier = ">=4.6.4" },
     { name = "nbformat", specifier = "==5.8.0" },
+]
+reference = [
+    { name = "brighteyes-ffs", git = "https://github.com/VicidominiLab/BrightEyes-FFS?rev=f6d640d" },
+    { name = "brighteyes-flism", git = "https://github.com/VicidominiLab/BrightEyes-FLISM?rev=85f0d96" },
+    { name = "brighteyes-ism", git = "https://github.com/VicidominiLab/BrightEyes-ISM?rev=d799720" },
+]
+
+[[package]]
+name = "brighteyes-ffs"
+version = "0.1.8"
+source = { git = "https://github.com/VicidominiLab/BrightEyes-FFS?rev=f6d640d#f6d640d4d134630ed1fd38f096fa94ce56a9237a" }
+dependencies = [
+    { name = "brighteyes-ism" },
+    { name = "czifile", version = "2019.7.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "czifile", version = "2026.10.14", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "h5py" },
+    { name = "imutils" },
+    { name = "joblib" },
+    { name = "jupyterlab" },
+    { name = "matplotlib" },
+    { name = "multipletau" },
+    { name = "nbformat" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "ome-types" },
+    { name = "openpyxl" },
+    { name = "pandas" },
+    { name = "phconvert" },
+    { name = "ptufile", version = "2026.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "ptufile", version = "2026.10.16", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pydantic" },
+    { name = "pyqt5" },
+    { name = "qdarkstyle" },
+    { name = "rfc3987" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "seaborn" },
+    { name = "tifffile", version = "2026.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "tifffile", version = "2026.10.15", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[[package]]
+name = "brighteyes-flism"
+version = "0.14.0"
+source = { git = "https://github.com/VicidominiLab/BrightEyes-FLISM?rev=85f0d96#85f0d96fec374efc12e8993cc35aa552ebc9a271" }
+dependencies = [
+    { name = "brighteyes-mcs-dataprep" },
+    { name = "brighteyes-mcs-reader" },
+    { name = "h5py" },
+    { name = "joblib" },
+    { name = "matplotlib" },
+    { name = "matplotlib-scalebar" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scikit-image" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "tqdm" },
+]
+
+[[package]]
+name = "brighteyes-ism"
+version = "1.5.1"
+source = { git = "https://github.com/VicidominiLab/BrightEyes-ISM?rev=d799720#d799720bf2f79cff4f85c29075e4e131fe33ea7a" }
+dependencies = [
+    { name = "brighteyes-mcs-reader" },
+    { name = "h5py" },
+    { name = "joblib" },
+    { name = "matplotlib" },
+    { name = "matplotlib-scalebar" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "psf-generator" },
+    { name = "scikit-image" },
+    { name = "scikit-learn" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "statsmodels" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torchvision", version = "0.29.2", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torchvision", version = "0.29.2+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "tqdm" },
+    { name = "zernikepy" },
 ]
 
 [[package]]
