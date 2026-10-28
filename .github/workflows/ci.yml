@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Check the code
+        run: uv run --locked --only-group dev ruff check
+
+      - name: Check the formatting
+        run: uv run --locked --only-group dev ruff format --check
+
+  imports:
+    name: Imports on Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the project
+        run: uv sync --locked --all-extras --group dev
+
+      - name: Import every module
+        run: uv run --locked --all-extras --group dev pytest tests/imports
+
+  equivalence:
+    name: Equivalence on Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the project and the reference packages
+        run: uv sync --locked --all-extras --group dev --group reference
+
+      - name: Compare with the reference packages
+        run: uv run --locked --all-extras --group dev --group reference pytest tests/equivalence
