@@ -67,7 +67,10 @@ def flim_decay_histogram() -> np.ndarray:
     """Return a `(64, 25)` float64 Poisson decay histogram, channel `c` delayed by `c % 5` bins."""
     rng = np.random.default_rng(0)
     return np.stack(
-        [rng.poisson(flim_decay(3.0, 5.0 + c % 5) * 3).astype(float) for c in range(CHANNELS)],
+        [
+            rng.poisson(flim_decay(3.0, 5.0 + c % 5) * 3).astype(float)
+            for c in range(CHANNELS)
+        ],
         axis=1,
     )
 
@@ -82,6 +85,8 @@ def flim_image(side: int = 6, tau_ns: float = 3.0) -> np.ndarray:
     for y in range(side):
         for x in range(side):
             for c in range(CHANNELS):
-                mean = flim_decay(tau_ns + 0.1 * x, 5.0 + c % 5 + 0.3 * c / CHANNELS) * 0.2
+                mean = (
+                    flim_decay(tau_ns + 0.1 * x, 5.0 + c % 5 + 0.3 * c / CHANNELS) * 0.2
+                )
                 image[y, x, :, c] = rng.poisson(mean)
     return image

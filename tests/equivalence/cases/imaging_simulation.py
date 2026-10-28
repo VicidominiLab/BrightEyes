@@ -257,7 +257,9 @@ CASES: list[Case] = [
         lambda f: _spad_2d(f, n_photon_excitation=2),
         "two-photon",
     ),
-    Case(f"{PSF}:SPAD_PSF_2D", lambda f: _spad_2d(f, normalize=False), "not normalized"),
+    Case(
+        f"{PSF}:SPAD_PSF_2D", lambda f: _spad_2d(f, normalize=False), "not normalized"
+    ),
     Case(f"{PSF}:SPAD_PSF_2D", lambda f: _spad_2d(f, output="tensor"), "tensor output"),
     Case(f"{PSF}:SPAD_PSF_2D", _given_detector_2d, "given detector"),
     Case(f"{TUB}:tubSettings", _tub_settings),

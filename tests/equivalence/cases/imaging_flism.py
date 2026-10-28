@@ -138,10 +138,24 @@ CASES: list[Case] = [
         lambda cls: _flim_data_session(cls, correction_coeff=0.5 + 0.2j),
         "complex_coefficient",
     ),
-    Case(f"{GRAPH}:crop_2d", lambda f: f(np.arange(100.0).reshape(10, 10), crop=2), "crop"),
-    Case(f"{GRAPH}:crop_2d", lambda f: f(np.arange(100.0).reshape(10, 10), crop=0), "no_crop"),
-    Case(f"{GRAPH}:crop_2d", lambda f: _error(f, np.zeros((4, 4)), crop=2), "too_large"),
-    Case(f"{GRAPH}:normalize_histogram", lambda f: f(flim_decay_histogram()[:, 0]), "normal"),
+    Case(
+        f"{GRAPH}:crop_2d",
+        lambda f: f(np.arange(100.0).reshape(10, 10), crop=2),
+        "crop",
+    ),
+    Case(
+        f"{GRAPH}:crop_2d",
+        lambda f: f(np.arange(100.0).reshape(10, 10), crop=0),
+        "no_crop",
+    ),
+    Case(
+        f"{GRAPH}:crop_2d", lambda f: _error(f, np.zeros((4, 4)), crop=2), "too_large"
+    ),
+    Case(
+        f"{GRAPH}:normalize_histogram",
+        lambda f: f(flim_decay_histogram()[:, 0]),
+        "normal",
+    ),
     Case(f"{GRAPH}:normalize_histogram", lambda f: f(np.zeros(8)), "zero_sum"),
     Case(
         f"{GRAPH}:threshold_lifetime_map",
@@ -150,7 +164,12 @@ CASES: list[Case] = [
     ),
     Case(
         f"{GRAPH}:threshold_lifetime_map",
-        lambda f: f(_lifetime_map(), intensity=_intensity_map(), threshold=0.3, finite_only=False),
+        lambda f: f(
+            _lifetime_map(),
+            intensity=_intensity_map(),
+            threshold=0.3,
+            finite_only=False,
+        ),
         "intensity_keep_nonfinite",
     ),
     Case(
@@ -158,13 +177,17 @@ CASES: list[Case] = [
         lambda f: f(_lifetime_map(), intensity=np.zeros((8, 8))),
         "zero_intensity",
     ),
-    Case(f"{GRAPH}:threshold_lifetime_map", lambda f: f(_lifetime_map()), "no_intensity"),
+    Case(
+        f"{GRAPH}:threshold_lifetime_map", lambda f: f(_lifetime_map()), "no_intensity"
+    ),
     Case(
         f"{GRAPH}:threshold_lifetime_map",
         lambda f: _error(f, _lifetime_map(), intensity=np.ones((3, 3))),
         "shape_mismatch",
     ),
-    Case(f"{GRAPH}:weighted_lifetime_stats", lambda f: f(_lifetime_map()), "unweighted"),
+    Case(
+        f"{GRAPH}:weighted_lifetime_stats", lambda f: f(_lifetime_map()), "unweighted"
+    ),
     Case(
         f"{GRAPH}:weighted_lifetime_stats",
         lambda f: f(_lifetime_map(), weights=_intensity_map()),
@@ -183,10 +206,16 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:correct_phasor",
-        lambda f: f(_phasor_map(), 0.4 + 0.3j, coeff=0.9 + 0.1j, laser_correction=False),
+        lambda f: f(
+            _phasor_map(), 0.4 + 0.3j, coeff=0.9 + 0.1j, laser_correction=False
+        ),
         "no_laser_correction",
     ),
-    Case(f"{PHASOR}:correct_phasor", lambda f: _error(f, None, 0.4 + 0.3j), "missing_phasor"),
+    Case(
+        f"{PHASOR}:correct_phasor",
+        lambda f: _error(f, None, 0.4 + 0.3j),
+        "missing_phasor",
+    ),
     Case(
         f"{PHASOR}:sum_adjacent_pixel",
         lambda f: f(np.random.default_rng(0).random((10, 10)), n=2),
@@ -218,12 +247,22 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:torch_median_filter",
-        lambda f: f(torch.as_tensor(flim_decay_histogram()), window_size=3, dims=[0], mode="reflect"),
+        lambda f: f(
+            torch.as_tensor(flim_decay_histogram()),
+            window_size=3,
+            dims=[0],
+            mode="reflect",
+        ),
         "reflect",
     ),
     Case(
         f"{PHASOR}:torch_median_filter",
-        lambda f: f(torch.as_tensor(flim_decay_histogram()), window_size=5, dims=[0, 1], mode="replicate"),
+        lambda f: f(
+            torch.as_tensor(flim_decay_histogram()),
+            window_size=5,
+            dims=[0, 1],
+            mode="replicate",
+        ),
         "replicate_two_dims",
     ),
     Case(
@@ -253,29 +292,45 @@ CASES: list[Case] = [
     Case(
         f"{PHASOR}:richardson_lucy_deconvolution",
         lambda f: f(
-            torch.as_tensor(flim_decay(2.0, 8.0)), flim_time_axis(), 1.0, 3.0, PERIOD_NS,
-            iterations=10, regularization=3,
+            torch.as_tensor(flim_decay(2.0, 8.0)),
+            flim_time_axis(),
+            1.0,
+            3.0,
+            PERIOD_NS,
+            iterations=10,
+            regularization=3,
         ),
         "regularized",
     ),
     Case(
         f"{PHASOR}:richardson_lucy_deconvolution",
         lambda f: f(
-            flim_decay(2.0, 8.0), flim_time_axis(), 1.0, 3.0, PERIOD_NS,
-            iterations=10, regularization=1,
+            flim_decay(2.0, 8.0),
+            flim_time_axis(),
+            1.0,
+            3.0,
+            PERIOD_NS,
+            iterations=10,
+            regularization=1,
         ),
         "array_input_unregularized",
     ),
     Case(
         f"{PHASOR}:estimate_irf",
         lambda f: f(
-            torch.as_tensor(flim_decay(2.0, 8.0)), flim_time_axis(), 1.0, 3.0, PERIOD_NS,
+            torch.as_tensor(flim_decay(2.0, 8.0)),
+            flim_time_axis(),
+            1.0,
+            3.0,
+            PERIOD_NS,
             iterations=10,
         ),
     ),
     Case(
         f"{PHASOR}:estimate_lifetime_from_birfi",
-        lambda f: f(flim_time_axis(), flim_decay_histogram(), axis=0, return_bounds=True),
+        lambda f: f(
+            flim_time_axis(), flim_decay_histogram(), axis=0, return_bounds=True
+        ),
         "multi_channel_bounds",
     ),
     Case(
@@ -296,8 +351,13 @@ CASES: list[Case] = [
     Case(
         f"{PHASOR}:estimate_lifetime_from_log",
         lambda f: f(
-            flim_decay(1.0, 20.0), flim_time_axis(), PERIOD_NS / 64, 64, PERIOD_NS,
-            start_level=0.9, end_level=0.1,
+            flim_decay(1.0, 20.0),
+            flim_time_axis(),
+            PERIOD_NS / 64,
+            64,
+            PERIOD_NS,
+            start_level=0.9,
+            end_level=0.1,
         ),
         "wrapped_peak",
     ),
@@ -319,19 +379,33 @@ CASES: list[Case] = [
     Case(
         f"{PHASOR}:estimate_lifetime_from_circmean",
         lambda f: f(
-            flim_decay(), 0.5, repetition_rate_MHz=40.0, background_per_bin=1.0, truncate_ns=12.0
+            flim_decay(),
+            0.5,
+            repetition_rate_MHz=40.0,
+            background_per_bin=1.0,
+            truncate_ns=12.0,
         ),
         "background_and_truncation",
     ),
-    Case(f"{PHASOR}:estimate_lifetime_from_circmean", lambda f: f(np.zeros(64), 0.5), "no_photons"),
+    Case(
+        f"{PHASOR}:estimate_lifetime_from_circmean",
+        lambda f: f(np.zeros(64), 0.5),
+        "no_photons",
+    ),
     Case(f"{PHASOR}:flatten_and_remove_nan", lambda f: f(_lifetime_map()), "single"),
     Case(
         f"{PHASOR}:flatten_and_remove_nan",
         lambda f: f(_lifetime_map(), _intensity_map()),
         "pair",
     ),
-    Case(f"{PHASOR}:g0s0_to_m_phi", lambda f: f(np.array([0.3, -0.4]), np.array([0.4, 0.2]))),
-    Case(f"{PHASOR}:m_phi_to_g0s0", lambda f: f(np.array([0.5, 0.9]), np.array([0.3, -2.0]))),
+    Case(
+        f"{PHASOR}:g0s0_to_m_phi",
+        lambda f: f(np.array([0.3, -0.4]), np.array([0.4, 0.2])),
+    ),
+    Case(
+        f"{PHASOR}:m_phi_to_g0s0",
+        lambda f: f(np.array([0.5, 0.9]), np.array([0.3, -2.0])),
+    ),
     Case(
         f"{PHASOR}:phasor",
         lambda f: f(flim_image(4)[:, :, :, 0], threshold=0, harmonic=1),
@@ -339,7 +413,9 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:phasor",
-        lambda f: f(_flux_split_image()[0], threshold=_flux_split_image()[1], harmonic=2),
+        lambda f: f(
+            _flux_split_image()[0], threshold=_flux_split_image()[1], harmonic=2
+        ),
         "threshold_and_harmonic",
     ),
     Case(
@@ -354,10 +430,16 @@ CASES: list[Case] = [
         lambda f: f(flim_decay(), threshold=10**6),
         "1d_below_threshold",
     ),
-    Case(f"{PHASOR}:calculate_phasor", lambda f: f(flim_decay(), harmonic=2), "1d_second_harmonic"),
     Case(
         f"{PHASOR}:calculate_phasor",
-        lambda f: f(np.where(np.arange(25) == 3, 0.0, flim_decay_histogram()), threshold=5),
+        lambda f: f(flim_decay(), harmonic=2),
+        "1d_second_harmonic",
+    ),
+    Case(
+        f"{PHASOR}:calculate_phasor",
+        lambda f: f(
+            np.where(np.arange(25) == 3, 0.0, flim_decay_histogram()), threshold=5
+        ),
         "2d_with_empty_channel",
     ),
     Case(
@@ -378,13 +460,21 @@ CASES: list[Case] = [
         lambda f: f(np.array([0.4, 0.6]), np.array([0.3, 0.2]), dfd_freq=FREQ_HZ),
         "g0_s0",
     ),
-    Case(f"{PHASOR}:calculate_tau_phi", lambda f: f(np.array([0.4 + 0.3j, 0.6 + 0.2j])), "complex"),
+    Case(
+        f"{PHASOR}:calculate_tau_phi",
+        lambda f: f(np.array([0.4 + 0.3j, 0.6 + 0.2j])),
+        "complex",
+    ),
     Case(
         f"{PHASOR}:calculate_tau_m",
         lambda f: f(np.array([0.4, 0.6]), np.array([0.3, 0.2]), dfd_freq=FREQ_HZ),
         "g0_s0",
     ),
-    Case(f"{PHASOR}:calculate_tau_m", lambda f: f(np.array([0.4 + 0.3j, 0.6 + 0.2j])), "complex"),
+    Case(
+        f"{PHASOR}:calculate_tau_m",
+        lambda f: f(np.array([0.4 + 0.3j, 0.6 + 0.2j])),
+        "complex",
+    ),
     Case(
         f"{PHASOR}:calculate_m_phi_tau_phi_tau_m",
         lambda f: f(np.array([0.4, 0.6]), np.array([0.3, 0.2]), dfd_freq=FREQ_HZ),
@@ -397,7 +487,9 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:calculate_phasor_on_img",
-        lambda f: f(flim_image(3)[:, :, :, 0].reshape(1, 3, 3, 64), threshold=1, harmonic=1),
+        lambda f: f(
+            flim_image(3)[:, :, :, 0].reshape(1, 3, 3, 64), threshold=1, harmonic=1
+        ),
         "4d",
     ),
     Case(
@@ -405,8 +497,14 @@ CASES: list[Case] = [
         lambda f: f(flim_image(3)[:, :, :, 0].reshape(1, 1, 3, 3, 64)),
         "5d",
     ),
-    Case(f"{PHASOR}:calculate_phasor_on_img", lambda f: _error(f, np.zeros((3, 3, 8))), "3d"),
-    Case(f"{PHASOR}:fourier_shift", lambda f: f(flim_decay_histogram(), shift_angle=0.01)),
+    Case(
+        f"{PHASOR}:calculate_phasor_on_img",
+        lambda f: _error(f, np.zeros((3, 3, 8))),
+        "3d",
+    ),
+    Case(
+        f"{PHASOR}:fourier_shift", lambda f: f(flim_decay_histogram(), shift_angle=0.01)
+    ),
     Case(
         f"{PHASOR}:cmap2d",
         lambda f: f(*_cmap_inputs(), EDGE_STYLE | {"invertColormap": False}),
@@ -417,18 +515,37 @@ CASES: list[Case] = [
         lambda f: f(*_cmap_inputs(), EDGE_STYLE | {"invertColormap": True}),
         "inverted",
     ),
-    Case(f"{PHASOR}:linear_shift", lambda f: f(flim_decay(), 2.5, cyclic=True), "cyclic"),
-    Case(f"{PHASOR}:linear_shift", lambda f: f(flim_decay(), -3.2, cyclic=False), "not_cyclic"),
-    Case(f"{PHASOR}:correction_phasor", lambda f: f(flim_decay(0.5, 3.0), flim_decay(0.5, 1.0))),
-    Case(f"{PHASOR}:threshold_intensity", lambda f: f(_intensity_map()[2:, 2:], threshold=0.5)),
+    Case(
+        f"{PHASOR}:linear_shift", lambda f: f(flim_decay(), 2.5, cyclic=True), "cyclic"
+    ),
+    Case(
+        f"{PHASOR}:linear_shift",
+        lambda f: f(flim_decay(), -3.2, cyclic=False),
+        "not_cyclic",
+    ),
+    Case(
+        f"{PHASOR}:correction_phasor",
+        lambda f: f(flim_decay(0.5, 3.0), flim_decay(0.5, 1.0)),
+    ),
+    Case(
+        f"{PHASOR}:threshold_intensity",
+        lambda f: f(_intensity_map()[2:, 2:], threshold=0.5),
+    ),
     Case(
         f"{PHASOR}:threshold_phasor",
         lambda f: f(_intensity_map()[2:, 2:], _phasor_map()[2:, 2:], threshold=0.5),
     ),
     Case(f"{PHASOR}:calculate_irf_correction", lambda f: f(flim_decay(0.5, 4.0), 64)),
-    Case(f"{PHASOR}:m_phi_to_complex", lambda f: f(np.array([0.5, 0.9]), np.array([0.3, -2.0]))),
-    Case(f"{PHASOR}:align_decays", lambda f: f(_flim_data(), np.linspace(-2.0, 2.0, 25))),
-    Case(f"{PHASOR}:align_image", lambda f: f(_flim_data(), np.linspace(-2.0, 2.0, 25))),
+    Case(
+        f"{PHASOR}:m_phi_to_complex",
+        lambda f: f(np.array([0.5, 0.9]), np.array([0.3, -2.0])),
+    ),
+    Case(
+        f"{PHASOR}:align_decays", lambda f: f(_flim_data(), np.linspace(-2.0, 2.0, 25))
+    ),
+    Case(
+        f"{PHASOR}:align_image", lambda f: f(_flim_data(), np.linspace(-2.0, 2.0, 25))
+    ),
     Case(
         f"{PHASOR}:build_lifetime_equalizer",
         lambda f: f(_equalizer_reference(), (1.0, 5.0)),
@@ -437,8 +554,11 @@ CASES: list[Case] = [
     Case(
         f"{PHASOR}:build_lifetime_equalizer",
         lambda f: f(
-            _equalizer_reference(), (1.0, 5.0),
-            weights=np.linspace(0.0, 1.0, 802), strength=2.0, equalization_bins=100,
+            _equalizer_reference(),
+            (1.0, 5.0),
+            weights=np.linspace(0.0, 1.0, 802),
+            strength=2.0,
+            equalization_bins=100,
         ),
         "weighted_strong",
     ),
@@ -467,22 +587,97 @@ CASES: list[Case] = [
         f"{PHASOR}:equalized_lifetime_tick_values",
         lambda f: f(_equalizer_reference(), (1.0, 5.0), n_ticks=7, strength=2.0),
     ),
-    Case(f"{PHASOR}:median_phasors", lambda f: f(np.abs(_phasor_map()), window=3), "real_map"),
-    Case(f"{PHASOR}:median_phasors", lambda f: _error(f, _phasor_map(), window=3), "complex_map"),
+    Case(
+        f"{PHASOR}:median_phasors",
+        lambda f: f(np.abs(_phasor_map()), window=3),
+        "real_map",
+    ),
+    Case(
+        f"{PHASOR}:median_phasors",
+        lambda f: _error(f, _phasor_map(), window=3),
+        "complex_map",
+    ),
     # skimage 0.26 returns shape (1,) shifts for 1D input and numpy 2 refuses to assign that to one element.
-    Case(f"{PHASOR}:find_shifts_irf_data", lambda f: _error(f, _reference_data(), _flim_data())),
+    Case(
+        f"{PHASOR}:find_shifts_irf_data",
+        lambda f: _error(f, _reference_data(), _flim_data()),
+    ),
     Case(f"{PHASOR}:find_temporal_shifts", lambda f: _error(f, _flim_data())),
-    Case(f"{PHASOR}:calibrate_phasor", lambda f: _error(f, _flim_data(), _reference_data())),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, np.zeros((2, 2)), _fit_irf(), flim_time_axis(), PERIOD_NS), "data_ndim"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), flim_decay()[:10], flim_time_axis(), PERIOD_NS), "irf_shape"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis()[:10], PERIOD_NS), "t_shape"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), np.full(64, np.nan), PERIOD_NS), "t_not_finite"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), np.zeros(64), flim_time_axis(), PERIOD_NS), "irf_zero_sum"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, valid_mask=np.ones(3)), "mask_shape"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: f(_fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, min_counts=1e9, show_progress=False), "no_valid_pixel"),
-    Case(f"{FIT}:generate_fit_maps", lambda f: f(_fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, valid_mask=np.zeros((2, 2), bool), show_progress=False), "empty_mask"),
+    Case(
+        f"{PHASOR}:calibrate_phasor",
+        lambda f: _error(f, _flim_data(), _reference_data()),
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(f, np.zeros((2, 2)), _fit_irf(), flim_time_axis(), PERIOD_NS),
+        "data_ndim",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(
+            f, _fit_data(), flim_decay()[:10], flim_time_axis(), PERIOD_NS
+        ),
+        "irf_shape",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis()[:10], PERIOD_NS),
+        "t_shape",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(f, _fit_data(), _fit_irf(), np.full(64, np.nan), PERIOD_NS),
+        "t_not_finite",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(f, _fit_data(), np.zeros(64), flim_time_axis(), PERIOD_NS),
+        "irf_zero_sum",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(
+            f,
+            _fit_data(),
+            _fit_irf(),
+            flim_time_axis(),
+            PERIOD_NS,
+            valid_mask=np.ones(3),
+        ),
+        "mask_shape",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: f(
+            _fit_data(),
+            _fit_irf(),
+            flim_time_axis(),
+            PERIOD_NS,
+            min_counts=1e9,
+            show_progress=False,
+        ),
+        "no_valid_pixel",
+    ),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: f(
+            _fit_data(),
+            _fit_irf(),
+            flim_time_axis(),
+            PERIOD_NS,
+            valid_mask=np.zeros((2, 2), bool),
+            show_progress=False,
+        ),
+        "empty_mask",
+    ),
     # brighteyes-mcs-dataprep 0.1.0 needs nine more keyword arguments in Alignment._fit_map_one_pixel than this code passes.
-    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, show_progress=False), "pixel_fit"),
+    Case(
+        f"{FIT}:generate_fit_maps",
+        lambda f: _error(
+            f, _fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, show_progress=False
+        ),
+        "pixel_fit",
+    ),
 ]
 
 SKIPPED: dict[str, str] = {

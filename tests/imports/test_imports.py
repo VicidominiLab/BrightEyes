@@ -12,7 +12,9 @@ def _raise(name: str) -> None:
 
 MODULE_NAMES = sorted(
     info.name
-    for info in pkgutil.walk_packages(brighteyes.__path__, prefix="brighteyes.", onerror=_raise)
+    for info in pkgutil.walk_packages(
+        brighteyes.__path__, prefix="brighteyes.", onerror=_raise
+    )
 )
 
 
