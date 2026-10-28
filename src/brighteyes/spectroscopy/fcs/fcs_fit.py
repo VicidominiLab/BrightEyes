@@ -204,7 +204,7 @@ def fit_corr(Gexp, tau, fit_info, param, weights=1, global_param=None, lower_bou
         Vector with upper bound values for all (fitted and fixed) parameters.
     fitmodel : function
         Fit model function, e.g. fcs_2c_analytical from the brighteyes package:
-        from brighteyes_ffs.fcs.fcs_analytical import fcs_2c_analytical
+        from brighteyes.spectroscopy.fcs.fcs_analytical import fcs_2c_analytical
     fit_options : fit options
         All options from least_squares can be entered
 
