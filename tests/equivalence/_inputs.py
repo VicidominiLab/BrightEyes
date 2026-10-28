@@ -45,3 +45,43 @@ def correlation_curve() -> tuple[np.ndarray, np.ndarray]:
     tau = np.logspace(-6, 0, 60)
     amplitude = np.random.default_rng(0).random(CHANNELS) + 0.5
     return tau, amplitude / (1.0 + tau[:, None] / 1e-3)
+
+
+FLIM_BINS = 64
+FLIM_PERIOD_NS = 25.0
+
+
+def flim_time_axis() -> np.ndarray:
+    """Return the `(64,)` float64 time axis in ns, spanning one 25 ns excitation period."""
+    return np.arange(FLIM_BINS) * FLIM_PERIOD_NS / FLIM_BINS
+
+
+def flim_decay(tau_ns: float = 3.0, shift_bins: float = 5.0) -> np.ndarray:
+    """Return a `(64,)` float64 periodic mono-exponential decay with its onset at `shift_bins`."""
+    t = (flim_time_axis() - shift_bins * FLIM_PERIOD_NS / FLIM_BINS) % FLIM_PERIOD_NS
+    decay = np.exp(-t / tau_ns)
+    return 1000.0 * decay / decay.sum()
+
+
+def flim_decay_histogram() -> np.ndarray:
+    """Return a `(64, 25)` float64 Poisson decay histogram, channel `c` delayed by `c % 5` bins."""
+    rng = np.random.default_rng(0)
+    return np.stack(
+        [rng.poisson(flim_decay(3.0, 5.0 + c % 5) * 3).astype(float) for c in range(CHANNELS)],
+        axis=1,
+    )
+
+
+def flim_image(side: int = 6, tau_ns: float = 3.0) -> np.ndarray:
+    """Return a `(side, side, 64, 25)` float64 image of Poisson decays.
+
+    The lifetime grows by 0.1 ns per pixel column and channel `c` is delayed by `c % 5` bins.
+    """
+    rng = np.random.default_rng(1)
+    image = np.empty((side, side, FLIM_BINS, CHANNELS))
+    for y in range(side):
+        for x in range(side):
+            for c in range(CHANNELS):
+                mean = flim_decay(tau_ns + 0.1 * x, 5.0 + c % 5 + 0.3 * c / CHANNELS) * 0.2
+                image[y, x, :, c] = rng.poisson(mean)
+    return image
