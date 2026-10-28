@@ -113,6 +113,14 @@ def _cmap_inputs() -> tuple[np.ndarray, np.ndarray]:
     )
 
 
+def _fit_data() -> np.ndarray:
+    return np.stack([flim_decay(3.0, 5.0)] * 4).reshape(2, 2, 64) * 5
+
+
+def _fit_irf() -> np.ndarray:
+    return flim_decay(0.4, 5.0)
+
+
 CASES: list[Case] = [
     Case(f"{DATA}:FlimData", lambda cls: _flim_data_session(cls), "empty_object"),
     Case(
@@ -459,13 +467,25 @@ CASES: list[Case] = [
         f"{PHASOR}:equalized_lifetime_tick_values",
         lambda f: f(_equalizer_reference(), (1.0, 5.0), n_ticks=7, strength=2.0),
     ),
+    Case(f"{PHASOR}:median_phasors", lambda f: f(np.abs(_phasor_map()), window=3), "real_map"),
+    Case(f"{PHASOR}:median_phasors", lambda f: _error(f, _phasor_map(), window=3), "complex_map"),
+    # skimage 0.26 returns shape (1,) shifts for 1D input and numpy 2 refuses to assign that to one element.
+    Case(f"{PHASOR}:find_shifts_irf_data", lambda f: _error(f, _reference_data(), _flim_data())),
+    Case(f"{PHASOR}:find_temporal_shifts", lambda f: _error(f, _flim_data())),
+    Case(f"{PHASOR}:calibrate_phasor", lambda f: _error(f, _flim_data(), _reference_data())),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, np.zeros((2, 2)), _fit_irf(), flim_time_axis(), PERIOD_NS), "data_ndim"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), flim_decay()[:10], flim_time_axis(), PERIOD_NS), "irf_shape"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis()[:10], PERIOD_NS), "t_shape"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), np.full(64, np.nan), PERIOD_NS), "t_not_finite"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), np.zeros(64), flim_time_axis(), PERIOD_NS), "irf_zero_sum"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, valid_mask=np.ones(3)), "mask_shape"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: f(_fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, min_counts=1e9, show_progress=False), "no_valid_pixel"),
+    Case(f"{FIT}:generate_fit_maps", lambda f: f(_fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, valid_mask=np.zeros((2, 2), bool), show_progress=False), "empty_mask"),
+    # brighteyes-mcs-dataprep 0.1.0 needs nine more keyword arguments in Alignment._fit_map_one_pixel than this code passes.
+    Case(f"{FIT}:generate_fit_maps", lambda f: _error(f, _fit_data(), _fit_irf(), flim_time_axis(), PERIOD_NS, show_progress=False), "pixel_fit"),
 ]
 
 SKIPPED: dict[str, str] = {
-    f"{PHASOR}:find_shifts_irf_data": "ValueError: setting an array element with a sequence (old code too, phase_cross_correlation returns an array that is assigned to one element)",
-    f"{PHASOR}:find_temporal_shifts": "ValueError: setting an array element with a sequence (old code too, phase_cross_correlation returns an array that is assigned to one element)",
-    f"{PHASOR}:calibrate_phasor": "ValueError: setting an array element with a sequence (old code too, both modes call find_shifts_irf_data)",
-    f"{FIT}:generate_fit_maps": "TypeError: Alignment._fit_map_one_pixel() missing 9 required positional arguments: 'model_fn', 'p0', 'bounds', 'parameter_names', 'param_names', 'model_kwargs', 'amplitude_param', 'delay_param', and 'lifetime_param' (old code too, installed brighteyes_mcs_dataprep has a different signature)",
     f"{GRAPH}:load_calibration_fit_traces": SKIP_FILE_IO,
     f"{GRAPH}:load_calibration_summary": SKIP_FILE_IO,
     f"{GRAPH}:plot_calibration_fit_traces": SKIP_PLOT_ONLY,
@@ -477,7 +497,6 @@ SKIPPED: dict[str, str] = {
     f"{GRAPH}:plot_lifetime_summary": SKIP_PLOT_ONLY,
     f"{PHASOR}:calculate_phasor_on_img_ch": SKIP_FILE_IO,
     f"{PHASOR}:calculate_phasor_on_img_pixels": SKIP_FILE_IO,
-    f"{PHASOR}:median_phasors": "TypeError: Complex type not supported (old code too, scipy median_filter on a complex phasor map)",
     f"{PHASOR}:phasor_h5": SKIP_FILE_IO,
     f"{PHASOR}:plot_flim_image": SKIP_PLOT_ONLY,
     f"{PHASOR}:plot_funny_single_phasor": SKIP_PLOT_ONLY,
