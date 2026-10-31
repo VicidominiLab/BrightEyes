@@ -17,7 +17,7 @@ from skimage.registration import phase_cross_correlation
 from tqdm.auto import tqdm 
 
 try:
-    import brighteyes_ism.analysis.Graph_lib as gra
+    import brighteyes.imaging.analysis.Graph_lib as gra
 except ImportError:  # pragma: no cover - optional dependency
     gra = None
 try:
@@ -1393,7 +1393,7 @@ def plot_flim_image(data_4D, phasors_calibrated, method='tau_phi', pxsize=0.04, 
     : dfd_freq: frequency of the pulsed laser source used for fluorescence excitation (in Hz)
     '''
     if gra is None:
-        raise ImportError("plot_flim_image requires brighteyes_ism.analysis.Graph_lib")
+        raise ImportError("plot_flim_image requires brighteyes.imaging.analysis.Graph_lib")
 
     if method == 'tau_phi':
         data_histograms = data_4D.sum((-2, -1))

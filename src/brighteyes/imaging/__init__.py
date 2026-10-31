@@ -1,5 +1,5 @@
 from . import simulation
-from . import dataio
+from . import io
 from . import analysis
-# __all__=['simulation',  'dataio', 'analysis']
+# __all__=['simulation',  'io', 'analysis']
 

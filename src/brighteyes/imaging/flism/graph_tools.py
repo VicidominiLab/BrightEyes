@@ -8,7 +8,7 @@ from matplotlib.ticker import ScalarFormatter
 from . import tools_phasor as flim
 
 try:
-    import brighteyes_ism.analysis.Graph_lib as gra
+    import brighteyes.imaging.analysis.Graph_lib as gra
 except ImportError:  # pragma: no cover - optional dependency
     gra = None
 
@@ -31,7 +31,7 @@ __all__ = [
 
 def _require_graph_lib():
     if gra is None:
-        raise ImportError("FLIM map plotting requires brighteyes_ism.analysis.Graph_lib")
+        raise ImportError("FLIM map plotting requires brighteyes.imaging.analysis.Graph_lib")
 
 
 def crop_2d(array, crop=0):
