@@ -1,4 +1,4 @@
-"""Equivalence cases for `brighteyes_ffs.fcs`, first half of the modules."""
+"""Equivalence cases for `brighteyes_ffs.fcs`."""
 
 import contextlib
 import io
@@ -46,6 +46,32 @@ FILE = f"{FCS}.fcs_file"
 FIT = f"{FCS}.fcs_fit"
 LOAD_G = f"{FCS}.fcs_load_g"
 POLAR = f"{FCS}.fcs_polar"
+FCSBIN = f"{FCS}.fcsbin2h5"
+VIDEO = f"{FCS}.fcsdata2video"
+FILTER_AP = f"{FCS}.filter_ap"
+FILTER_G = f"{FCS}.filter_g"
+DET_ELEM = f"{FCS}.get_det_elem_from_array"
+INFO = f"{FCS}.get_fcs_info"
+IMSD = f"{FCS}.imsd"
+LIFETIME = f"{FCS}.lifetimehist"
+ANALOG = f"{FCS}.meas_to_analogcount"
+COUNT = f"{FCS}.meas_to_count"
+MEM = f"{FCS}.mem_fit"
+SCHEME = f"{FCS}.plot_corrs_scheme"
+FINGERPRINT = f"{FCS}.plot_fingerprint"
+TRACES = f"{FCS}.plot_intensity_traces"
+PYCORRFIT = f"{FCS}.plot_pycorrfit"
+PLOTS = f"{FCS}.plots"
+BH_ASC = f"{FCS}.read_bh_asc"
+BH_HIST = f"{FCS}.read_bh_hist"
+BH_SPC = f"{FCS}.read_bh_spc"
+READ_BIN = f"{FCS}.read_binfile"
+SELECT_G = f"{FCS}.select_g"
+SHIFTS = f"{FCS}.spad_shifts"
+TT2CORR = f"{FCS}.timetrace2corr"
+TWO_FOCUS = f"{FCS}.two_focus_fcs"
+U64 = f"{FCS}.u64_to_counts"
+W0 = f"{FCS}.w0_from_fingerprint"
 
 SPLIT = 5e-8
 MACROTIME = 1e-12
@@ -1239,3 +1265,393 @@ SKIPPED |= {
     f"{FCS_CORR}:plot_fcs_correlations": SKIP_PLOT_ONLY,
     f"{FCS_CORR}:plot_g_surf": SKIP_PLOT_ONLY,
 }
+
+
+def _with_detectors(data):
+    for channel in range(3):
+        setattr(data, f"det{channel}", np.zeros((1, 2)))
+    return data
+
+
+def _filter_range(function):
+    data = _with_detectors(_histograms())
+    function(data)
+    return data
+
+
+def _chunk_g(function, n_chunks=8):
+    return _correlations(function, ["sum5"], n_chunks=n_chunks)
+
+
+def _g_curves(n_curves, n_lags=6):
+    return _rng().uniform(0.1, 1.0, (n_lags, n_curves))
+
+
+def _imsd_curves():
+    axis = np.arange(9) - 4.0
+    x, y = np.meshgrid(axis, axis)
+    widths = 4.0 + 500.0 * np.arange(1, 13) * 1e-3
+    noise = _rng().normal(0, 1e-3, (12, 9, 9))
+    return np.exp(-(x**2 + y**2) / (2 * widths[:, None, None])) + noise
+
+
+def _imsd(function, **kwargs):
+    return function(
+        _imsd_curves(),
+        np.arange(1, 13) * 1e-3,
+        fitparam=np.array([True, True, False, False]),
+        startvalues=np.array([1.0, 1.0, 2.0, 50.0]),
+        **kwargs,
+    )
+
+
+def _lifetime(function, **kwargs):
+    streams = photon_streams()
+    data = SimpleNamespace(**{f"det{channel}": streams[channel] for channel in range(3)})
+    function(data, **kwargs)
+    return data
+
+
+def _matrix_to_count(function, values):
+    out = np.zeros((len(values), 25), dtype=np.uint16)
+    function(values, out)
+    return out
+
+
+def _bit_patterns():
+    return _rng().integers(0, np.iinfo(np.uint64).max, size=(30, 2), dtype=np.uint64, endpoint=True)
+
+
+def _mem_curve(obj):
+    model = _sibling(obj, "fcs_analytical").fcs_analytical
+    tau = _tau()
+    noise = _rng().normal(0, 1e-3, tau.shape)
+    return tau, model(tau, 2.0, 1e-3, 5.0, 0.0) + 0.5 * model(tau, 1.0, 3e-2, 5.0, 0.0) + noise
+
+
+MEM_PARAM = [20, 100, 1e-6, 2e-3, 1, 10, 5]
+
+
+def _mem_direct(function, **kwargs):
+    tau, curve = _mem_curve(function)
+    return function(MEM_PARAM, tau, curve, **kwargs)
+
+
+def _mem_free_diffusion(function, weights=1):
+    tau, curve = _mem_curve(function)
+    return function(list(MEM_PARAM), tau, curve, weights=weights)
+
+
+def _figure(function, data, **kwargs):
+    return _drawn(lambda: function(data, **kwargs))
+
+
+def _info_text():
+    return "DURATION [s]\t12.5\nREADING SPEED [kHz]\t400\nNUMBER OF LINES\t7"
+
+
+def _select_g_input():
+    rng = _rng()
+    return SimpleNamespace(
+        dwellTime=1e-6,
+        sum3_average=rng.uniform(0.1, 1, (10, 2)),
+        sum3_chunk0=rng.uniform(0.1, 1, (10, 2)),
+        central_average=rng.uniform(0.1, 1, (10, 2)),
+        central_chunk0=rng.uniform(0.1, 1, (10, 2)),
+    )
+
+
+def _u64_numbers():
+    example = 13091560953979690842
+    return [0, 31, example, example | 16, example & ~16]
+
+
+FINGERPRINT_POINTS = 25
+W0_TRUE = [3.0, -2.0, 0.25, 500.0, 1.3, 50.0, 20.0]
+W0_START = np.array([2.0, -1.0, 0.25, 500.0, 1.0, 50.0, 20.0])
+W0_FIT = np.array([1, 1, 0, 0, 1, 0, 0])
+
+
+def _w0_data(function):
+    calc_fingerprint = _sibling(function, "w0_from_fingerprint").calc_fingerprint
+    return _printed(calc_fingerprint, W0_TRUE, FINGERPRINT_POINTS)[0]
+
+
+def _w0_fit(function):
+    return _printed(function, _w0_data(function), W0_FIT, W0_START, N=FINGERPRINT_POINTS)
+
+
+def _w0_residuals(function):
+    weights = np.linspace(0.5, 1.5, 25).reshape(5, 5)
+    args = (W0_START[W0_FIT == 1], W0_START[W0_FIT == 0], W0_FIT, _w0_data(function), FINGERPRINT_POINTS, weights)
+    return _printed(function, *args)
+
+
+def _tt_traces():
+    data = time_trace()
+    return data[:, 12], data[:, 7]
+
+
+def _same_trace_corr(function):
+    trace = time_trace()[:, 12]
+    return function(trace, trace, macro_time=1e-6)
+
+
+def _log_corr(function, same):
+    first, second = _tt_traces()
+    return function(first, first if same else second, 1e-6, m=30)
+
+
+def _two_focus(function, tau):
+    return function(tau, 2e-7, 1e-7, 0.0, 6e20, 4e-11, 2.5e-7, 3.1e-7, 1.5e-6, 1.9e-6)
+
+
+def _two_focus_inputs():
+    return np.linspace(2.0e-7, 3.0e-7, 25), np.linspace(1.0e-6, 1.5e-6, 25)
+
+
+CASES += [
+    Case(f"{FCSBIN}:numpy_timetrace_2_atimes", lambda f: f(time_trace()[:300, :5].astype(np.int64), 1e-6)),
+    Case(f"{FCSBIN}:photon_arrivals", lambda f: f(time_trace()[:300, :5].astype(np.int64), 3)),
+]
+
+SKIPPED |= {
+    f"{FCSBIN}:fcsbin2atimes": SKIP_FILE_IO,
+    f"{FCSBIN}:fcsbin2h5": SKIP_FILE_IO,
+    f"{FCSBIN}:fcsbin2h5_atimes": SKIP_FILE_IO,
+    f"{FCSBIN}:photon_data_2_h5": SKIP_FILE_IO,
+    f"{VIDEO}:fcsdata2video": SKIP_FILE_IO,
+    f"{VIDEO}:fcstraces2video": SKIP_FILE_IO,
+    f"{VIDEO}:partpos2video": SKIP_FILE_IO,
+}
+
+CASES += [
+    Case(f"{FILTER_AP}:filter_ap", lambda f: f(0, 23.78, 64, 0.028, plot_fig=False), "no STED"),
+    Case(f"{FILTER_AP}:filter_ap", lambda f: f(0.5, 20.0, 64, 0.05, norm_exp=True, plot_fig=False), "STED, normalised decay"),
+    Case(f"{FILTER_AP}:filter_ap", lambda f: _drawn(lambda: f(0.2, 15.0, 48, 0.03)), "plot"),
+    Case(
+        f"{FILTER_AP}:filter_2c",
+        lambda f: f(decay_histogram(), 1.0 + 0.5 * decay_histogram()[::-1], 0.7, plot_fig=False),
+    ),
+    Case(
+        f"{FILTER_AP}:filter_2c",
+        lambda f: _drawn(lambda: f(decay_histogram(), 2.0 + decay_histogram()[::-1], 1.3)),
+        "plot",
+    ),
+    Case(f"{FILTER_AP}:filter_range", _filter_range),
+]
+
+CASES += [
+    Case(f"{FILTER_G}:good_chunks_from_g_obj", lambda f: f(_chunk_g(f), "sum5"), "default acceptance"),
+    Case(f"{FILTER_G}:good_chunks_from_g_obj", lambda f: f(_chunk_g(f, 12), "sum5", 0.5), "acceptance 0.5"),
+    Case(f"{FILTER_G}:check_chunks_from_g_obj", lambda f: f(_chunk_g(f), "sum5")),
+    Case(f"{FILTER_G}:sort_g_obj", lambda f: f(_chunk_g(f), "sum5")),
+    Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(12)), "12 curves"),
+    Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(2)), "two curves"),
+    Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(252)), "252 curves with the pre-selection"),
+]
+
+CASES += [
+    Case(f"{DET_ELEM}:get_elsum", lambda f: f(5, 0), "central element"),
+    Case(f"{DET_ELEM}:get_elsum", lambda f: f(5, 1), "sum 3x3"),
+    Case(f"{DET_ELEM}:get_elsum", lambda f: f(5, 2), "sum 5x5"),
+    Case(f"{DET_ELEM}:get_elsum", lambda f: f(7, 3), "7x7 detector"),
+    Case(f"{DET_ELEM}:get_el_ring_array", lambda f: f(5, 1), "ring 1"),
+    Case(f"{DET_ELEM}:get_el_ring_array", lambda f: f(5, 2), "ring 2"),
+    Case(f"{DET_ELEM}:get_el_ring_array", lambda f: f(7, 3), "7x7 detector"),
+]
+
+CASES += [
+    Case(f"{INFO}:infoObj", lambda cls: _marked(cls, "duration")),
+    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/sub/measure_y_52_x_1480.bin"), "bin file"),
+    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/measure.bin", metastring="_meta.txt"), "custom suffix"),
+    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/measure.h5"), "not a bin file"),
+    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "DURATION [s]"), "first parameter"),
+    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "READING SPEED [kHz]"), "middle parameter"),
+    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "NUMBER OF LINES"), "last parameter"),
+]
+
+SKIPPED |= {
+    f"{INFO}:get_duration_from_h5_timetagging_data": SKIP_FILE_IO,
+    f"{INFO}:get_fcs_info": SKIP_FILE_IO,
+    f"{INFO}:get_file_info": SKIP_FILE_IO,
+    f"{INFO}:get_file_info_czi": SKIP_FILE_IO,
+    f"{INFO}:get_file_info_h5": SKIP_FILE_IO,
+    f"{INFO}:get_file_info_ptu": SKIP_FILE_IO,
+    f"{INFO}:get_file_info_tiff": SKIP_FILE_IO,
+    f"{INFO}:get_file_info_txt": SKIP_FILE_IO,
+}
+
+CASES += [
+    Case(f"{IMSD}:fcs2imsd", lambda f: _imsd(f), "default"),
+    Case(f"{IMSD}:fcs2imsd", lambda f: _imsd(f, remove_outliers=True, remove_afterpulsing=False), "outlier removal, afterpulsing kept"),
+]
+
+CASES += [
+    Case(f"{LIFETIME}:lifetimehist", lambda f: _lifetime(f), "defaults"),
+    Case(f"{LIFETIME}:lifetimehist", lambda f: _lifetime(f, m_bins=100, laser_freq=40e6), "bins and laser frequency"),
+]
+
+SKIPPED |= {f"{ANALOG}:file_to_analogcount": SKIP_FILE_IO}
+
+CASES += [
+    Case(f"{COUNT}:matrix_to_count", lambda f: _matrix_to_count(f, _bit_patterns()), "random bits"),
+    Case(
+        f"{COUNT}:matrix_to_count",
+        lambda f: _matrix_to_count(f, np.full((4, 2), np.iinfo(np.uint64).max, dtype=np.uint64)),
+        "all bits set",
+    ),
+    Case(f"{COUNT}:reshape_to_5d", lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 3, 4, 5)),
+    Case(f"{COUNT}:reshape_to_6d", lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 1, 3, 4, 5), "with time bins"),
+    Case(f"{COUNT}:reshape_to_6d", lambda f: f(np.arange(24 * 25).reshape(24, 25), 2, 1, 3, 4), "default time bins"),
+]
+
+SKIPPED |= {
+    f"{COUNT}:all_bin_images_2_h5": SKIP_FILE_IO,
+    f"{COUNT}:all_bin_images_2_tiff": SKIP_FILE_IO,
+    f"{COUNT}:all_timetr_2_h5": SKIP_FILE_IO,
+    f"{COUNT}:bin2h5": SKIP_FILE_IO,
+    f"{COUNT}:bin2np": SKIP_FILE_IO,
+    f"{COUNT}:czi2h5": SKIP_FILE_IO,
+    f"{COUNT}:file_to_count": SKIP_FILE_IO,
+    f"{COUNT}:file_to_fcs_count": SKIP_FILE_IO,
+    f"{COUNT}:image2h5": SKIP_FILE_IO,
+    f"{COUNT}:image2tiff": SKIP_FILE_IO,
+    f"{COUNT}:locseries2h5": SKIP_FILE_IO,
+    f"{COUNT}:mat2h5": SKIP_FILE_IO,
+    f"{COUNT}:numpy2h5": SKIP_FILE_IO,
+}
+
+CASES += [
+    Case(f"{MEM}:Fitresultclass", lambda cls: _marked(cls, "x")),
+    Case(f"{MEM}:mem_fit", lambda f: _mem_direct(f), "default start distribution"),
+    Case(f"{MEM}:mem_fit", lambda f: _mem_direct(f, weights=_weights(), startdistr=_rng().uniform(0.5, 1.5, 20)), "weights and start distribution"),
+    Case(f"{MEM}:mem_fit_free_diffusion", lambda f: _mem_free_diffusion(f), "unweighted"),
+    Case(f"{MEM}:mem_fit_free_diffusion", lambda f: _mem_free_diffusion(f, _weights()), "weighted"),
+]
+
+SKIPPED |= {
+    f"{SCHEME}:plot_correlations_microimage": SKIP_PLOT_ONLY,
+    f"{SCHEME}:plot_det_element_map": SKIP_PLOT_ONLY,
+    f"{TRACES}:plot_intensity_traces": SKIP_PLOT_ONLY,
+    f"{FINGERPRINT}:plot_fingerprint7x7": SKIP_PLOT_ONLY,
+    f"{FINGERPRINT}:plot_det_dist": SKIP_PLOT_ONLY,
+}
+
+CASES += [
+    Case(f"{FINGERPRINT}:plot_fingerprint_airyscan", lambda f: f(_rng().uniform(1, 100, 32)), "no plot"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_airyscan",
+        lambda f: _figure(f, _rng().uniform(1, 100, 32), cmap="viridis", plot=True),
+        "plot",
+    ),
+    Case(f"{FINGERPRINT}:plot_fingerprint_airyscan", lambda f: f(np.full(32, 7.0)), "flat counts"),
+    Case(f"{FINGERPRINT}:plot_fingerprint_luminosa", lambda f: f(_rng().uniform(1, 100, 23)), "23 elements"),
+    Case(f"{FINGERPRINT}:plot_fingerprint_luminosa", lambda f: f(_rng().uniform(1, 100, 32)), "32 elements"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_luminosa",
+        lambda f: _figure(f, _rng().uniform(1, 100, 23), cmap="viridis", plot=True),
+        "plot",
+    ),
+    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, time_trace()), "intensity traces, percentages"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(f, time_trace(), normalize=True, show_perc="numbers", dtype="float64"),
+        "intensity traces, normalised, numbers",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(f, time_trace().sum(axis=0), show_perc=False, vminmax=[0.0, 80000.0]),
+        "summed counts, colour range",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(f, time_trace().sum(axis=0), show_perc=True, vminmax=[0.0, 80000.0]),
+        "summed counts, colour range, percentages",
+    ),
+    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, _atimes(f)), "arrival times, 25 detectors"),
+    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, _atimes(f, range(21))), "arrival times, 21 detectors"),
+]
+
+SKIPPED |= {
+    f"{PYCORRFIT}:plot_g_csv": SKIP_FILE_IO,
+    f"{PYCORRFIT}:plot_pycorr_all": SKIP_FILE_IO,
+    f"{PYCORRFIT}:plot_pycorrfit": SKIP_PLOT_ONLY,
+    f"{PYCORRFIT}:plot_pycorrfit3": SKIP_FILE_IO,
+    f"{PYCORRFIT}:read_pycorrfit": SKIP_FILE_IO,
+    f"{PLOTS}:plot_anisotropy_heat_map": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_atimeshist": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_atimetrace": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_corrs": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_corrs_av": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_corrs_fit": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_difflaw": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_fida_hist": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_flow_heat_map": SKIP_PLOT_ONLY,
+    f"{PLOTS}:plot_timetrace": SKIP_PLOT_ONLY,
+}
+
+CASES += [
+    Case(f"{PYCORRFIT}:PyCorrfit_data", lambda cls: _marked(cls, "data")),
+    Case(f"{BH_ASC}:DataObj", lambda cls: _marked(cls, "G")),
+    Case(f"{BH_HIST}:DataObj", lambda cls: _marked(cls, "G")),
+    Case(f"{BH_SPC}:BHspcInfo", lambda cls: _marked(cls, "photons")),
+]
+
+SKIPPED |= {
+    f"{BH_ASC}:read_asc": SKIP_FILE_IO,
+    f"{BH_HIST}:read_hist": SKIP_FILE_IO,
+    f"{BH_SPC}:read_spc": SKIP_FILE_IO,
+    f"{READ_BIN}:read_binfile": SKIP_FILE_IO,
+}
+
+CASES += [
+    Case(f"{SELECT_G}:Correlations", lambda cls: _marked(cls, "dwellTime")),
+    Case(f"{SELECT_G}:select_g", lambda f: f(_select_g_input()), "average"),
+    Case(f"{SELECT_G}:select_g", lambda f: f(_select_g_input(), selection="all"), "all"),
+    Case(f"{SHIFTS}:spad_shifts", lambda f: f()),
+]
+
+CASES += [
+    Case(f"{TT2CORR}:tt2corr", lambda f: _log_corr(f, same=False), "crosscorrelation"),
+    Case(f"{TT2CORR}:tt2corr", lambda f: _log_corr(f, same=True), "autocorrelation"),
+    Case(f"{TT2CORR}:autocorrelation_wiener_khinchin", lambda f: _same_trace_corr(f), "same array"),
+    Case(f"{TT2CORR}:autocorrelation_wiener_khinchin", lambda f: f(*_tt_traces(), macro_time=1e-6), "two arrays"),
+]
+
+CASES += [
+    Case(
+        f"{TWO_FOCUS}:two_focus_fcs",
+        lambda f: _two_focus(f, np.logspace(-6, 0, 30)),
+        "lag times",
+    ),
+    Case(f"{TWO_FOCUS}:two_focus_fcs", lambda f: _two_focus(f, 1e-3), "scalar lag time"),
+    Case(
+        f"{TWO_FOCUS}:simulate_two_focus_cross_center",
+        lambda f: f(np.logspace(-6, 0, 20), 6e20, 4e-11, _two_focus_inputs()[0], _two_focus_inputs()[1], 1.5e-7),
+    ),
+    Case(
+        f"{TWO_FOCUS}:simulate_spatialcorr",
+        lambda f: _printed(f, np.array([1e-4, 1e-3]), 1.5e-7, 6e20, 4e-11, *_two_focus_inputs()),
+        "lag times",
+    ),
+    Case(
+        f"{TWO_FOCUS}:simulate_spatialcorr",
+        lambda f: _printed(f, 1e-3, 1.5e-7, 6e20, 4e-11, *_two_focus_inputs()),
+        "scalar lag time",
+    ),
+]
+
+CASES += [
+    Case(f"{U64}:u64_to_counts", lambda f: [f(number) for number in _u64_numbers()], "small, both cluster types"),
+    Case(f"{U64}:binary_to_counts", lambda f: f(list("10110101"), 3), "three bits"),
+    Case(f"{U64}:binary_to_counts", lambda f: f(list("1011010110"), 6), "six bits"),
+]
+
+CASES += [
+    Case(f"{W0}:calc_fingerprint", lambda f: _printed(f, W0_TRUE, FINGERPRINT_POINTS)),
+    Case(f"{W0}:fitfun_w0_from_fingerprint", _w0_residuals),
+    Case(f"{W0}:get_w0_from_fingerprint", _w0_fit),
+]
+
+SKIPPED[f"{PYCORRFIT}:read_pycorrfit_singleparam"] = "AttributeError: module 'numpy' has no attribute 'float'"
