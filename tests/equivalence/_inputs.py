@@ -1,0 +1,41 @@
+import numpy as np
+
+SIZE = 32
+CHANNELS = 25
+
+
+def ism_dataset() -> np.ndarray:
+    """Return a small `(x, y, channels)` array of photon counts."""
+    return np.random.default_rng(0).poisson(10.0, size=(SIZE, SIZE, CHANNELS)).astype(np.float64)
+
+
+def ism_psf() -> np.ndarray:
+    """Return a `(x, y, channels)` array holding one shifted Gaussian per channel."""
+    axis = np.arange(SIZE) - SIZE / 2
+    x, y = np.meshgrid(axis, axis, indexing="ij")
+    shifts = np.random.default_rng(0).uniform(-3, 3, size=(CHANNELS, 2))
+    psf = np.stack([np.exp(-((x - dx) ** 2 + (y - dy) ** 2) / (2 * 2.0**2)) for dx, dy in shifts], axis=-1)
+    return psf / psf.sum(axis=(0, 1), keepdims=True)
+
+
+def photon_arrival_times() -> np.ndarray:
+    """Return about 10^4 sorted integer arrival times."""
+    return np.sort(np.random.default_rng(0).integers(0, 10**7, size=10_000)).astype(np.int64)
+
+
+def time_trace() -> np.ndarray:
+    """Return a `(time, channels)` array of photon counts."""
+    return np.random.default_rng(0).poisson(5.0, size=(10_000, CHANNELS)).astype(np.float64)
+
+
+def decay_histogram() -> np.ndarray:
+    """Return a noisy single-exponential photon arrival histogram."""
+    time = np.arange(256)
+    return np.random.default_rng(0).poisson(1000.0 * np.exp(-time / 40.0)).astype(np.float64)
+
+
+def correlation_curve() -> tuple[np.ndarray, np.ndarray]:
+    """Return lag times and a noisy diffusion correlation curve."""
+    tau = np.logspace(-6, 0, 50)
+    noise = np.random.default_rng(0).normal(0, 1e-3, size=tau.shape)
+    return tau, 1.0 / (1.0 + tau / 1e-3) + noise
