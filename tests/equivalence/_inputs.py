@@ -39,3 +39,18 @@ def correlation_curve() -> tuple[np.ndarray, np.ndarray]:
     tau = np.logspace(-6, 0, 50)
     noise = np.random.default_rng(0).normal(0, 1e-3, size=tau.shape)
     return tau, 1.0 / (1.0 + tau / 1e-3) + noise
+
+
+def ism_series() -> np.ndarray:
+    """Return a `(x, y, time, channels)` array of photon counts of a smooth sample."""
+    rng = np.random.default_rng(0)
+    axis = np.arange(SIZE)
+    x, y = np.meshgrid(axis, axis, indexing="ij")
+    sample = sum(
+        np.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 3.0**2)) for cx, cy in rng.uniform(6, SIZE - 6, size=(4, 2))
+    )
+    detector = np.arange(CHANNELS)
+    radius2 = (detector // 5 - 2) ** 2 + (detector % 5 - 2) ** 2
+    weights = np.exp(-radius2 / (2 * 1.2**2)) * rng.uniform(0.9, 1.1, size=CHANNELS)
+    mean = 400.0 * sample[:, :, None, None] * weights[None, None, None, :] + 2.0
+    return rng.poisson(np.broadcast_to(mean, (SIZE, SIZE, 4, CHANNELS))).astype(np.float64)
