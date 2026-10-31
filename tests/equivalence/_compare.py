@@ -1,3 +1,4 @@
+import cmath
 import inspect
 from collections.abc import Mapping
 
@@ -25,11 +26,20 @@ def _kinds(old: object, new: object) -> str:
 
 
 def _check_array(old: np.ndarray, new: object, path: str) -> None:
-    if isinstance(old, np.ndarray) and old.dtype == object and isinstance(new, np.ndarray):
+    if (
+        isinstance(old, np.ndarray)
+        and old.dtype == object
+        and isinstance(new, np.ndarray)
+    ):
         if old.shape != new.shape or new.dtype != object:
-            raise _fail(path, f"object arrays differ: {old.shape} {old.dtype} vs {new.shape} {new.dtype}")
+            raise _fail(
+                path,
+                f"object arrays differ: {old.shape} {old.dtype} vs {new.shape} {new.dtype}",
+            )
         for index in np.ndindex(old.shape):
-            _compare(old[index], new[index], f"{path}[{', '.join(map(str, index))}]", set())
+            _compare(
+                old[index], new[index], f"{path}[{', '.join(map(str, index))}]", set()
+            )
         return
     try:
         np.testing.assert_array_equal(new, old, strict=True)
@@ -50,14 +60,20 @@ def _compare(old: object, new: object, path: str, seen: set[tuple[int, int]]) ->
             if type(old) is not type(new):
                 raise _fail(path, _kinds(old, new))
             if isinstance(old, np.ma.MaskedArray):
-                _check_array(np.ma.getmaskarray(old), np.ma.getmaskarray(new), path + ".mask")
+                _check_array(
+                    np.ma.getmaskarray(old), np.ma.getmaskarray(new), path + ".mask"
+                )
                 _check_array(np.ma.getdata(old), np.ma.getdata(new), path + ".data")
             else:
                 _check_array(old, new, path)
         case pd.DataFrame() | pd.Series():
             if type(old) is not type(new):
                 raise _fail(path, _kinds(old, new))
-            check = pd.testing.assert_frame_equal if isinstance(old, pd.DataFrame) else pd.testing.assert_series_equal
+            check = (
+                pd.testing.assert_frame_equal
+                if isinstance(old, pd.DataFrame)
+                else pd.testing.assert_series_equal
+            )
             try:
                 check(old, new, check_exact=True)
             except AssertionError as error:
@@ -79,7 +95,9 @@ def _compare(old: object, new: object, path: str, seen: set[tuple[int, int]]) ->
             for index, (old_item, new_item) in enumerate(zip(old, new, strict=True)):
                 _compare(old_item, new_item, f"{path}[{index}]", seen)
         case float() | complex():
-            if not _same_name(old, new) or not (old == new or (old != old and new != new)):
+            if not _same_name(old, new) or not (
+                old == new or (cmath.isnan(old) and cmath.isnan(new))
+            ):
                 raise _fail(path, f"{old!r} vs {new!r}")
         case bool() | int() | str() | bytes() | None:
             if not _same_name(old, new) or old != new:
@@ -91,7 +109,9 @@ def _compare(old: object, new: object, path: str, seen: set[tuple[int, int]]) ->
             try:
                 old_attributes = vars(old)
             except TypeError:
-                raise TypeError(f"{path}: cannot compare an object of type {type(old).__name__}") from None
+                raise TypeError(
+                    f"{path}: cannot compare an object of type {type(old).__name__}"
+                ) from None
             if not _same_name(old, new):
                 raise _fail(path, _kinds(old, new))
             if (id(old), id(new)) in seen:

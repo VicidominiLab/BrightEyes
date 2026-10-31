@@ -97,17 +97,27 @@ def _global_pch_hist(obj):
     psf, weights = _compressed(obj, 2)
     simulate = _sibling(obj, "simulate_pch").simulate_pch_nc
     columns = [
-        simulate(psf[i], dV=weights[i], k_max=30, c=[0.02], q=[q], T=1.0, dV0=1.0, bg=0.05)
+        simulate(
+            psf[i], dV=weights[i], k_max=30, c=[0.02], q=[q], T=1.0, dV0=1.0, bg=0.05
+        )
         for i, q in enumerate((4.0, 2.5))
     ]
     return _noisy_hist(np.column_stack(columns))
 
 
 _PCH_MODELS = {
-    "single": SimpleNamespace(fit=[1, 1, 0, 0], start=[0.01, 2.0, 1.0, 1.0], n_comp=1, hist={}),
-    "one": SimpleNamespace(fit=[1, 1, 0, 0, 0], start=[0.01, 2.0, 0.0, 1.0, 1.0], n_comp=1, hist={}),
-    "background": SimpleNamespace(fit=[1, 1, 1, 0, 0], start=[0.01, 2.0, 0.01, 1.0, 1.0], n_comp=1, hist={}),
-    "likelihood": SimpleNamespace(fit=[1, 1, 0, 0, 0], start=[0.015, 3.0, 0.0, 1.0, 1.0], n_comp=1, hist={}),
+    "single": SimpleNamespace(
+        fit=[1, 1, 0, 0], start=[0.01, 2.0, 1.0, 1.0], n_comp=1, hist={}
+    ),
+    "one": SimpleNamespace(
+        fit=[1, 1, 0, 0, 0], start=[0.01, 2.0, 0.0, 1.0, 1.0], n_comp=1, hist={}
+    ),
+    "background": SimpleNamespace(
+        fit=[1, 1, 1, 0, 0], start=[0.01, 2.0, 0.01, 1.0, 1.0], n_comp=1, hist={}
+    ),
+    "likelihood": SimpleNamespace(
+        fit=[1, 1, 0, 0, 0], start=[0.015, 3.0, 0.0, 1.0, 1.0], n_comp=1, hist={}
+    ),
     "two": SimpleNamespace(
         fit=[1, 1, 1, 1, 0, 0, 0],
         start=[0.01, 0.01, 2.0, 5.0, 0.0, 1.0, 1.0],
@@ -145,7 +155,9 @@ def _fit_pch(function, model, minimization, fitfun="fitfun_pch_nc", **kwargs):
 
 def _fit_pch_global(function, minimization):
     brightness = 3.0 if minimization == "mle" else 2.0
-    start = np.array([[0.015, 0.015], [brightness, brightness], [0.0, 0.0], [1.0, 1.0], [1.0, 1.0]])
+    start = np.array(
+        [[0.015, 0.015], [brightness, brightness], [0.0, 0.0], [1.0, 1.0], [1.0, 1.0]]
+    )
     return _dense(
         function(
             _global_pch_hist(function),
@@ -274,18 +286,30 @@ def _curve(kind):
 
 def _fit_curve(function, kind, fit, start, lower, upper):
     x, y = _curve(kind)
-    return function(y, x, kind, np.array(fit), np.array(start), np.array(lower), np.array(upper))
+    return function(
+        y, x, kind, np.array(fit), np.array(start), np.array(lower), np.array(upper)
+    )
 
 
 def _fit_curve_g(function, n_curves, plot_individually):
     x = np.arange(1.0, 31.0)
     rng = _rng()
-    names = ["central", "sum3", "sum5"] if n_curves == 3 else [f"det{i}_average" for i in range(n_curves)]
+    names = (
+        ["central", "sum3", "sum5"]
+        if n_curves == 3
+        else [f"det{i}_average" for i in range(n_curves)]
+    )
     curves = {
-        name: np.column_stack((x, (2.0 + i % 3) * x**-1.1 + rng.normal(0, 1e-3, x.shape)))
+        name: np.column_stack(
+            (x, (2.0 + i % 3) * x**-1.1 + rng.normal(0, 1e-3, x.shape))
+        )
         for i, name in enumerate(names)
     }
-    return _drawn(lambda: function(SimpleNamespace(dwellTime=1e-6, **curves), 2, plot_individually))
+    return _drawn(
+        lambda: function(
+            SimpleNamespace(dwellTime=1e-6, **curves), 2, plot_individually
+        )
+    )
 
 
 def _residuals(function, start, fixed, fit, *data):
@@ -337,13 +361,17 @@ POLY_COEFFS = np.array([5.0, 6.0, 1.0, 0.1, -0.05, 0.01])
 
 def _poly_data(function):
     model = _sibling(function, "fit_polynomial_2d").polynomial2d
-    return model(np.zeros((12, 10)), 2, 2, POLY_COEFFS) + _rng().normal(0, 0.01, size=(12, 10))
+    return model(np.zeros((12, 10)), 2, 2, POLY_COEFFS) + _rng().normal(
+        0, 0.01, size=(12, 10)
+    )
 
 
 def _psf_image(function, three_d=False):
     module = _sibling(function, "fit_psf")
     if three_d:
-        image = module.gaussian3d(12, 14, 8, 5.5, 6.5, 3.5, 5.0, 6.0, 30.0, 0.05, 0.02, 50.0, 2.0)
+        image = module.gaussian3d(
+            12, 14, 8, 5.5, 6.5, 3.5, 5.0, 6.0, 30.0, 0.05, 0.02, 50.0, 2.0
+        )
         return image + _rng().normal(0, 0.1, size=image.shape)
     image = module.gaussian(21, 19, 10.5, 9.0, 6.0, 5.0, 100.0, 3.0, 0.05)
     return image + _rng().normal(0, 0.5, size=image.shape)
@@ -375,7 +403,9 @@ def _metadata(obj, duration=20.0):
     )
 
 
-def _corr_function(obj, mode="Spot-variation fcs", elements=("central", "sum3", "sum5")):
+def _corr_function(
+    obj, mode="Spot-variation fcs", elements=("central", "sum3", "sum5")
+):
     function = _gui(obj, "correlation_functions_class").CorrelationFunction()
     function.set_params(
         {
@@ -402,7 +432,9 @@ def _fit_model(obj):
             "paramFactors10": [1, 1e3, 1],
             "paramMinbound": [0, 1e-6, 1, -1, 0],
             "paramMaxbound": [1e3, 1, 50, 1, 1e3],
-            "fitfunctionName": import_module(_root(obj) + ".fcs.fcs_analytical").fcs_analytical,
+            "fitfunctionName": import_module(
+                _root(obj) + ".fcs.fcs_analytical"
+            ).fcs_analytical,
             "fitfunctionParamUsed": [0, 1, 3],
             "globalParam": [False, False, False],
         }
@@ -444,7 +476,9 @@ def _analysis(obj, n_fits=0, n_chunks=2):
     analysis.update(corrs=_correlations(obj, n_chunks))
     analysis.settings.update(chunks_off=np.ones(n_chunks), analysis=analysis)
     for _ in range(n_fits):
-        analysis.add_fit_analysis(_fit_model(obj), [1, 1, 0, 0], _start_values(), [1, 15])
+        analysis.add_fit_analysis(
+            _fit_model(obj), [1, 1, 0, 0], _start_values(), [1, 15]
+        )
     return analysis
 
 
@@ -453,7 +487,11 @@ def _legacy_analysis(obj):
     tau = np.logspace(-6, 0, 20)
     curve = lambda: np.column_stack((tau, rng.uniform(0.1, 1, 20)))
     corrs = SimpleNamespace(
-        **{f"{name}{suffix}": curve() for name in ("central", "sum3", "sum5") for suffix in ("", "_chunk0", "_chunk1")}
+        **{
+            f"{name}{suffix}": curve()
+            for name in ("central", "sum3", "sum5")
+            for suffix in ("", "_chunk0", "_chunk1")
+        }
     )
     analysis = _analysis(obj, n_fits=1)
     analysis.update(corrs=corrs)
@@ -537,7 +575,9 @@ def _fit_model_case(cls):
 
 
 def _fit_single(cls):
-    single = cls("central", _fit_model(cls), [1, 1, 0, 0], np.array([1.0, 2e-3, 0.1]), [1, 15])
+    single = cls(
+        "central", _fit_model(cls), [1, 1, 0, 0], np.array([1.0, 2e-3, 0.1]), [1, 15]
+    )
     single.update(fitresult=np.arange(14.0), w0=250.0, D=1.2)
     single.update(startvalues=np.arange(6.0))
     unused = _fit_model(cls)
@@ -566,7 +606,11 @@ def _corr_fit_results(cls):
 def _corr_fit_mem(cls):
     fit = _corr_fit(cls, ("central", "sum3"), (2, 10))
     for i, curve in enumerate(fit.fit_all_curves):
-        curve.update(startvalues=np.concatenate((_rng().uniform(0.1, 1, 8) * (i + 1), [5.0, 1e-3, 5.0, 0.0, 0.0])))
+        curve.update(
+            startvalues=np.concatenate(
+                (_rng().uniform(0.1, 1, 8) * (i + 1), [5.0, 1e-3, 5.0, 0.0, 0.0])
+            )
+        )
     return fit.fitresults_mem(np.logspace(-6, 0, 20), 5), fit
 
 
@@ -590,7 +634,9 @@ def _directions(i):
 
 def _corr_fit_mfda(cls):
     names = ("V0_H0", "V0_H1", "V1_H-1")
-    return _corr_fit_map(cls, names, "fitresults_mfda", lambda i: np.array([1e-3 * (1 + i), 0.5 + i]))
+    return _corr_fit_map(
+        cls, names, "fitresults_mfda", lambda i: np.array([1e-3 * (1 + i), 0.5 + i])
+    )
 
 
 def _ffs_corr(cls):
@@ -615,8 +661,12 @@ def _ffs_corr(cls):
         cls().get_corr(),
         cls().get_corr3D(),
     ]
-    analysis.update_fit_analysis(_fit_model(cls), [1, 1, 1, 1], _start_values() * 2, [2, 12])
-    analysis.update_fit_analysis(_fit_model(cls), [0, 1, 0, 0], _start_values() * 3, [3, 14], fit_num=0)
+    analysis.update_fit_analysis(
+        _fit_model(cls), [1, 1, 1, 1], _start_values() * 2, [2, 12]
+    )
+    analysis.update_fit_analysis(
+        _fit_model(cls), [0, 1, 0, 0], _start_values() * 3, [3, 14], fit_num=0
+    )
     analysis.add_fit_analysis(_fit_model(cls), [0, 0, 0, 0], _start_values(), [1, 15])
     analysis.remove_fit(0)
     analysis.remove_fit(7)
@@ -636,7 +686,9 @@ def _ffs_corr_cross(cls):
         active_fit=2,
     )
     other = cls()
-    other.analysis(_corr_function(cls, "Cross", ("crossAll",)), 8, 5, np.ones(3), "tt2corr")
+    other.analysis(
+        _corr_function(cls, "Cross", ("crossAll",)), 8, 5, np.ones(3), "tt2corr"
+    )
     return analysis, other
 
 
@@ -645,7 +697,9 @@ def _ffs_file_session(cls):
     file.add_analysis(_corr_function(cls), resolution=8, chunksize=5)
     file.add_analysis(_corr_function(cls, "Second"), active_analysis=0)
     file.get_analysis(0).update(corrs=_correlations(cls, 4))
-    file.get_analysis(0).add_fit_analysis(_fit_model(cls), [1, 1, 0, 0], _start_values(), [1, 15])
+    file.get_analysis(0).add_fit_analysis(
+        _fit_model(cls), [1, 1, 0, 0], _start_values(), [1, 15]
+    )
     file.copy_correlation(0)
     file.copy_correlation(9)
     results = [
@@ -885,7 +939,9 @@ CASES += [
     Case(f"{PCH}.pch_fit:generate_psfs", lambda f: f(pch_psf(), 1, 200), "3D array"),
     Case(f"{PCH}.pch_fit:generate_psfs", lambda f: f(_two_psfs(), 2, 200), "4D array"),
     Case(f"{PCH}.pch_fit:hist_param", lambda f: f(np.arange(30.0)), "one histogram"),
-    Case(f"{PCH}.pch_fit:hist_param", lambda f: f(np.ones((30, 3))), "three histograms"),
+    Case(
+        f"{PCH}.pch_fit:hist_param", lambda f: f(np.ones((30, 3))), "three histograms"
+    ),
     Case(
         f"{PCH}.pch_fit:parse_fitfun_and_fitinfo",
         lambda f: f("fitfun_pch", [1, 1, 0, 0], np.arange(30.0)),
@@ -919,7 +975,9 @@ CASES += [
     ),
     Case(
         f"{PCH}.pch_fit:make_2D_fit_parameter_array_global_fit",
-        lambda f: f([0.1, 2.0, 3.0, 0.05], [1.0, 1.5, 2.0], GLOBAL_INFO, GLOBAL_PARAM, 5, 2),
+        lambda f: f(
+            [0.1, 2.0, 3.0, 0.05], [1.0, 1.5, 2.0], GLOBAL_INFO, GLOBAL_PARAM, 5, 2
+        ),
         "no factors",
     ),
     Case(
@@ -937,7 +995,9 @@ CASES += [
     ),
     Case(
         f"{PCH}.pch_fit:global_fit_result_to_parameters",
-        lambda f: f(_global_start(), GLOBAL_INFO, 2, GLOBAL_PARAM, [0.5, 2.5, 3.5, 0.07]),
+        lambda f: f(
+            _global_start(), GLOBAL_INFO, 2, GLOBAL_PARAM, [0.5, 2.5, 3.5, 0.07]
+        ),
     ),
     Case(
         f"{PCH}.pch_fit:global_fit_result_to_residuals",
@@ -952,7 +1012,9 @@ CASES += [
     ),
     Case(
         f"{PCH}.pch_fit:global_fit_result_to_residuals",
-        lambda f: f(_rng().normal(size=60), _rng().uniform(0.1, 1, (30, 2)), 2, 1, "absolute"),
+        lambda f: f(
+            _rng().normal(size=60), _rng().uniform(0.1, 1, (30, 2)), 2, 1, "absolute"
+        ),
         "absolute",
     ),
 ]
@@ -1021,7 +1083,9 @@ CASES += [
     ),
     Case(
         f"{PCH}.pch_fit:fit_pch",
-        lambda f: _fit_pch(f, "one", "absolute", weights=np.linspace(0.5, 2, 30), n_draws=2),
+        lambda f: _fit_pch(
+            f, "one", "absolute", weights=np.linspace(0.5, 2, 30), n_draws=2
+        ),
         "weighted, two draws",
     ),
     Case(
@@ -1220,7 +1284,9 @@ CASES += [
 CASES += [
     Case(
         f"{TOOLS}.fit_curve:fit_curve",
-        lambda f: _fit_curve(f, "powerlaw", [1, 1, 0], [2.0, -1.0, 0.0], [0, -10, -10], [100, 0, 100]),
+        lambda f: _fit_curve(
+            f, "powerlaw", [1, 1, 0], [2.0, -1.0, 0.0], [0, -10, -10], [100, 0, 100]
+        ),
         "power law",
     ),
     Case(
@@ -1265,7 +1331,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_curve:fitfun_exp_n",
-        lambda f: _residuals(f, [4.0, 0.2, 1.0, 0.05, 0.1], [0.5], [1, 1, 1, 1, 0, 1], *_curve("exp")),
+        lambda f: _residuals(
+            f, [4.0, 0.2, 1.0, 0.05, 0.1], [0.5], [1, 1, 1, 1, 0, 1], *_curve("exp")
+        ),
     ),
     Case(
         f"{TOOLS}.fit_curve:fitfun_linear",
@@ -1295,7 +1363,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_data:fit_and_plot",
-        lambda f: _drawn(lambda: _printed(f, *_curve("exp")[::-1], "exp", [1, 1, 1], [4.0, 0.2, 0.1])),
+        lambda f: _drawn(
+            lambda: _printed(f, *_curve("exp")[::-1], "exp", [1, 1, 1], [4.0, 0.2, 0.1])
+        ),
         "printed and plotted",
     ),
     Case(
@@ -1312,7 +1382,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_data:fitfun_exp_n",
-        lambda f: _residuals(f, [4.0, 0.2, 1.0, 0.05], [0.1], [1, 1, 1, 1, 0], *_curve("exp")),
+        lambda f: _residuals(
+            f, [4.0, 0.2, 1.0, 0.05], [0.1], [1, 1, 1, 1, 0], *_curve("exp")
+        ),
     ),
     Case(
         f"{TOOLS}.fit_doughnut2d:doughnut2d",
@@ -1329,7 +1401,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_doughnut2d:fit_dougnut2D",
-        lambda f: _blob_fit(f, "fit_doughnut2d", "doughnut2d", [0, 0, 1, 1, 1], BLOB_WEIGHTS),
+        lambda f: _blob_fit(
+            f, "fit_doughnut2d", "doughnut2d", [0, 0, 1, 1, 1], BLOB_WEIGHTS
+        ),
         "weighted, fixed center",
     ),
     Case(f"{TOOLS}.fit_gauss_2d:normal2d", lambda f: f(20, 16, *BLOB_TRUTH)),
@@ -1344,7 +1418,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_gauss_2d:fit_gauss_2d",
-        lambda f: _blob_fit(f, "fit_gauss_2d", "normal2d", [0, 0, 1, 1, 1], BLOB_WEIGHTS),
+        lambda f: _blob_fit(
+            f, "fit_gauss_2d", "normal2d", [0, 0, 1, 1, 1], BLOB_WEIGHTS
+        ),
         "weighted, fixed center",
     ),
     Case(
@@ -1374,7 +1450,11 @@ CASES += [
 ]
 
 CASES += [
-    Case(f"{TOOLS}.fit_psf:fit_psf", lambda f: _clicked_fit_psf(f, bead_image().sum(axis=2)), "2D"),
+    Case(
+        f"{TOOLS}.fit_psf:fit_psf",
+        lambda f: _clicked_fit_psf(f, bead_image().sum(axis=2)),
+        "2D",
+    ),
     Case(f"{TOOLS}.fit_psf:fit_psf", lambda f: _clicked_fit_psf(f, bead_image()), "3D"),
     Case(
         f"{TOOLS}.fit_psf:checkrange",
@@ -1412,7 +1492,9 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.fit_psf:gauss_fitres",
-        lambda f: f(_psf_image(f), np.array(PSF_START), np.array([1, 1, 1, 1, 1, 1, 0])),
+        lambda f: f(
+            _psf_image(f), np.array(PSF_START), np.array([1, 1, 1, 1, 1, 1, 0])
+        ),
         "fixed rotation",
     ),
     Case(
@@ -1427,12 +1509,16 @@ CASES += [
 CASES += [
     Case(
         f"{TOOLS}.cmap2d:cmap2d",
-        lambda f: _color_image(f, ltimeBound=["auto", "auto"], intBound=["auto", "auto"]),
+        lambda f: _color_image(
+            f, ltimeBound=["auto", "auto"], intBound=["auto", "auto"]
+        ),
         "automatic bounds",
     ),
     Case(
         f"{TOOLS}.cmap2d:cmap2d",
-        lambda f: _color_image(f, ltimeBound=[2.0, 4.0], intBound=[20.0, 80.0], cmap="viridis"),
+        lambda f: _color_image(
+            f, ltimeBound=[2.0, 4.0], intBound=[20.0, 80.0], cmap="viridis"
+        ),
         "given bounds",
     ),
     Case(
@@ -1458,7 +1544,11 @@ CASES += [
     ),
     Case(
         f"{TOOLS}.cmap2d:cmap2d",
-        lambda f: _drawn(lambda: _color_image(f, ltimeBound=["auto", "auto"], intBound=["auto", "auto"], plotFig=True)),
+        lambda f: _drawn(
+            lambda: _color_image(
+                f, ltimeBound=["auto", "auto"], intBound=["auto", "auto"], plotFig=True
+            )
+        ),
         "plotted",
     ),
     Case(
@@ -1530,7 +1620,10 @@ CASES += [
     ),
 ]
 
-CASES += [Case(f"{TOOLS}.cmaps:cmaps", lambda f, name=name: f(name, 16), name) for name in COLOR_MAPS]
+CASES += [
+    Case(f"{TOOLS}.cmaps:cmaps", lambda f, name=name: f(name, 16), name)
+    for name in COLOR_MAPS
+]
 
 SKIPPED |= {
     f"{TOOLS}.array2tiff:array2tiff": SKIP_FILE_IO,
@@ -1556,7 +1649,9 @@ SKIPPED |= {
 SETTINGS = f"{GUI}.analysis_settings"
 CASES += [
     Case(f"{SETTINGS}:FFSmetadata", _metadata_case),
-    Case(f"{GUI}.correlation_functions_class:CorrelationFunction", _correlation_function),
+    Case(
+        f"{GUI}.correlation_functions_class:CorrelationFunction", _correlation_function
+    ),
     Case(f"{GUI}.fitmodel_class:FitModel", _fit_model_case),
     Case(f"{SETTINGS}:CorrSettings", _settings),
     Case(f"{SETTINGS}:FitSingleObj", _fit_single),
@@ -1566,17 +1661,23 @@ CASES += [
     Case(f"{SETTINGS}:CorrFit", _corr_fit_mfda, "model-free displacement"),
     Case(
         f"{SETTINGS}:CorrFit",
-        lambda cls: _corr_fit_map(cls, ("Right", "Up", "Left", "Down"), "fitresults_asymmetrymap", _directions),
+        lambda cls: _corr_fit_map(
+            cls, ("Right", "Up", "Left", "Down"), "fitresults_asymmetrymap", _directions
+        ),
         "asymmetry map, square",
     ),
     Case(
         f"{SETTINGS}:CorrFit",
-        lambda cls: _corr_fit_map(cls, ("a", "b", "c", "d"), "fitresults_asymmetrymap", _directions),
+        lambda cls: _corr_fit_map(
+            cls, ("a", "b", "c", "d"), "fitresults_asymmetrymap", _directions
+        ),
         "asymmetry map, curves not found",
     ),
     Case(
         f"{SETTINGS}:CorrFit",
-        lambda cls: _corr_fit_map(cls, ("Right", "Up", "Left", "Down"), "fitresults_flowmap", _directions),
+        lambda cls: _corr_fit_map(
+            cls, ("Right", "Up", "Left", "Down"), "fitresults_flowmap", _directions
+        ),
         "flow map, square",
     ),
     Case(
@@ -1611,7 +1712,9 @@ CASES += [
     ),
     Case(
         f"{SETTINGS}:CorrFit",
-        lambda cls: _corr_fit_map(cls, ("a", "b", "c", "d"), "fitresults_flowmap", _directions),
+        lambda cls: _corr_fit_map(
+            cls, ("a", "b", "c", "d"), "fitresults_flowmap", _directions
+        ),
         "flow map, curves not found",
     ),
     Case(f"{SETTINGS}:FFScorr", _ffs_corr, "correlations and fits"),
@@ -1636,7 +1739,9 @@ CASES += [
             f(7),
         ],
     ),
-    Case(f"{GUI}.restore_session:to_text", lambda f: [f(None), f(5), f("a"), f([1, 2])]),
+    Case(
+        f"{GUI}.restore_session:to_text", lambda f: [f(None), f(5), f("a"), f([1, 2])]
+    ),
     Case(f"{GUI}.session_to_excel:next_letter", lambda f: [f("A"), f("Y")]),
     Case(f"{GUI}.session_to_excel:green_fill", _green_fill),
 ]

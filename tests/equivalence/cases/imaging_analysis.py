@@ -32,7 +32,10 @@ def _meshgrid() -> tuple[np.ndarray, np.ndarray]:
 
 
 def _small_kernel_and_image() -> tuple[np.ndarray, np.ndarray]:
-    kernel = np.exp(-((np.arange(3) - 1.0) ** 2)[:, None] / 2 - ((np.arange(3) - 1.0) ** 2)[None, :] / 2)
+    kernel = np.exp(
+        -((np.arange(3) - 1.0) ** 2)[:, None] / 2
+        - ((np.arange(3) - 1.0) ** 2)[None, :] / 2
+    )
     return kernel / kernel.sum(), ism_dataset()[:6, :6, 0]
 
 
@@ -156,8 +159,14 @@ CASES: list[Case] = [
         ),
         "last, padded",
     ),
-    Case(f"{DECONV}:MultiImg_RL_FFT", lambda f: f(ism_psf(), ism_dataset(), max_iter=3, out="all"), "all"),
-    Case(f"{DECONV}:MultiImg_RL_FFT_2", lambda f: f(ism_psf(), ism_dataset(), max_iter=3)),
+    Case(
+        f"{DECONV}:MultiImg_RL_FFT",
+        lambda f: f(ism_psf(), ism_dataset(), max_iter=3, out="all"),
+        "all",
+    ),
+    Case(
+        f"{DECONV}:MultiImg_RL_FFT_2", lambda f: f(ism_psf(), ism_dataset(), max_iter=3)
+    ),
     Case(f"{DECONV}:PSF_FRC", lambda f: f(*(ism_series()[:, :, k] for k in (0, 1)))),
     Case(f"{DECONV}:FRC_MultiImg_RL_FFT", lambda f: f(ism_series(), max_iter=3)),
     Case(
@@ -173,11 +182,15 @@ CASES: list[Case] = [
     ),
     Case(
         f"{FRC}:radial_profile",
-        lambda f: f(np.fft.fftshift(np.fft.fft2(ism_dataset()[:, :, 0])), (SIZE // 2, SIZE // 2)),
+        lambda f: f(
+            np.fft.fftshift(np.fft.fft2(ism_dataset()[:, :, 0])), (SIZE // 2, SIZE // 2)
+        ),
         "complex",
     ),
     Case(f"{FRC}:FRC", lambda f: f(*_frc_images())),
-    Case(f"{FRC}:fixed_threshold", lambda f: f(np.linspace(1, 0, 50), 1 / 7), "crossing"),
+    Case(
+        f"{FRC}:fixed_threshold", lambda f: f(np.linspace(1, 0, 50), 1 / 7), "crossing"
+    ),
     Case(
         f"{FRC}:fixed_threshold",
         lambda f: f(np.linspace(1, 0.5, 50), 1 / 7),
@@ -193,8 +206,12 @@ CASES: list[Case] = [
         ),
     ),
     Case(f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), px=0.05), "fixed"),
-    Case(f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), method="3sigma"), "3sigma"),
-    Case(f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), method="5sigma"), "5sigma"),
+    Case(
+        f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), method="3sigma"), "3sigma"
+    ),
+    Case(
+        f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), method="5sigma"), "5sigma"
+    ),
     Case(f"{FRC}:FRC_resolution", lambda f: f(*_frc_images(), smoothing="fit"), "fit"),
     Case(f"{FRC}:timeFRC", lambda f: f(ism_series()[:, :, :, REF], px=0.05), "even"),
     Case(
@@ -212,7 +229,9 @@ CASES: list[Case] = [
         lambda f: f(np.random.default_rng(0).normal(size=(2, 25)), 1.0, 0.3, 4.0),
     ),
     Case(f"{FOCUS}:FitFingerprint", lambda f: f(_focus_calibration())),
-    Case(f"{FOCUS}:pixel_fit_1", lambda f: f(_summed_series()[10, 10], 1.2, 4.0), "fit"),
+    Case(
+        f"{FOCUS}:pixel_fit_1", lambda f: f(_summed_series()[10, 10], 1.2, 4.0), "fit"
+    ),
     Case(
         f"{FOCUS}:pixel_fit_1",
         lambda f: f(_summed_series()[10, 10], 1.2, 4.0, threshold=1e9),
@@ -259,7 +278,9 @@ CASES: list[Case] = [
         "fourier",
     ),
     Case(f"{TOOLS}:Reorder", lambda f: f(ism_dataset(), "xyc"), "add dimensions"),
-    Case(f"{TOOLS}:Reorder", lambda f: f(ism_dataset(), "cyx", "xyc"), "same dimensions"),
+    Case(
+        f"{TOOLS}:Reorder", lambda f: f(ism_dataset(), "cyx", "xyc"), "same dimensions"
+    ),
     Case(
         f"{TOOLS}:Reorder",
         lambda f: f(f(ism_dataset(), "xyc"), "rzxytc", "xyc"),
@@ -279,7 +300,9 @@ CASES: list[Case] = [
     Case(f"{TOOLS}:ArgMaxND", lambda f: f(ism_dataset())),
     Case(
         f"{TOOLS}:FWHM",
-        lambda f: f(np.linspace(-5, 5, 101), np.exp(-(np.linspace(-5, 5, 101) ** 2) / 2), 0.4),
+        lambda f: f(
+            np.linspace(-5, 5, 101), np.exp(-(np.linspace(-5, 5, 101) ** 2) / 2), 0.4
+        ),
     ),
     Case(f"{TOOLS}:RadialSpectrum", lambda f: f(ism_dataset()[:, :, 0], pxsize=0.05)),
     Case(f"{TOOLS}:fingerprint", lambda f: f(ism_dataset()), "summed"),

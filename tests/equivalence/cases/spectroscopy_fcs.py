@@ -105,7 +105,13 @@ def _atimes(obj, channels=range(CHANNELS), filters=0, tcspc=True):
     weights = _rng()
     for channel, stream in photon_streams().items():
         if channel in channels:
-            setattr(data, f"det{channel}", np.column_stack((stream, weights.uniform(0, 1, (len(stream), filters)))))
+            setattr(
+                data,
+                f"det{channel}",
+                np.column_stack(
+                    (stream, weights.uniform(0, 1, (len(stream), filters)))
+                ),
+            )
     return data
 
 
@@ -152,7 +158,9 @@ def _arrival_bins():
         times = np.sort(rng.choice(500, size=20 + det, replace=False))
         setattr(data, f"det{det}", np.sort(np.append(times, times[:3])))
     data.det1 = np.array([], dtype=int)
-    data.sum = np.sort(np.concatenate([getattr(data, f"det{det}") for det in range(25)]))
+    data.sum = np.sort(
+        np.concatenate([getattr(data, f"det{det}") for det in range(25)])
+    )
     return data
 
 
@@ -160,7 +168,11 @@ def _chunk_correlations(names=("a", "b"), n_chunks=3):
     rng = _rng()
     tau = np.logspace(-6, 0, 20)
     return SimpleNamespace(
-        **{f"{name}_chunk{chunk}": np.column_stack((tau, rng.uniform(0.1, 1, 20))) for name in names for chunk in range(n_chunks)}
+        **{
+            f"{name}_chunk{chunk}": np.column_stack((tau, rng.uniform(0.1, 1, 20)))
+            for name in names
+            for chunk in range(n_chunks)
+        }
     )
 
 
@@ -182,13 +194,13 @@ def _all_pair_averages():
     tau = np.logspace(-6, 0, 12)
     return SimpleNamespace(
         **{
-            f"det{a}x{b}_average": np.column_stack((tau, rng.uniform(0.1, 1, 12), rng.uniform(0, 0.1, 12)))
+            f"det{a}x{b}_average": np.column_stack(
+                (tau, rng.uniform(0.1, 1, 12), rng.uniform(0, 0.1, 12))
+            )
             for a in range(25)
             for b in range(25)
         }
     )
-
-
 
 
 def _tau() -> np.ndarray:
@@ -284,7 +296,10 @@ def _fit_data(function, kind):
     tau = _tau()
     model = getattr(_sibling(function, "fcs_analytical"), spec.model)
     curve = model(tau, *spec.args) + _rng().normal(0, 1e-3, tau.shape)
-    arrays = {key: np.asarray(getattr(spec, key), dtype=float) for key in ("start", "lower", "upper")}
+    arrays = {
+        key: np.asarray(getattr(spec, key), dtype=float)
+        for key in ("start", "lower", "upper")
+    }
     return tau, curve, SimpleNamespace(fit=np.asarray(spec.fit), **arrays)
 
 
@@ -294,7 +309,9 @@ def _weights() -> np.ndarray:
 
 def _residual(function, kind, weights=1):
     tau, curve, s = _fit_data(function, kind)
-    return function(s.start[s.fit == 1], s.start[s.fit == 0], s.fit, tau, curve, weights)
+    return function(
+        s.start[s.fit == 1], s.start[s.fit == 0], s.fit, tau, curve, weights
+    )
 
 
 def _fit(function, kind, fitfun, weights=1, global_param=None, plot=-1):
@@ -318,13 +335,33 @@ def _global_dualfocus(function):
     tau = _tau()
     noise = _rng().normal(0, 1e-3, (50, 2))
     curves = np.column_stack(
-        [module.fcs_dualfocus(tau, 2.0, 1e-10, 2.5e-7, 5.0, rhox, 0.0, 0.0, 0.0, 0.0) for rhox in (3e-7, 4.5e-7)]
+        [
+            module.fcs_dualfocus(tau, 2.0, 1e-10, 2.5e-7, 5.0, rhox, 0.0, 0.0, 0.0, 0.0)
+            for rhox in (3e-7, 4.5e-7)
+        ]
     )
     start = np.array(
-        [[1.0, 1.0], [50.0, 50.0], [250.0, 250.0], [5.0, 5.0], [300.0, 450.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.01, 0.01]]
+        [
+            [1.0, 1.0],
+            [50.0, 50.0],
+            [250.0, 250.0],
+            [5.0, 5.0],
+            [300.0, 450.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [0.0, 0.0],
+            [0.01, 0.01],
+        ]
     )
     spec = _FITS["fitfun_dualfocus"]
-    return tau, curves + noise, start, np.asarray(spec.fit), np.asarray(spec.lower, dtype=float), np.asarray(spec.upper, dtype=float)
+    return (
+        tau,
+        curves + noise,
+        start,
+        np.asarray(spec.fit),
+        np.asarray(spec.lower, dtype=float),
+        np.asarray(spec.upper, dtype=float),
+    )
 
 
 GLOBAL_PARAM = [True, True, True, True, False, False, True, True, True]
@@ -343,7 +380,10 @@ def _fit_info_inputs():
     tau = _tau()
     rng = _rng()
     G = SimpleNamespace(
-        **{f"{name}_averageX": np.column_stack((tau, rng.uniform(0.1, 1, 50))) for name in ("a", "b")}
+        **{
+            f"{name}_averageX": np.column_stack((tau, rng.uniform(0.1, 1, 50)))
+            for name in ("a", "b")
+        }
     )
     return (
         G,
@@ -364,7 +404,12 @@ def _spatial_correlations():
         dwellTime=1e-6,
         spatialCorr=rng.uniform(0.1, 1, (5, 5, 20)),
         crossCenterAv=rng.uniform(0.1, 1, (20, 6)),
-        **{f"twofocus{name}_average": np.column_stack((np.arange(20.0), rng.uniform(0.1, 1, 20))) for name in names},
+        **{
+            f"twofocus{name}_average": np.column_stack(
+                (np.arange(20.0), rng.uniform(0.1, 1, 20))
+            )
+            for name in names
+        },
     )
 
 
@@ -400,7 +445,9 @@ CASES += [
 
 CASES += [
     Case(f"{ALIGN}:align_hist", lambda f: _in_place(f, _histograms(), n=9), "n=9"),
-    Case(f"{ALIGN}:align_hist", lambda f: _in_place(f, _histograms()), "default window"),
+    Case(
+        f"{ALIGN}:align_hist", lambda f: _in_place(f, _histograms()), "default window"
+    ),
 ]
 
 CASES += [
@@ -416,7 +463,14 @@ CASES += [
     ),
     Case(
         f"{ATIMES_FILTERED}:atimes_filtered",
-        lambda f: _printed(_in_place, f, _micro_data(), _filter_functions(), micro_bin=True, verbose=True),
+        lambda f: _printed(
+            _in_place,
+            f,
+            _micro_data(),
+            _filter_functions(),
+            micro_bin=True,
+            verbose=True,
+        ),
         "micro times in bins",
     ),
     Case(
@@ -428,25 +482,39 @@ CASES += [
 
 CASES += [
     Case(f"{ATIMES_TRACE}:atimes2timetrace", lambda f: _printed(f, _arrival_bins())),
-    Case(f"{ATIMES_TRACE}:atimes2timetrace_bh", lambda f: f(photon_arrival_times().astype(np.float64), 500.0)),
+    Case(
+        f"{ATIMES_TRACE}:atimes2timetrace_bh",
+        lambda f: f(photon_arrival_times().astype(np.float64), 500.0),
+    ),
 ]
 
 CASES += [
     Case(f"{ATIMES_CORR}:Correlations", lambda cls: _marked(cls, "det0")),
     Case(
         f"{ATIMES_CORR}:atimes_2_corrs",
-        lambda f: _printed(f, _atimes(f), [12, "sum3", "C6+7"], accuracy=8, taumax=1e-8, split=SPLIT),
+        lambda f: _printed(
+            f, _atimes(f), [12, "sum3", "C6+7"], accuracy=8, taumax=1e-8, split=SPLIT
+        ),
         "unfiltered",
     ),
     Case(
         f"{ATIMES_CORR}:atimes_2_corrs",
-        lambda f: _printed(f, _atimes(f, filters=1), [12, "sum3"], accuracy=8, taumax=1e-8, split=SPLIT),
+        lambda f: _printed(
+            f, _atimes(f, filters=1), [12, "sum3"], accuracy=8, taumax=1e-8, split=SPLIT
+        ),
         "filtered",
     ),
     Case(
         f"{ATIMES_CORR}:atimes_2_corrs",
         lambda f: _printed(
-            lambda: f(_atimes(f), [12], taumax=3e-10, perform_coarsening=False, logtau=False, split=SPLIT)
+            lambda: f(
+                _atimes(f),
+                [12],
+                taumax=3e-10,
+                perform_coarsening=False,
+                logtau=False,
+                split=SPLIT,
+            )
         ),
         "linear lag times",
     ),
@@ -465,12 +533,28 @@ CASES += [
     ),
     Case(
         f"{ATIMES_CORR}:atimes_2_corr",
-        lambda f: f(photon_arrival_times(), photon_arrival_times(), [1], [1], MACROTIME, accuracy=16, taumax=1e-8),
+        lambda f: f(
+            photon_arrival_times(),
+            photon_arrival_times(),
+            [1],
+            [1],
+            MACROTIME,
+            accuracy=16,
+            taumax=1e-8,
+        ),
         "autocorrelation",
     ),
     Case(
         f"{ATIMES_CORR}:atimes_2_corr",
-        lambda f: f(photon_arrival_times(), photon_arrival_times()[1::2], [1], [1], MACROTIME, accuracy=16, taumax=1e-8),
+        lambda f: f(
+            photon_arrival_times(),
+            photon_arrival_times()[1::2],
+            [1],
+            [1],
+            MACROTIME,
+            accuracy=16,
+            taumax=1e-8,
+        ),
         "crosscorrelation",
     ),
     Case(
@@ -522,70 +606,134 @@ CASES += [
             np.unique(photon_arrival_times() // 1000),
             np.unique(photon_arrival_times()[1::2] // 1000),
             _rng().uniform(0.5, 1.5, np.unique(photon_arrival_times() // 1000).size),
-            _rng().uniform(0.5, 1.5, np.unique(photon_arrival_times()[1::2] // 1000).size),
+            _rng().uniform(
+                0.5, 1.5, np.unique(photon_arrival_times()[1::2] // 1000).size
+            ),
             5,
             4,
         ),
     ),
-    Case(f"{ATIMES_CORR}:atimes_2_all_crosscorr", lambda f: f(time_channel_array(), MACROTIME, accuracy=8), "default"),
     Case(
         f"{ATIMES_CORR}:atimes_2_all_crosscorr",
-        lambda f: f(time_channel_array(), MACROTIME, accuracy=4, taumax=3e-11, logtau=False, perform_coarsening=False),
+        lambda f: f(time_channel_array(), MACROTIME, accuracy=8),
+        "default",
+    ),
+    Case(
+        f"{ATIMES_CORR}:atimes_2_all_crosscorr",
+        lambda f: f(
+            time_channel_array(),
+            MACROTIME,
+            accuracy=4,
+            taumax=3e-11,
+            logtau=False,
+            perform_coarsening=False,
+        ),
         "linear lag times",
     ),
     Case(
         f"{ATIMES_CORR}:atimes_2_all_crosscorr",
-        lambda f: f(time_channel_array(), MACROTIME, accuracy=8, taumax=1e-9, min_step=2),
+        lambda f: f(
+            time_channel_array(), MACROTIME, accuracy=8, taumax=1e-9, min_step=2
+        ),
         "initial coarsening",
     ),
     Case(f"{ATIMES_CORR}:all_crosscorr_at_tau", lambda f: f(time_channel_array(), 7.0)),
-    Case(f"{ATIMES_CORR}:time_coarsening", lambda f: f(photon_arrival_times(), _rng().uniform(0.5, 1.5, 10_000))),
+    Case(
+        f"{ATIMES_CORR}:time_coarsening",
+        lambda f: f(photon_arrival_times(), _rng().uniform(0.5, 1.5, 10_000)),
+    ),
     Case(f"{ATIMES_CORR}:time_coarsening_all_ch", lambda f: f(time_channel_array())),
-    Case(f"{ATIMES_CORR}:generate_list_of_tau_values", lambda f: f(1e5, 8, 2, True), "logarithmic"),
-    Case(f"{ATIMES_CORR}:generate_list_of_tau_values", lambda f: f(120.7, 8, 0, False), "linear"),
+    Case(
+        f"{ATIMES_CORR}:generate_list_of_tau_values",
+        lambda f: f(1e5, 8, 2, True),
+        "logarithmic",
+    ),
+    Case(
+        f"{ATIMES_CORR}:generate_list_of_tau_values",
+        lambda f: f(120.7, 8, 0, False),
+        "linear",
+    ),
 ]
 
 
 def _parallel(function, data, list_of_g, **kwargs):
-    return function(data, list_of_g, accuracy=8, split=SPLIT, parallel_prefer="threads", print_info=False, **kwargs)
+    return function(
+        data,
+        list_of_g,
+        accuracy=8,
+        split=SPLIT,
+        parallel_prefer="threads",
+        print_info=False,
+        **kwargs,
+    )
 
 
 def _add_cross_all(function, averaging, names, **kwargs):
     G = _sibling(function, "fcs2corr").Correlations()
     chunks = _rng().uniform(0.1, 1, (2, 3, 12, 5, 5))
-    function(G, chunks, np.logspace(-6, 0, 12), averaging, names, channels_order=[0, 1, 2, 3, 4], **kwargs)
+    function(
+        G,
+        chunks,
+        np.logspace(-6, 0, 12),
+        averaging,
+        names,
+        channels_order=[0, 1, 2, 3, 4],
+        **kwargs,
+    )
     return G
 
 
 CASES += [
-    Case(f"{ATIMES_PARALLEL}:convert_crossall_to_list_of_g", lambda f: f(4), "all channels"),
-    Case(f"{ATIMES_PARALLEL}:convert_crossall_to_list_of_g", lambda f: f(12, start_ch=9), "start channel"),
+    Case(
+        f"{ATIMES_PARALLEL}:convert_crossall_to_list_of_g",
+        lambda f: f(4),
+        "all channels",
+    ),
+    Case(
+        f"{ATIMES_PARALLEL}:convert_crossall_to_list_of_g",
+        lambda f: f(12, start_ch=9),
+        "start channel",
+    ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f), ["central", "sum3"], list_of_g_out=["c", "s3"]),
+        lambda f: _parallel(
+            f, _atimes(f), ["central", "sum3"], list_of_g_out=["c", "s3"]
+        ),
         "keywords",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f), [12, "x0612"], list_of_g_out=["single", "pair"]),
+        lambda f: _parallel(
+            f, _atimes(f), [12, "x0612"], list_of_g_out=["single", "pair"]
+        ),
         "channel and pair",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f), ["C6+7", "C6+7xC11+12"], list_of_g_out=["sum", "cross sum"]),
+        lambda f: _parallel(
+            f, _atimes(f), ["C6+7", "C6+7xC11+12"], list_of_g_out=["sum", "cross sum"]
+        ),
         "custom sums",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f, filters=2), ["central", "x0612"], list_of_g_out=["c", "pair"]),
+        lambda f: _parallel(
+            f, _atimes(f, filters=2), ["central", "x0612"], list_of_g_out=["c", "pair"]
+        ),
         "all filters",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f, filters=2), ["sum3"], list_of_g_out=["s3"], filters=[0, 2]),
+        lambda f: _parallel(
+            f, _atimes(f, filters=2), ["sum3"], list_of_g_out=["s3"], filters=[0, 2]
+        ),
         "selected filters",
     ),
-    Case(f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel", lambda f: _parallel(f, _atimes(f, range(5)), ["crossAll"]), "crossAll"),
+    Case(
+        f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
+        lambda f: _parallel(f, _atimes(f, range(5)), ["crossAll"]),
+        "crossAll",
+    ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
         lambda f: _parallel(f, _atimes(f, range(5)), ["crossAll", [[0, 1], [2, 3, 4]]]),
@@ -594,36 +742,78 @@ CASES += [
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
         lambda f: _parallel(
-            f, _atimes(f, range(5)), ["crossAll"], averaging=["0x0+1x1", "0x1+1x0+2x3"], list_of_g_out=["auto", "cross"]
+            f,
+            _atimes(f, range(5)),
+            ["crossAll"],
+            averaging=["0x0+1x1", "0x1+1x0+2x3"],
+            list_of_g_out=["auto", "cross"],
         ),
         "crossAll averaged",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f, range(5)), ["crossAll"], averaging=["0x0+1x1", "2x3"]),
+        lambda f: _parallel(
+            f, _atimes(f, range(5)), ["crossAll"], averaging=["0x0+1x1", "2x3"]
+        ),
         "crossAll averaged with default names",
     ),
     Case(
         f"{ATIMES_PARALLEL}:atimes_2_corrs_parallel",
-        lambda f: _parallel(f, _atimes(f, range(5), filters=1, tcspc=False), ["crossAll"]),
+        lambda f: _parallel(
+            f, _atimes(f, range(5), filters=1, tcspc=False), ["crossAll"]
+        ),
         "crossAll without microtimes",
     ),
     Case(
         f"{ATIMES_PARALLEL}:parallel_g",
-        lambda f: f(photon_streams()[12][:, 0], [1], MACROTIME, 0, SPLIT, 8, 1e-8, True, True, 0, 1),
+        lambda f: f(
+            photon_streams()[12][:, 0],
+            [1],
+            MACROTIME,
+            0,
+            SPLIT,
+            8,
+            1e-8,
+            True,
+            True,
+            0,
+            1,
+        ),
         "unfiltered",
     ),
     Case(
         f"{ATIMES_PARALLEL}:parallel_g",
         lambda f: f(
-            photon_streams()[12][:, 0], _rng().uniform(0.5, 1.5, 400), MACROTIME, 1, SPLIT, 8, 1e-8, True, True, 0, 1
+            photon_streams()[12][:, 0],
+            _rng().uniform(0.5, 1.5, 400),
+            MACROTIME,
+            1,
+            SPLIT,
+            8,
+            1e-8,
+            True,
+            True,
+            0,
+            1,
         ),
         "filtered",
     ),
     Case(
         f"{ATIMES_PARALLEL}:parallel_gx",
         lambda f: f(
-            photon_streams()[12][:, 0], [1], photon_streams()[7][:, 0], [1], MACROTIME, 0, SPLIT, 8, 1e-8, True, True, 0, 1
+            photon_streams()[12][:, 0],
+            [1],
+            photon_streams()[7][:, 0],
+            [1],
+            MACROTIME,
+            0,
+            SPLIT,
+            8,
+            1e-8,
+            True,
+            True,
+            0,
+            1,
         ),
         "unfiltered",
     ),
@@ -646,10 +836,26 @@ CASES += [
         ),
         "filtered",
     ),
-    Case(f"{ATIMES_PARALLEL}:extract_atimes_for_corr", lambda f: f(_atimes(f), 12, SPLIT, print_info=False), "channel"),
-    Case(f"{ATIMES_PARALLEL}:extract_atimes_for_corr", lambda f: f(_atimes(f), "x0612", SPLIT, print_info=False), "pair"),
-    Case(f"{ATIMES_PARALLEL}:extract_atimes_for_corr", lambda f: f(_atimes(f), "sum3", SPLIT, print_info=False), "keyword"),
-    Case(f"{ATIMES_PARALLEL}:extract_atimes_for_corr", lambda f: f(_atimes(f), "C6+7", SPLIT, print_info=False), "custom sum"),
+    Case(
+        f"{ATIMES_PARALLEL}:extract_atimes_for_corr",
+        lambda f: f(_atimes(f), 12, SPLIT, print_info=False),
+        "channel",
+    ),
+    Case(
+        f"{ATIMES_PARALLEL}:extract_atimes_for_corr",
+        lambda f: f(_atimes(f), "x0612", SPLIT, print_info=False),
+        "pair",
+    ),
+    Case(
+        f"{ATIMES_PARALLEL}:extract_atimes_for_corr",
+        lambda f: f(_atimes(f), "sum3", SPLIT, print_info=False),
+        "keyword",
+    ),
+    Case(
+        f"{ATIMES_PARALLEL}:extract_atimes_for_corr",
+        lambda f: f(_atimes(f), "C6+7", SPLIT, print_info=False),
+        "custom sum",
+    ),
     Case(
         f"{ATIMES_PARALLEL}:extract_atimes_for_corr",
         lambda f: f(_atimes(f), "C6+7xC11+12", SPLIT, print_info=False),
@@ -673,11 +879,21 @@ CASES += [
 
 
 CASES += [
-    Case(f"{ATIMES_HIST}:atimes_data_2_hist", lambda f: _in_place(f, _atimes(f)), "automatic bin time"),
-    Case(f"{ATIMES_HIST}:atimes_data_2_hist", lambda f: _in_place(f, _atimes(f), bintime=250.0), "bin time"),
     Case(
         f"{ATIMES_HIST}:atimes_data_2_hist",
-        lambda f: _in_place(f, _atimes(f), bintime=250.0, ttm_correction=True, laser_freq=40e6),
+        lambda f: _in_place(f, _atimes(f)),
+        "automatic bin time",
+    ),
+    Case(
+        f"{ATIMES_HIST}:atimes_data_2_hist",
+        lambda f: _in_place(f, _atimes(f), bintime=250.0),
+        "bin time",
+    ),
+    Case(
+        f"{ATIMES_HIST}:atimes_data_2_hist",
+        lambda f: _in_place(
+            f, _atimes(f), bintime=250.0, ttm_correction=True, laser_freq=40e6
+        ),
         "TTM correction",
     ),
 ]
@@ -717,10 +933,22 @@ def _atimes_data_methods(cls):
 
 CASES += [
     Case(f"{ATIMES_DATA}:ATimesData", _atimes_data_methods, "with microtimes"),
-    Case(f"{ATIMES_DATA}:ATimesData", _atimes_data_without_microtimes, "without microtimes"),
+    Case(
+        f"{ATIMES_DATA}:ATimesData",
+        _atimes_data_without_microtimes,
+        "without microtimes",
+    ),
     Case(f"{ATIMES_DATA}:atimes_data_2_duration", lambda f: f(_atimes(f)), "default"),
-    Case(f"{ATIMES_DATA}:atimes_data_2_duration", lambda f: f(_atimes(f), 1e-9, subtract_start_time=True), "subtract start"),
-    Case(f"{ATIMES_DATA}:atimes_data_2_duration", lambda f: f(_atimes(f), return_period=True), "period"),
+    Case(
+        f"{ATIMES_DATA}:atimes_data_2_duration",
+        lambda f: f(_atimes(f), 1e-9, subtract_start_time=True),
+        "subtract start",
+    ),
+    Case(
+        f"{ATIMES_DATA}:atimes_data_2_duration",
+        lambda f: f(_atimes(f), return_period=True),
+        "period",
+    ),
     Case(f"{ATIMES_DATA}:atimes_data_2_channels", lambda f: f(_atimes(f, range(3, 9)))),
     Case(f"{ATIMES_DATA}:atimes_data_attr_2_ch", lambda f: f("det31")),
 ]
@@ -751,20 +979,40 @@ CASES += [
     Case(f"{BIN_DATA}:ArrivalTimes", lambda cls: _marked(cls, "pixel0")),
     Case(
         f"{BIN_DATA}:getaddress",
-        lambda f: [f([byte, 0, 0, 0]) for byte in (0b00000000, 0b00100000, 0b01100000, 0b11111111, 0b10101010)],
+        lambda f: [
+            f([byte, 0, 0, 0])
+            for byte in (0b00000000, 0b00100000, 0b01100000, 0b11111111, 0b10101010)
+        ],
     ),
     Case(
         f"{BIN_DATA}:gettime",
-        lambda f: [f([0, 0, high, low]) for high, low in ((0, 0), (0b00001111, 255), (0b00000101, 0b10110001), (0b11110010, 7))],
+        lambda f: [
+            f([0, 0, high, low])
+            for high, low in (
+                (0, 0),
+                (0b00001111, 255),
+                (0b00000101, 0b10110001),
+                (0b11110010, 7),
+            )
+        ],
     ),
     Case(
         f"{BIN_DATA}:getchannel",
-        lambda f: [f([high, low, 0, 0]) for high, low in ((0, 1), (0, 2), (1, 0), (2, 0), (0, 0), (1, 1), (3, 3))],
+        lambda f: [
+            f([high, low, 0, 0])
+            for high, low in ((0, 1), (0, 2), (1, 0), (2, 0), (0, 0), (1, 1), (3, 3))
+        ],
     ),
 ]
 
 CASES += [
-    Case(f"{CORR_KW}:get_corr_input", lambda f, c=corr: [f(c, det) for det in ("square 5x5", "PDA-23", "airyscan 32")], corr)
+    Case(
+        f"{CORR_KW}:get_corr_input",
+        lambda f, c=corr: [
+            f(c, det) for det in ("square 5x5", "PDA-23", "airyscan 32")
+        ],
+        corr,
+    )
     for corr in (
         "all autocorrelations",
         "spot-variation fcs",
@@ -775,8 +1023,16 @@ CASES += [
         "unknown",
     )
 ] + [
-    Case(f"{CORR_KW}:get_corr_input", lambda f, c=corr, d=det: f(c, d), f"{corr}, {det}")
-    for corr, det in (("fcs", "nsparc"), ("svfcs", "luminosa"), ("xcorr", "airyscan"), ("svfcs-ext", "5x5"), ("fcs", "pda23"))
+    Case(
+        f"{CORR_KW}:get_corr_input", lambda f, c=corr, d=det: f(c, d), f"{corr}, {det}"
+    )
+    for corr, det in (
+        ("fcs", "nsparc"),
+        ("svfcs", "luminosa"),
+        ("xcorr", "airyscan"),
+        ("svfcs-ext", "5x5"),
+        ("fcs", "pda23"),
+    )
 ]
 
 CASES += [
@@ -784,10 +1040,28 @@ CASES += [
 ]
 
 CASES += [
-    Case(f"{DETECTORS}:detector_element_coordinates", lambda f, d=detector: (f(d), f(d, element=3)), detector)
-    for detector in ("airyscan", "Luminosa", "pda-23", "nsparc", "5x5", "gi", "7x7", "prism", "unknown")
+    Case(
+        f"{DETECTORS}:detector_element_coordinates",
+        lambda f, d=detector: (f(d), f(d, element=3)),
+        detector,
+    )
+    for detector in (
+        "airyscan",
+        "Luminosa",
+        "pda-23",
+        "nsparc",
+        "5x5",
+        "gi",
+        "7x7",
+        "prism",
+        "unknown",
+    )
 ] + [
-    Case(f"{DETECTORS}:distance_between_elements", lambda f, d=detector: f(d, 3, 17), detector)
+    Case(
+        f"{DETECTORS}:distance_between_elements",
+        lambda f, d=detector: f(d, 3, 17),
+        detector,
+    )
     for detector in ("airyscan", "luminosa", "nsparc", "prism")
 ]
 
@@ -795,7 +1069,9 @@ CASES += [
     Case(f"{DISTANCE}:distance2detelements", lambda f: f(3, 18)),
     Case(f"{DISTANCE}:spad_coord_from_det_numb", lambda f: f(13)),
     Case(f"{DISTANCE}:spad_shift_vector_crosscorr", lambda f: f(), "default"),
-    Case(f"{DISTANCE}:spad_shift_vector_crosscorr", lambda f: f([1, -1], 3), "3x3 region"),
+    Case(
+        f"{DISTANCE}:spad_shift_vector_crosscorr", lambda f: f([1, -1], 3), "3x3 region"
+    ),
 ]
 
 SPAD_MODES = {
@@ -835,15 +1111,26 @@ SWITCH_MODES = (
 )
 
 CASES += [
-    Case(f"{SPAD_DATA}:extract_spad_data", lambda f, m=mode: _printed(f, _spad_input("data"), m), label)
+    Case(
+        f"{SPAD_DATA}:extract_spad_data",
+        lambda f, m=mode: _printed(f, _spad_input("data"), m),
+        label,
+    )
     for label, mode in SPAD_MODES.items()
 ] + [
-    Case(f"{SPAD_DATA}:switch_mode_string", lambda f, m=mode: _printed(f, _spad_input(m), m), mode)
+    Case(
+        f"{SPAD_DATA}:switch_mode_string",
+        lambda f, m=mode: _printed(f, _spad_input(m), m),
+        mode,
+    )
     for mode in SWITCH_MODES
 ]
 
 CASES += [
-    Case(f"{SPAD_DATA}:{name}", lambda f, n=name: _printed(f, _spad_input(n if n.endswith("_5D") else "data")))
+    Case(
+        f"{SPAD_DATA}:{name}",
+        lambda f, n=name: _printed(f, _spad_input(n if n.endswith("_5D") else "data")),
+    )
     for name in (
         "central",
         "sum3",
@@ -868,10 +1155,26 @@ CASES += [
 ]
 
 CASES += [
-    Case(f"{SPAD_STREAMS}:extract_spad_photon_streams", lambda f: f(_atimes(f), "C3+4+7+12"), "custom sum"),
-    Case(f"{SPAD_STREAMS}:extract_spad_photon_streams", lambda f: f(_atimes(f), 7), "single channel"),
-    Case(f"{SPAD_STREAMS}:extract_spad_photon_streams", lambda f: f(_atimes(f), "sum3"), "keyword"),
-    Case(f"{SPAD_STREAMS}:extract_spad_photon_streams", lambda f: f(_atimes(f, filters=2), "sum3"), "with filter weights"),
+    Case(
+        f"{SPAD_STREAMS}:extract_spad_photon_streams",
+        lambda f: f(_atimes(f), "C3+4+7+12"),
+        "custom sum",
+    ),
+    Case(
+        f"{SPAD_STREAMS}:extract_spad_photon_streams",
+        lambda f: f(_atimes(f), 7),
+        "single channel",
+    ),
+    Case(
+        f"{SPAD_STREAMS}:extract_spad_photon_streams",
+        lambda f: f(_atimes(f), "sum3"),
+        "keyword",
+    ),
+    Case(
+        f"{SPAD_STREAMS}:extract_spad_photon_streams",
+        lambda f: f(_atimes(f, filters=2), "sum3"),
+        "with filter weights",
+    ),
 ]
 
 CASES += [
@@ -879,13 +1182,28 @@ CASES += [
 ]
 
 CASES += [
-    Case(f"{DIFFTIME}:g2difftime", lambda f: f(np.column_stack(correlation_curve())), "default smoothing"),
-    Case(f"{DIFFTIME}:g2difftime", lambda f: f(np.column_stack(correlation_curve()), smoothing=3), "smoothing 3"),
+    Case(
+        f"{DIFFTIME}:g2difftime",
+        lambda f: f(np.column_stack(correlation_curve())),
+        "default smoothing",
+    ),
+    Case(
+        f"{DIFFTIME}:g2difftime",
+        lambda f: f(np.column_stack(correlation_curve()), smoothing=3),
+        "smoothing 3",
+    ),
 ]
 
 CASES += [
-    Case(f"{LOAD_G}:strip_g_fname", lambda f: _printed(f, "folder/FCS_beads_sum3.csv", "FCS_beads_")),
-    Case(f"{LOAD_G}:strip_g_fname", lambda f: _printed(f, "FCS_beads_det12x7.csv", "FCS_", False), "quiet"),
+    Case(
+        f"{LOAD_G}:strip_g_fname",
+        lambda f: _printed(f, "folder/FCS_beads_sum3.csv", "FCS_beads_"),
+    ),
+    Case(
+        f"{LOAD_G}:strip_g_fname",
+        lambda f: _printed(f, "FCS_beads_det12x7.csv", "FCS_", False),
+        "quiet",
+    ),
 ]
 
 CASES += [
@@ -893,19 +1211,54 @@ CASES += [
     Case(f"{POLAR}:g2polar", lambda f: f(_directions(4), Nr=48), "4 directions"),
     Case(f"{POLAR}:g2polar", lambda f: f(_directions(6), Nr=48), "6 directions"),
     Case(f"{POLAR}:g2flow", lambda f: f(_directions(4), Nr=48), "square"),
-    Case(f"{POLAR}:g2flow", lambda f: f(_directions(4), Nr=48, detector="airy"), "airy"),
-    Case(f"{POLAR}:g2flow", lambda f: f(_directions(6), Nr=48, detector="airy6"), "airy6"),
-    Case(f"{POLAR}:g2polar_old", lambda f: f(_oscillating_curve()), "default smoothing"),
-    Case(f"{POLAR}:g2polar_old", lambda f: f(_oscillating_curve(), smoothing=5), "smoothing 5"),
+    Case(
+        f"{POLAR}:g2flow", lambda f: f(_directions(4), Nr=48, detector="airy"), "airy"
+    ),
+    Case(
+        f"{POLAR}:g2flow", lambda f: f(_directions(6), Nr=48, detector="airy6"), "airy6"
+    ),
+    Case(
+        f"{POLAR}:g2polar_old", lambda f: f(_oscillating_curve()), "default smoothing"
+    ),
+    Case(
+        f"{POLAR}:g2polar_old",
+        lambda f: f(_oscillating_curve(), smoothing=5),
+        "smoothing 5",
+    ),
 ]
 
 CASES += [
-    Case(f"{ANALYTICAL}:fcs_analytical", lambda f: f(_tau(), 2.0, 1e-3, 5.0, 0.01), "plain"),
-    Case(f"{ANALYTICAL}:fcs_analytical", lambda f: f(_tau(), 2.0, 1e-3, 5.0, 0.01, 1e-7, -1.05, 0.9), "afterpulsing and anomalous diffusion"),
-    Case(f"{ANALYTICAL}:fcs_analytical", lambda f: f(np.float64(1e-3), 2.0, 1e-3, 5.0, 0.01), "scalar lag time"),
+    Case(
+        f"{ANALYTICAL}:fcs_analytical",
+        lambda f: f(_tau(), 2.0, 1e-3, 5.0, 0.01),
+        "plain",
+    ),
+    Case(
+        f"{ANALYTICAL}:fcs_analytical",
+        lambda f: f(_tau(), 2.0, 1e-3, 5.0, 0.01, 1e-7, -1.05, 0.9),
+        "afterpulsing and anomalous diffusion",
+    ),
+    Case(
+        f"{ANALYTICAL}:fcs_analytical",
+        lambda f: f(np.float64(1e-3), 2.0, 1e-3, 5.0, 0.01),
+        "scalar lag time",
+    ),
     Case(
         f"{ANALYTICAL}:fcs_2c_analytical",
-        lambda f: f(_tau(), 2.0, 1e-3, 3e-2, 0.6, alpha=1.5, T=0.1, tautrip=5e-6, SF=4.0, offset=0.01, A=1e-8, B=-1.0),
+        lambda f: f(
+            _tau(),
+            2.0,
+            1e-3,
+            3e-2,
+            0.6,
+            alpha=1.5,
+            T=0.1,
+            tautrip=5e-6,
+            SF=4.0,
+            offset=0.01,
+            A=1e-8,
+            B=-1.0,
+        ),
     ),
     Case(
         f"{ANALYTICAL}:fcs_analytical_2c_anomalous",
@@ -913,60 +1266,114 @@ CASES += [
     ),
     Case(
         f"{ANALYTICAL}:fcs_analytical_2c_anomalous_c",
-        lambda f: f(_tau(), 0.5, 15.0, 2.0, 0.9, 0.8, 0.6, 0.1, 5e-6, 0.25, 4.0, 0.01, 1.5),
+        lambda f: f(
+            _tau(), 0.5, 15.0, 2.0, 0.9, 0.8, 0.6, 0.1, 5e-6, 0.25, 4.0, 0.01, 1.5
+        ),
     ),
     Case(
         f"{ANALYTICAL}:fcs_dualfocus",
-        lambda f: f(_tau(), 2.0, 1e-10, 2.5e-7, 5.0, 3e-7, 1.5e-7, 0.01, vx=2e-5, vy=-1e-5),
+        lambda f: f(
+            _tau(), 2.0, 1e-10, 2.5e-7, 5.0, 3e-7, 1.5e-7, 0.01, vx=2e-5, vy=-1e-5
+        ),
     ),
     Case(
         f"{ANALYTICAL}:fcs_dualfocus_c",
-        lambda f: f(_tau(), 0.5, 1e-10, 2.5e-7, 5.0, 3e-7, 1.5e-7, 0.01, vx=2e-5, vy=-1e-5),
+        lambda f: f(
+            _tau(), 0.5, 1e-10, 2.5e-7, 5.0, 3e-7, 1.5e-7, 0.01, vx=2e-5, vy=-1e-5
+        ),
     ),
     Case(
         f"{ANALYTICAL}:fcs_circular_scanning",
-        lambda f: f(_tau(), 2.0, 1e-3, 2.5e-7, 5.0, 1e-3, 2e-7, 0.01, vx=2e-5, vy=-1e-5),
+        lambda f: f(
+            _tau(), 2.0, 1e-3, 2.5e-7, 5.0, 1e-3, 2e-7, 0.01, vx=2e-5, vy=-1e-5
+        ),
     ),
-    Case(f"{ANALYTICAL}:fcs_circular_scanning_c", lambda f: f(_tau(), 0.5, 1e-10, 2.5e-7, 5.0, 1e-3, 2e-7, 0.01)),
+    Case(
+        f"{ANALYTICAL}:fcs_circular_scanning_c",
+        lambda f: f(_tau(), 0.5, 1e-10, 2.5e-7, 5.0, 1e-3, 2e-7, 0.01),
+    ),
     Case(
         f"{ANALYTICAL}:fcs_2c_2d_analytical",
-        lambda f: f(_tau(), 2.0, 1e-3, 3e-2, 0.6, alpha=1.5, T=0.1, tautrip=5e-6, offset=0.01, A=1e-8, B=-1.0),
+        lambda f: f(
+            _tau(),
+            2.0,
+            1e-3,
+            3e-2,
+            0.6,
+            alpha=1.5,
+            T=0.1,
+            tautrip=5e-6,
+            offset=0.01,
+            A=1e-8,
+            B=-1.0,
+        ),
     ),
     Case(
         f"{ANALYTICAL}:nanosecond_fcs_analytical",
-        lambda f: f(_tau(), 0.5, 0.3, 2e-6, 0.2, 2e-5, 0.1, 1e-6, 0.15, 1e-5, 1e-3, 5.0),
+        lambda f: f(
+            _tau(), 0.5, 0.3, 2e-6, 0.2, 2e-5, 0.1, 1e-6, 0.15, 1e-5, 1e-3, 5.0
+        ),
     ),
-    Case(f"{ANALYTICAL}:uncoupled_reaction_diffusion", lambda f: f(_tau(), 0.5, 1e-3, 5.0, 0.6, 100.0)),
-    Case(f"{ANALYTICAL}:fcs_finitelength", lambda f: f(_tau(), 2.0, 1e-3, 5.0, 1e4, 10.0, 1e-6)),
+    Case(
+        f"{ANALYTICAL}:uncoupled_reaction_diffusion",
+        lambda f: f(_tau(), 0.5, 1e-3, 5.0, 0.6, 100.0),
+    ),
+    Case(
+        f"{ANALYTICAL}:fcs_finitelength",
+        lambda f: f(_tau(), 2.0, 1e-3, 5.0, 1e4, 10.0, 1e-6),
+    ),
     Case(f"{ANALYTICAL}:fcs_1c_2dgl", lambda f: f(_tau(), 2.0, 1e-3, 5.0, 0.01)),
-    Case(f"{ANALYTICAL}:compute_gamma", lambda f: f(_tau(), 2.0, 1e-3), "default parameters"),
-    Case(f"{ANALYTICAL}:compute_gamma", lambda f: f(_tau(), 2.0, 1e-3, 20.0, 1e-6, 0.8, 5.0, 1e4), "given parameters"),
+    Case(
+        f"{ANALYTICAL}:compute_gamma",
+        lambda f: f(_tau(), 2.0, 1e-3),
+        "default parameters",
+    ),
+    Case(
+        f"{ANALYTICAL}:compute_gamma",
+        lambda f: f(_tau(), 2.0, 1e-3, 20.0, 1e-6, 0.8, 5.0, 1e4),
+        "given parameters",
+    ),
 ]
+
 
 def _single_dualfocus_residual(function):
     tau, curve, s = _fit_data(function, "fitfun_dualfocus")
-    return function(s.start[s.fit == 1], s.start[s.fit == 0], s.fit, None, tau, curve, _weights())
+    return function(
+        s.start[s.fit == 1], s.start[s.fit == 0], s.fit, None, tau, curve, _weights()
+    )
 
 
 def _global_residual(function):
     tau, curves, _, fit, _, _ = _global_dualfocus(function)
     fitted = np.array([1.0, 50.0, 0.01])
     fixed = np.array([250.0, 5.0, 300.0, 450.0, 0.0, 0.0, 0.0, 0.0])
-    return function(fitted, fixed, fit, GLOBAL_PARAM, tau, curves, _weights()[:, None] * np.ones(2))
+    return function(
+        fitted, fixed, fit, GLOBAL_PARAM, tau, curves, _weights()[:, None] * np.ones(2)
+    )
 
 
-CASES += [
-    Case(f"{FIT}:compute_gamma", lambda f: f(_tau(), 2.0, 1e-3), "default parameters"),
-    Case(f"{FIT}:compute_gamma", lambda f: f(_tau(), 2.0, 1e-3, 20.0, 1e-6, 0.8, 5.0, 1e4), "given parameters"),
-] + [
-    Case(f"{FIT}:{kind}", lambda f, k=kind: _residual(f, k, _weights()), "weights")
-    for kind in _FITS
-    if kind != "fitfun_dualfocus"
-] + [
-    Case(f"{FIT}:fitfun", lambda f: _residual(f, "fitfun"), "no weights"),
-    Case(f"{FIT}:fitfun_dualfocus", _single_dualfocus_residual, "single curve"),
-    Case(f"{FIT}:fitfun_dualfocus", _global_residual, "global fit of two curves"),
-]
+CASES += (
+    [
+        Case(
+            f"{FIT}:compute_gamma", lambda f: f(_tau(), 2.0, 1e-3), "default parameters"
+        ),
+        Case(
+            f"{FIT}:compute_gamma",
+            lambda f: f(_tau(), 2.0, 1e-3, 20.0, 1e-6, 0.8, 5.0, 1e4),
+            "given parameters",
+        ),
+    ]
+    + [
+        Case(f"{FIT}:{kind}", lambda f, k=kind: _residual(f, k, _weights()), "weights")
+        for kind in _FITS
+        if kind != "fitfun_dualfocus"
+    ]
+    + [
+        Case(f"{FIT}:fitfun", lambda f: _residual(f, "fitfun"), "no weights"),
+        Case(f"{FIT}:fitfun_dualfocus", _single_dualfocus_residual, "single curve"),
+        Case(f"{FIT}:fitfun_dualfocus", _global_residual, "global fit of two curves"),
+    ]
+)
 
 
 def _fit_global(function, weights=1, plot=-1):
@@ -988,7 +1395,15 @@ def _fit_global(function, weights=1, plot=-1):
 def _fit_dualfocus_direct(function, global_fit):
     if global_fit:
         tau, curves, start, fit, lower, upper = _global_dualfocus(function)
-        return function(curves, tau, fit, start, global_param=GLOBAL_PARAM, lBounds=lower, uBounds=upper)
+        return function(
+            curves,
+            tau,
+            fit,
+            start,
+            global_param=GLOBAL_PARAM,
+            lBounds=lower,
+            uBounds=upper,
+        )
     tau, curve, s = _fit_data(function, "fitfun_dualfocus")
     return function(curve, tau, s.fit, s.start, lBounds=s.lower, uBounds=s.upper)
 
@@ -1018,7 +1433,14 @@ def _fitfun_general(function, curves):
     fit = np.array([1, 1, 0, 1])
     if curves == 1:
         return function(
-            np.array([1.0, 5e-4, 0.01]), np.array([5.0]), fit, tau, data[:, 0], model, [False] * 4, _weights()
+            np.array([1.0, 5e-4, 0.01]),
+            np.array([5.0]),
+            fit,
+            tau,
+            data[:, 0],
+            model,
+            [False] * 4,
+            _weights(),
         )
     return function(
         np.array([1.0, 1.1, 0.5, 0.01, 0.02]),
@@ -1045,30 +1467,75 @@ def _fcs_fit_plotted(function):
     tau, curve, s = _fit_data(function, "fitfun_an")
     fit = np.ones(5, dtype=int)
     return _drawn(
-        lambda: function(curve, tau, "fitfun_an", fit, s.start, s.lower, s.upper, "central")
+        lambda: function(
+            curve, tau, "fitfun_an", fit, s.start, s.lower, s.upper, "central"
+        )
     )
 
 
 def _mem_fit(function, fitfun):
     tau, curve, s = _fit_data(function, "fitfun")
     param = [20, 30, 1e-5, 2e-4, 1.0, 20.0, 3.0]
-    return function(curve, tau, fitfun(_sibling(function, "mem_fit")), s.fit, param, s.lower, s.upper, -1)
+    return function(
+        curve,
+        tau,
+        fitfun(_sibling(function, "mem_fit")),
+        s.fit,
+        param,
+        s.lower,
+        s.upper,
+        -1,
+    )
 
 
 CASES += [
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_2c", lambda m: "fitfun_2c"), "fitfun_2c by name"),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_an", lambda m: "fitfun_an", _weights()), "fitfun_an by name, weights"),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_dualfocus", lambda m: "fitfun_dualfocus"), "fitfun_dualfocus by name"),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_circfcs", lambda m: "fitfun_circfcs"), "fitfun_circfcs by name"),
     Case(
         f"{FIT}:fcs_fit",
-        lambda f: _fit(f, "fitfun_free_diffusion_2d", lambda m: "fitfun_free_diffusion_2d"),
+        lambda f: _fit(f, "fitfun_2c", lambda m: "fitfun_2c"),
+        "fitfun_2c by name",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun_an", lambda m: "fitfun_an", _weights()),
+        "fitfun_an by name, weights",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun_dualfocus", lambda m: "fitfun_dualfocus"),
+        "fitfun_dualfocus by name",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun_circfcs", lambda m: "fitfun_circfcs"),
+        "fitfun_circfcs by name",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(
+            f, "fitfun_free_diffusion_2d", lambda m: "fitfun_free_diffusion_2d"
+        ),
         "fitfun_free_diffusion_2d by name",
     ),
-    Case(f"{FIT}:fcs_fit", lambda f: _mem_fit(f, lambda m: "mem_fit_free_diffusion"), "mem_fit_free_diffusion by name"),
-    Case(f"{FIT}:fcs_fit", lambda f: _mem_fit(f, lambda m: m.mem_fit_free_diffusion), "mem_fit_free_diffusion function"),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun", lambda m: m.fitfun, _weights()), "function object, weights"),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_an_2c", lambda m: m.fitfun_an_2c), "anomalous two components function"),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _mem_fit(f, lambda m: "mem_fit_free_diffusion"),
+        "mem_fit_free_diffusion by name",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _mem_fit(f, lambda m: m.mem_fit_free_diffusion),
+        "mem_fit_free_diffusion function",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun", lambda m: m.fitfun, _weights()),
+        "function object, weights",
+    ),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun_an_2c", lambda m: m.fitfun_an_2c),
+        "anomalous two components function",
+    ),
     Case(
         f"{FIT}:fcs_fit",
         lambda f: _fit(f, "fitfun_finitelength", lambda m: m.fitfun_finitelength),
@@ -1081,7 +1548,11 @@ CASES += [
     ),
     Case(
         f"{FIT}:fcs_fit",
-        lambda f: _fit(f, "fitfun_uncoupled_reaction_diffusion", lambda m: m.fitfun_uncoupled_reaction_diffusion),
+        lambda f: _fit(
+            f,
+            "fitfun_uncoupled_reaction_diffusion",
+            lambda m: m.fitfun_uncoupled_reaction_diffusion,
+        ),
         "reaction diffusion function",
     ),
     Case(
@@ -1089,20 +1560,42 @@ CASES += [
         lambda f: _fit(f, "fitfun_dualfocus", lambda m: m.fitfun_dualfocus),
         "fitfun_dualfocus function",
     ),
-    Case(f"{FIT}:fcs_fit", lambda f: _fit(f, "fitfun_dualfocus", lambda m: m.fcs_fit_dualfocus), "fcs_fit_dualfocus function"),
+    Case(
+        f"{FIT}:fcs_fit",
+        lambda f: _fit(f, "fitfun_dualfocus", lambda m: m.fcs_fit_dualfocus),
+        "fcs_fit_dualfocus function",
+    ),
     Case(f"{FIT}:fcs_fit", _fit_global, "global dual focus"),
     Case(f"{FIT}:fcs_fit", _fcs_fit_plotted, "plot"),
-    Case(f"{FIT}:fcs_fit_dualfocus", lambda f: _fit_dualfocus_direct(f, False), "single curve"),
-    Case(f"{FIT}:fcs_fit_dualfocus", lambda f: _fit_dualfocus_direct(f, True), "global fit"),
+    Case(
+        f"{FIT}:fcs_fit_dualfocus",
+        lambda f: _fit_dualfocus_direct(f, False),
+        "single curve",
+    ),
+    Case(
+        f"{FIT}:fcs_fit_dualfocus",
+        lambda f: _fit_dualfocus_direct(f, True),
+        "global fit",
+    ),
     Case(f"{FIT}:fit_corr", lambda f: _fit_corr(f, 1), "single curve"),
-    Case(f"{FIT}:fit_corr", lambda f: _fit_corr(f, 1, x_scale="jac"), "single curve with least_squares options"),
     Case(
         f"{FIT}:fit_corr",
-        lambda f: _fit_corr(f, 2, global_param=[False, True, True, False], weights=np.ones((50, 2))),
+        lambda f: _fit_corr(f, 1, x_scale="jac"),
+        "single curve with least_squares options",
+    ),
+    Case(
+        f"{FIT}:fit_corr",
+        lambda f: _fit_corr(
+            f, 2, global_param=[False, True, True, False], weights=np.ones((50, 2))
+        ),
         "global fit",
     ),
     Case(f"{FIT}:fitfun_general", lambda f: _fitfun_general(f, 1), "single curve"),
-    Case(f"{FIT}:fitfun_general", lambda f: _fitfun_general(f, 2), "global fit with scaled parameters"),
+    Case(
+        f"{FIT}:fitfun_general",
+        lambda f: _fitfun_general(f, 2),
+        "global fit with scaled parameters",
+    ),
     Case(f"{FIT}:plot_fit", _plot_fit),
     Case(
         f"{FIT}:make_fit_info_global_fit",
@@ -1119,24 +1612,59 @@ CASES += [
             [1.0, 2.0],
         ),
     ),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), ["spatialCorr"], 2, 3), "spatialCorr"),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), ["crossCenterAv"], 2), "crossCenterAv"),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), ["crossCenterAvN"], 1, 3), "crossCenterAvN"),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), ["twofocus5"], 2), "twofocus5"),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), ["twofocus5Av"], 2), "twofocus5Av"),
-    Case(f"{FIT}:g2global_fit_struct", lambda f: f(_spatial_correlations(), "", 0, 3), "all fields"),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), ["spatialCorr"], 2, 3),
+        "spatialCorr",
+    ),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), ["crossCenterAv"], 2),
+        "crossCenterAv",
+    ),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), ["crossCenterAvN"], 1, 3),
+        "crossCenterAvN",
+    ),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), ["twofocus5"], 2),
+        "twofocus5",
+    ),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), ["twofocus5Av"], 2),
+        "twofocus5Av",
+    ),
+    Case(
+        f"{FIT}:g2global_fit_struct",
+        lambda f: f(_spatial_correlations(), "", 0, 3),
+        "all fields",
+    ),
     Case(
         f"{FIT}:chi_2_fcs_fit",
-        lambda f: f(_tau(), correlation_curve()[1], np.array([1, 1, 0, 1]), _fit_result(4)),
+        lambda f: f(
+            _tau(), correlation_curve()[1], np.array([1, 1, 0, 1]), _fit_result(4)
+        ),
     ),
-    Case(f"{FIT}:stddev_2_weights", lambda f: f(np.append(_rng().uniform(0.5, 2, 20), 0.0))),
-    Case(f"{FIT}:stddev_2_weights", lambda f: f(_rng().uniform(0.5, 2, 20), clipmin=0.2, clipmax=0.8), "clipped"),
+    Case(
+        f"{FIT}:stddev_2_weights",
+        lambda f: f(np.append(_rng().uniform(0.5, 2, 20), 0.0)),
+    ),
+    Case(
+        f"{FIT}:stddev_2_weights",
+        lambda f: f(_rng().uniform(0.5, 2, 20), clipmin=0.2, clipmax=0.8),
+        "clipped",
+    ),
 ]
 
 
 def _fcs2corr(function, list_of_g, data=None, **kwargs):
     trace = time_trace() if data is None else data
-    return _printed(function, trace, 1.0, list_of_g, accuracy=8, print_info=False, **kwargs)
+    return _printed(
+        function, trace, 1.0, list_of_g, accuracy=8, print_info=False, **kwargs
+    )
 
 
 def _correlations_methods(cls):
@@ -1175,18 +1703,52 @@ def _spatialcorrav(function, return_type):
 CASES += [
     Case(f"{FCS_CORR}:Correlations", _correlations_methods),
     Case(f"{FCS_CORR}:Correlations_chunks", _chunks_methods),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["central", "sum3", "sum5"]), "keywords"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["central"], list_of_g_out=["c"]), "keyword with output name"),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["central", "sum3", "sum5"]),
+        "keywords",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["central"], list_of_g_out=["c"]),
+        "keyword with output name",
+    ),
     Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, [12, 3]), "channels"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["x0112", "x1201"]), "channel pairs"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["C6+7+8", "C6+7xC11+12"]), "custom sums"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["A1+2+3"]), "average of autocorrelations"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["crossCenter"]), "crossCenter"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["singleElement"]), "singleElement"),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["x0112", "x1201"]),
+        "channel pairs",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["C6+7+8", "C6+7xC11+12"]),
+        "custom sums",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["A1+2+3"]),
+        "average of autocorrelations",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["crossCenter"]), "crossCenter"
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["singleElement"]),
+        "singleElement",
+    ),
     Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["2MPD"]), "2MPD"),
     Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["av"]), "av"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["autoSpatial"], time_trace()[:12]), "autoSpatial"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["crossAll"], time_trace()[:2000]), "crossAll"),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["autoSpatial"], time_trace()[:12]),
+        "autoSpatial",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["crossAll"], time_trace()[:2000]),
+        "crossAll",
+    ),
     Case(
         f"{FCS_CORR}:fcs2corr",
         lambda f: _fcs2corr(f, ["crossAll"], algorithm="sparse_matrices"),
@@ -1194,21 +1756,47 @@ CASES += [
     ),
     Case(
         f"{FCS_CORR}:fcs2corr",
-        lambda f: _fcs2corr(f, ["crossAll"], algorithm="sparse_matrices", averaging="default"),
+        lambda f: _fcs2corr(
+            f, ["crossAll"], algorithm="sparse_matrices", averaging="default"
+        ),
         "crossAll sparse matrices default averaging",
     ),
     Case(
         f"{FCS_CORR}:fcs2corr",
         lambda f: _fcs2corr(
-            f, ["crossAll"], algorithm="sparse_matrices", averaging=["0x0+1x1", "0x1"], list_of_g_out=["auto", "cross"]
+            f,
+            ["crossAll"],
+            algorithm="sparse_matrices",
+            averaging=["0x0+1x1", "0x1"],
+            list_of_g_out=["auto", "cross"],
         ),
         "crossAll sparse matrices custom averaging",
     ),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["central"], algorithm="wiener-khinchin"), "wiener-khinchin"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["central"], algorithm="tt2corr"), "arrival times algorithm"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, ["central"], binsize=2, algorithm="pch"), "pch"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, [], time_trace()[:, 12]), "single detector vector"),
-    Case(f"{FCS_CORR}:fcs2corr", lambda f: _fcs2corr(f, [], time_trace()[:, 12], list_of_g_out=["only"]), "vector with output name"),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["central"], algorithm="wiener-khinchin"),
+        "wiener-khinchin",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["central"], algorithm="tt2corr"),
+        "arrival times algorithm",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, ["central"], binsize=2, algorithm="pch"),
+        "pch",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, [], time_trace()[:, 12]),
+        "single detector vector",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corr",
+        lambda f: _fcs2corr(f, [], time_trace()[:, 12], list_of_g_out=["only"]),
+        "vector with output name",
+    ),
     Case(
         f"{FCS_CORR}:correlate",
         lambda f: f(time_trace()[:, 12], time_trace()[:, 7], m=8, deltat=1e-6),
@@ -1216,39 +1804,93 @@ CASES += [
     ),
     Case(
         f"{FCS_CORR}:correlate",
-        lambda f: f(time_trace()[:, 12], time_trace()[:, 7], m=8, deltat=1e-6, normalize=False),
+        lambda f: f(
+            time_trace()[:, 12], time_trace()[:, 7], m=8, deltat=1e-6, normalize=False
+        ),
         "multipletau not normalised",
     ),
     Case(
         f"{FCS_CORR}:correlate",
-        lambda f: f(time_trace()[:, 12], time_trace()[:, 7], m=8, deltat=1e-6, algorithm="wiener-khinchin"),
+        lambda f: f(
+            time_trace()[:, 12],
+            time_trace()[:, 7],
+            m=8,
+            deltat=1e-6,
+            algorithm="wiener-khinchin",
+        ),
         "wiener-khinchin",
     ),
     Case(
         f"{FCS_CORR}:correlate",
-        lambda f: f(time_trace()[:, 12], time_trace()[:, 7], m=8, binsize=2, algorithm="pch"),
+        lambda f: f(
+            time_trace()[:, 12], time_trace()[:, 7], m=8, binsize=2, algorithm="pch"
+        ),
         "pch",
     ),
     Case(
         f"{FCS_CORR}:correlate",
-        lambda f: f(time_trace()[:, 12], time_trace()[:, 7], m=8, deltat=1e-6, algorithm="tt2corr"),
+        lambda f: f(
+            time_trace()[:, 12],
+            time_trace()[:, 7],
+            m=8,
+            deltat=1e-6,
+            algorithm="tt2corr",
+        ),
         "arrival times algorithm",
     ),
-    Case(f"{FCS_CORR}:correlate_parallel", lambda f: f(time_trace()[:, :3].T, m=8, deltat=1e-6), "average compression"),
-    Case(f"{FCS_CORR}:correlate_parallel", lambda f: f(time_trace()[:, :3].T, m=8, compress="first", ret_sum=True), "first compression"),
-    Case(f"{FCS_CORR}:correlate_parallel", lambda f: f(time_trace()[:, :3].T, m=8, compress="second"), "second compression"),
-    Case(f"{FCS_CORR}:fcs2corrsplit", lambda f: _printed(f, time_trace(), 1.0, ["central", "sum3"], 8, 1), "no split"),
+    Case(
+        f"{FCS_CORR}:correlate_parallel",
+        lambda f: f(time_trace()[:, :3].T, m=8, deltat=1e-6),
+        "average compression",
+    ),
+    Case(
+        f"{FCS_CORR}:correlate_parallel",
+        lambda f: f(time_trace()[:, :3].T, m=8, compress="first", ret_sum=True),
+        "first compression",
+    ),
+    Case(
+        f"{FCS_CORR}:correlate_parallel",
+        lambda f: f(time_trace()[:, :3].T, m=8, compress="second"),
+        "second compression",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs2corrsplit",
+        lambda f: _printed(f, time_trace(), 1.0, ["central", "sum3"], 8, 1),
+        "no split",
+    ),
     Case(
         f"{FCS_CORR}:fcs_sparse",
         lambda f: f(time_trace()[:2000], 1e-6, m=8),
         "normalised",
     ),
-    Case(f"{FCS_CORR}:fcs_sparse", lambda f: f(time_trace()[:2000], 1e-6, m=9, normalize=False), "not normalised, odd accuracy"),
-    Case(f"{FCS_CORR}:fcs_spatialcorrav", lambda f: _spatialcorrav(f, "3Darray"), "3D array"),
-    Case(f"{FCS_CORR}:fcs_spatialcorrav", lambda f: _spatialcorrav(f, "fields"), "fields"),
-    Case(f"{FCS_CORR}:fcs_av_chunks", lambda f: _in_place(f, _chunk_correlations(["central", "sum3"]), [0, 2]), "named chunks"),
-    Case(f"{FCS_CORR}:fcs_crosscenter_av", lambda f: _crosscenter(f, "_averageX", True), "good chunks, object"),
-    Case(f"{FCS_CORR}:fcs_crosscenter_av", lambda f: _crosscenter(f, "_average", False), "all chunks, array"),
+    Case(
+        f"{FCS_CORR}:fcs_sparse",
+        lambda f: f(time_trace()[:2000], 1e-6, m=9, normalize=False),
+        "not normalised, odd accuracy",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs_spatialcorrav",
+        lambda f: _spatialcorrav(f, "3Darray"),
+        "3D array",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs_spatialcorrav", lambda f: _spatialcorrav(f, "fields"), "fields"
+    ),
+    Case(
+        f"{FCS_CORR}:fcs_av_chunks",
+        lambda f: _in_place(f, _chunk_correlations(["central", "sum3"]), [0, 2]),
+        "named chunks",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs_crosscenter_av",
+        lambda f: _crosscenter(f, "_averageX", True),
+        "good chunks, object",
+    ),
+    Case(
+        f"{FCS_CORR}:fcs_crosscenter_av",
+        lambda f: _crosscenter(f, "_average", False),
+        "all chunks, array",
+    ),
     Case(f"{FCS_CORR}:corrs2average_for_stics", lambda f: f(), "default"),
     Case(f"{FCS_CORR}:corrs2average_for_stics", lambda f: f(3), "3x3 detector"),
     Case(
@@ -1307,7 +1949,9 @@ def _imsd(function, **kwargs):
 
 def _lifetime(function, **kwargs):
     streams = photon_streams()
-    data = SimpleNamespace(**{f"det{channel}": streams[channel] for channel in range(3)})
+    data = SimpleNamespace(
+        **{f"det{channel}": streams[channel] for channel in range(3)}
+    )
     function(data, **kwargs)
     return data
 
@@ -1319,14 +1963,18 @@ def _matrix_to_count(function, values):
 
 
 def _bit_patterns():
-    return _rng().integers(0, np.iinfo(np.uint64).max, size=(30, 2), dtype=np.uint64, endpoint=True)
+    return _rng().integers(
+        0, np.iinfo(np.uint64).max, size=(30, 2), dtype=np.uint64, endpoint=True
+    )
 
 
 def _mem_curve(obj):
     model = _sibling(obj, "fcs_analytical").fcs_analytical
     tau = _tau()
     noise = _rng().normal(0, 1e-3, tau.shape)
-    return tau, model(tau, 2.0, 1e-3, 5.0, 0.0) + 0.5 * model(tau, 1.0, 3e-2, 5.0, 0.0) + noise
+    return tau, model(tau, 2.0, 1e-3, 5.0, 0.0) + 0.5 * model(
+        tau, 1.0, 3e-2, 5.0, 0.0
+    ) + noise
 
 
 MEM_PARAM = [20, 100, 1e-6, 2e-3, 1, 10, 5]
@@ -1378,12 +2026,21 @@ def _w0_data(function):
 
 
 def _w0_fit(function):
-    return _printed(function, _w0_data(function), W0_FIT, W0_START, N=FINGERPRINT_POINTS)
+    return _printed(
+        function, _w0_data(function), W0_FIT, W0_START, N=FINGERPRINT_POINTS
+    )
 
 
 def _w0_residuals(function):
     weights = np.linspace(0.5, 1.5, 25).reshape(5, 5)
-    args = (W0_START[W0_FIT == 1], W0_START[W0_FIT == 0], W0_FIT, _w0_data(function), FINGERPRINT_POINTS, weights)
+    args = (
+        W0_START[W0_FIT == 1],
+        W0_START[W0_FIT == 0],
+        W0_FIT,
+        _w0_data(function),
+        FINGERPRINT_POINTS,
+        weights,
+    )
     return _printed(function, *args)
 
 
@@ -1411,8 +2068,14 @@ def _two_focus_inputs():
 
 
 CASES += [
-    Case(f"{FCSBIN}:numpy_timetrace_2_atimes", lambda f: f(time_trace()[:300, :5].astype(np.int64), 1e-6)),
-    Case(f"{FCSBIN}:photon_arrivals", lambda f: f(time_trace()[:300, :5].astype(np.int64), 3)),
+    Case(
+        f"{FCSBIN}:numpy_timetrace_2_atimes",
+        lambda f: f(time_trace()[:300, :5].astype(np.int64), 1e-6),
+    ),
+    Case(
+        f"{FCSBIN}:photon_arrivals",
+        lambda f: f(time_trace()[:300, :5].astype(np.int64), 3),
+    ),
 ]
 
 SKIPPED |= {
@@ -1426,29 +2089,57 @@ SKIPPED |= {
 }
 
 CASES += [
-    Case(f"{FILTER_AP}:filter_ap", lambda f: f(0, 23.78, 64, 0.028, plot_fig=False), "no STED"),
-    Case(f"{FILTER_AP}:filter_ap", lambda f: f(0.5, 20.0, 64, 0.05, norm_exp=True, plot_fig=False), "STED, normalised decay"),
-    Case(f"{FILTER_AP}:filter_ap", lambda f: _drawn(lambda: f(0.2, 15.0, 48, 0.03)), "plot"),
     Case(
-        f"{FILTER_AP}:filter_2c",
-        lambda f: f(decay_histogram(), 1.0 + 0.5 * decay_histogram()[::-1], 0.7, plot_fig=False),
+        f"{FILTER_AP}:filter_ap",
+        lambda f: f(0, 23.78, 64, 0.028, plot_fig=False),
+        "no STED",
+    ),
+    Case(
+        f"{FILTER_AP}:filter_ap",
+        lambda f: f(0.5, 20.0, 64, 0.05, norm_exp=True, plot_fig=False),
+        "STED, normalised decay",
+    ),
+    Case(
+        f"{FILTER_AP}:filter_ap",
+        lambda f: _drawn(lambda: f(0.2, 15.0, 48, 0.03)),
+        "plot",
     ),
     Case(
         f"{FILTER_AP}:filter_2c",
-        lambda f: _drawn(lambda: f(decay_histogram(), 2.0 + decay_histogram()[::-1], 1.3)),
+        lambda f: f(
+            decay_histogram(), 1.0 + 0.5 * decay_histogram()[::-1], 0.7, plot_fig=False
+        ),
+    ),
+    Case(
+        f"{FILTER_AP}:filter_2c",
+        lambda f: _drawn(
+            lambda: f(decay_histogram(), 2.0 + decay_histogram()[::-1], 1.3)
+        ),
         "plot",
     ),
     Case(f"{FILTER_AP}:filter_range", _filter_range),
 ]
 
 CASES += [
-    Case(f"{FILTER_G}:good_chunks_from_g_obj", lambda f: f(_chunk_g(f), "sum5"), "default acceptance"),
-    Case(f"{FILTER_G}:good_chunks_from_g_obj", lambda f: f(_chunk_g(f, 12), "sum5", 0.5), "acceptance 0.5"),
+    Case(
+        f"{FILTER_G}:good_chunks_from_g_obj",
+        lambda f: f(_chunk_g(f), "sum5"),
+        "default acceptance",
+    ),
+    Case(
+        f"{FILTER_G}:good_chunks_from_g_obj",
+        lambda f: f(_chunk_g(f, 12), "sum5", 0.5),
+        "acceptance 0.5",
+    ),
     Case(f"{FILTER_G}:check_chunks_from_g_obj", lambda f: f(_chunk_g(f), "sum5")),
     Case(f"{FILTER_G}:sort_g_obj", lambda f: f(_chunk_g(f), "sum5")),
     Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(12)), "12 curves"),
     Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(2)), "two curves"),
-    Case(f"{FILTER_G}:sort_g_array", lambda f: f(_g_curves(252)), "252 curves with the pre-selection"),
+    Case(
+        f"{FILTER_G}:sort_g_array",
+        lambda f: f(_g_curves(252)),
+        "252 curves with the pre-selection",
+    ),
 ]
 
 CASES += [
@@ -1463,12 +2154,36 @@ CASES += [
 
 CASES += [
     Case(f"{INFO}:infoObj", lambda cls: _marked(cls, "duration")),
-    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/sub/measure_y_52_x_1480.bin"), "bin file"),
-    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/measure.bin", metastring="_meta.txt"), "custom suffix"),
-    Case(f"{INFO}:get_metafile_from_file", lambda f: f("folder/measure.h5"), "not a bin file"),
-    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "DURATION [s]"), "first parameter"),
-    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "READING SPEED [kHz]"), "middle parameter"),
-    Case(f"{INFO}:get_fcs_info_singleparam", lambda f: f(_info_text(), "NUMBER OF LINES"), "last parameter"),
+    Case(
+        f"{INFO}:get_metafile_from_file",
+        lambda f: f("folder/sub/measure_y_52_x_1480.bin"),
+        "bin file",
+    ),
+    Case(
+        f"{INFO}:get_metafile_from_file",
+        lambda f: f("folder/measure.bin", metastring="_meta.txt"),
+        "custom suffix",
+    ),
+    Case(
+        f"{INFO}:get_metafile_from_file",
+        lambda f: f("folder/measure.h5"),
+        "not a bin file",
+    ),
+    Case(
+        f"{INFO}:get_fcs_info_singleparam",
+        lambda f: f(_info_text(), "DURATION [s]"),
+        "first parameter",
+    ),
+    Case(
+        f"{INFO}:get_fcs_info_singleparam",
+        lambda f: f(_info_text(), "READING SPEED [kHz]"),
+        "middle parameter",
+    ),
+    Case(
+        f"{INFO}:get_fcs_info_singleparam",
+        lambda f: f(_info_text(), "NUMBER OF LINES"),
+        "last parameter",
+    ),
 ]
 
 SKIPPED |= {
@@ -1484,26 +2199,51 @@ SKIPPED |= {
 
 CASES += [
     Case(f"{IMSD}:fcs2imsd", lambda f: _imsd(f), "default"),
-    Case(f"{IMSD}:fcs2imsd", lambda f: _imsd(f, remove_outliers=True, remove_afterpulsing=False), "outlier removal, afterpulsing kept"),
+    Case(
+        f"{IMSD}:fcs2imsd",
+        lambda f: _imsd(f, remove_outliers=True, remove_afterpulsing=False),
+        "outlier removal, afterpulsing kept",
+    ),
 ]
 
 CASES += [
     Case(f"{LIFETIME}:lifetimehist", lambda f: _lifetime(f), "defaults"),
-    Case(f"{LIFETIME}:lifetimehist", lambda f: _lifetime(f, m_bins=100, laser_freq=40e6), "bins and laser frequency"),
+    Case(
+        f"{LIFETIME}:lifetimehist",
+        lambda f: _lifetime(f, m_bins=100, laser_freq=40e6),
+        "bins and laser frequency",
+    ),
 ]
 
 SKIPPED |= {f"{ANALOG}:file_to_analogcount": SKIP_FILE_IO}
 
 CASES += [
-    Case(f"{COUNT}:matrix_to_count", lambda f: _matrix_to_count(f, _bit_patterns()), "random bits"),
     Case(
         f"{COUNT}:matrix_to_count",
-        lambda f: _matrix_to_count(f, np.full((4, 2), np.iinfo(np.uint64).max, dtype=np.uint64)),
+        lambda f: _matrix_to_count(f, _bit_patterns()),
+        "random bits",
+    ),
+    Case(
+        f"{COUNT}:matrix_to_count",
+        lambda f: _matrix_to_count(
+            f, np.full((4, 2), np.iinfo(np.uint64).max, dtype=np.uint64)
+        ),
         "all bits set",
     ),
-    Case(f"{COUNT}:reshape_to_5d", lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 3, 4, 5)),
-    Case(f"{COUNT}:reshape_to_6d", lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 1, 3, 4, 5), "with time bins"),
-    Case(f"{COUNT}:reshape_to_6d", lambda f: f(np.arange(24 * 25).reshape(24, 25), 2, 1, 3, 4), "default time bins"),
+    Case(
+        f"{COUNT}:reshape_to_5d",
+        lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 3, 4, 5),
+    ),
+    Case(
+        f"{COUNT}:reshape_to_6d",
+        lambda f: f(np.arange(120 * 25).reshape(120, 25), 2, 1, 3, 4, 5),
+        "with time bins",
+    ),
+    Case(
+        f"{COUNT}:reshape_to_6d",
+        lambda f: f(np.arange(24 * 25).reshape(24, 25), 2, 1, 3, 4),
+        "default time bins",
+    ),
 ]
 
 SKIPPED |= {
@@ -1525,9 +2265,21 @@ SKIPPED |= {
 CASES += [
     Case(f"{MEM}:Fitresultclass", lambda cls: _marked(cls, "x")),
     Case(f"{MEM}:mem_fit", lambda f: _mem_direct(f), "default start distribution"),
-    Case(f"{MEM}:mem_fit", lambda f: _mem_direct(f, weights=_weights(), startdistr=_rng().uniform(0.5, 1.5, 20)), "weights and start distribution"),
-    Case(f"{MEM}:mem_fit_free_diffusion", lambda f: _mem_free_diffusion(f), "unweighted"),
-    Case(f"{MEM}:mem_fit_free_diffusion", lambda f: _mem_free_diffusion(f, _weights()), "weighted"),
+    Case(
+        f"{MEM}:mem_fit",
+        lambda f: _mem_direct(
+            f, weights=_weights(), startdistr=_rng().uniform(0.5, 1.5, 20)
+        ),
+        "weights and start distribution",
+    ),
+    Case(
+        f"{MEM}:mem_fit_free_diffusion", lambda f: _mem_free_diffusion(f), "unweighted"
+    ),
+    Case(
+        f"{MEM}:mem_fit_free_diffusion",
+        lambda f: _mem_free_diffusion(f, _weights()),
+        "weighted",
+    ),
 ]
 
 SKIPPED |= {
@@ -1539,38 +2291,72 @@ SKIPPED |= {
 }
 
 CASES += [
-    Case(f"{FINGERPRINT}:plot_fingerprint_airyscan", lambda f: f(_rng().uniform(1, 100, 32)), "no plot"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_airyscan",
+        lambda f: f(_rng().uniform(1, 100, 32)),
+        "no plot",
+    ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint_airyscan",
         lambda f: _figure(f, _rng().uniform(1, 100, 32), cmap="viridis", plot=True),
         "plot",
     ),
-    Case(f"{FINGERPRINT}:plot_fingerprint_airyscan", lambda f: f(np.full(32, 7.0)), "flat counts"),
-    Case(f"{FINGERPRINT}:plot_fingerprint_luminosa", lambda f: f(_rng().uniform(1, 100, 23)), "23 elements"),
-    Case(f"{FINGERPRINT}:plot_fingerprint_luminosa", lambda f: f(_rng().uniform(1, 100, 32)), "32 elements"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_airyscan",
+        lambda f: f(np.full(32, 7.0)),
+        "flat counts",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_luminosa",
+        lambda f: f(_rng().uniform(1, 100, 23)),
+        "23 elements",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint_luminosa",
+        lambda f: f(_rng().uniform(1, 100, 32)),
+        "32 elements",
+    ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint_luminosa",
         lambda f: _figure(f, _rng().uniform(1, 100, 23), cmap="viridis", plot=True),
         "plot",
     ),
-    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, time_trace()), "intensity traces, percentages"),
     Case(
         f"{FINGERPRINT}:plot_fingerprint5x5",
-        lambda f: _figure(f, time_trace(), normalize=True, show_perc="numbers", dtype="float64"),
+        lambda f: _figure(f, time_trace()),
+        "intensity traces, percentages",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(
+            f, time_trace(), normalize=True, show_perc="numbers", dtype="float64"
+        ),
         "intensity traces, normalised, numbers",
     ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint5x5",
-        lambda f: _figure(f, time_trace().sum(axis=0), show_perc=False, vminmax=[0.0, 80000.0]),
+        lambda f: _figure(
+            f, time_trace().sum(axis=0), show_perc=False, vminmax=[0.0, 80000.0]
+        ),
         "summed counts, colour range",
     ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint5x5",
-        lambda f: _figure(f, time_trace().sum(axis=0), show_perc=True, vminmax=[0.0, 80000.0]),
+        lambda f: _figure(
+            f, time_trace().sum(axis=0), show_perc=True, vminmax=[0.0, 80000.0]
+        ),
         "summed counts, colour range, percentages",
     ),
-    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, _atimes(f)), "arrival times, 25 detectors"),
-    Case(f"{FINGERPRINT}:plot_fingerprint5x5", lambda f: _figure(f, _atimes(f, range(21))), "arrival times, 21 detectors"),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(f, _atimes(f)),
+        "arrival times, 25 detectors",
+    ),
+    Case(
+        f"{FINGERPRINT}:plot_fingerprint5x5",
+        lambda f: _figure(f, _atimes(f, range(21))),
+        "arrival times, 21 detectors",
+    ),
 ]
 
 SKIPPED |= {
@@ -1608,15 +2394,25 @@ SKIPPED |= {
 CASES += [
     Case(f"{SELECT_G}:Correlations", lambda cls: _marked(cls, "dwellTime")),
     Case(f"{SELECT_G}:select_g", lambda f: f(_select_g_input()), "average"),
-    Case(f"{SELECT_G}:select_g", lambda f: f(_select_g_input(), selection="all"), "all"),
+    Case(
+        f"{SELECT_G}:select_g", lambda f: f(_select_g_input(), selection="all"), "all"
+    ),
     Case(f"{SHIFTS}:spad_shifts", lambda f: f()),
 ]
 
 CASES += [
     Case(f"{TT2CORR}:tt2corr", lambda f: _log_corr(f, same=False), "crosscorrelation"),
     Case(f"{TT2CORR}:tt2corr", lambda f: _log_corr(f, same=True), "autocorrelation"),
-    Case(f"{TT2CORR}:autocorrelation_wiener_khinchin", lambda f: _same_trace_corr(f), "same array"),
-    Case(f"{TT2CORR}:autocorrelation_wiener_khinchin", lambda f: f(*_tt_traces(), macro_time=1e-6), "two arrays"),
+    Case(
+        f"{TT2CORR}:autocorrelation_wiener_khinchin",
+        lambda f: _same_trace_corr(f),
+        "same array",
+    ),
+    Case(
+        f"{TT2CORR}:autocorrelation_wiener_khinchin",
+        lambda f: f(*_tt_traces(), macro_time=1e-6),
+        "two arrays",
+    ),
 ]
 
 CASES += [
@@ -1625,14 +2421,25 @@ CASES += [
         lambda f: _two_focus(f, np.logspace(-6, 0, 30)),
         "lag times",
     ),
-    Case(f"{TWO_FOCUS}:two_focus_fcs", lambda f: _two_focus(f, 1e-3), "scalar lag time"),
+    Case(
+        f"{TWO_FOCUS}:two_focus_fcs", lambda f: _two_focus(f, 1e-3), "scalar lag time"
+    ),
     Case(
         f"{TWO_FOCUS}:simulate_two_focus_cross_center",
-        lambda f: f(np.logspace(-6, 0, 20), 6e20, 4e-11, _two_focus_inputs()[0], _two_focus_inputs()[1], 1.5e-7),
+        lambda f: f(
+            np.logspace(-6, 0, 20),
+            6e20,
+            4e-11,
+            _two_focus_inputs()[0],
+            _two_focus_inputs()[1],
+            1.5e-7,
+        ),
     ),
     Case(
         f"{TWO_FOCUS}:simulate_spatialcorr",
-        lambda f: _printed(f, np.array([1e-4, 1e-3]), 1.5e-7, 6e20, 4e-11, *_two_focus_inputs()),
+        lambda f: _printed(
+            f, np.array([1e-4, 1e-3]), 1.5e-7, 6e20, 4e-11, *_two_focus_inputs()
+        ),
         "lag times",
     ),
     Case(
@@ -1643,7 +2450,11 @@ CASES += [
 ]
 
 CASES += [
-    Case(f"{U64}:u64_to_counts", lambda f: [f(number) for number in _u64_numbers()], "small, both cluster types"),
+    Case(
+        f"{U64}:u64_to_counts",
+        lambda f: [f(number) for number in _u64_numbers()],
+        "small, both cluster types",
+    ),
     Case(f"{U64}:binary_to_counts", lambda f: f(list("10110101"), 3), "three bits"),
     Case(f"{U64}:binary_to_counts", lambda f: f(list("1011010110"), 6), "six bits"),
 ]
@@ -1654,4 +2465,6 @@ CASES += [
     Case(f"{W0}:get_w0_from_fingerprint", _w0_fit),
 ]
 
-SKIPPED[f"{PYCORRFIT}:read_pycorrfit_singleparam"] = "AttributeError: module 'numpy' has no attribute 'float'"
+SKIPPED[f"{PYCORRFIT}:read_pycorrfit_singleparam"] = (
+    "AttributeError: module 'numpy' has no attribute 'float'"
+)

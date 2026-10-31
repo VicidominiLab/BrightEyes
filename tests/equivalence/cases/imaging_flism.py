@@ -86,7 +86,9 @@ def _calibration_table() -> dict[str, np.ndarray]:
 
 def _second_calibration_table() -> dict[str, np.ndarray]:
     table = _calibration_table()
-    return {name: values * 1.5 for name, values in table.items()} | {"channel": table["channel"]}
+    return {name: values * 1.5 for name, values in table.items()} | {
+        "channel": table["channel"]
+    }
 
 
 def _fit_traces() -> dict[str, np.ndarray | None]:
@@ -127,7 +129,9 @@ def _six_dimensional() -> np.ndarray:
 
 
 def _decays(*leading: int) -> np.ndarray:
-    return np.broadcast_to(flim_stack().sum(-1)[:4, :4, :16], (*leading, 4, 4, 16)).copy()
+    return np.broadcast_to(
+        flim_stack().sum(-1)[:4, :4, :16], (*leading, 4, 4, 16)
+    ).copy()
 
 
 def _shifts() -> np.ndarray:
@@ -162,36 +166,71 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:correct_phasor",
-        lambda f: f(_phasor_map(), _phasor_map()[0, 0] * 1j, coeff=0.5, laser_correction=False),
+        lambda f: f(
+            _phasor_map(), _phasor_map()[0, 0] * 1j, coeff=0.5, laser_correction=False
+        ),
         "no laser correction",
     ),
-    Case(f"{PHASOR}:sum_adjacent_pixel", lambda f: f(_rng().poisson(5.0, size=(16, 16)).astype(float), 4), "2D"),
+    Case(
+        f"{PHASOR}:sum_adjacent_pixel",
+        lambda f: f(_rng().poisson(5.0, size=(16, 16)).astype(float), 4),
+        "2D",
+    ),
     Case(f"{PHASOR}:sum_adjacent_pixel", lambda f: f(_six_dimensional(), 2), "6D"),
-    Case(f"{PHASOR}:sum_adjacent_pixel", lambda f: f(_six_dimensional(), 1), "no summing"),
-    Case(f"{PHASOR}:periodic_single_exponential_model", lambda f: f(T_NS, 3.0, 2.5, PERIOD_NS)),
+    Case(
+        f"{PHASOR}:sum_adjacent_pixel", lambda f: f(_six_dimensional(), 1), "no summing"
+    ),
+    Case(
+        f"{PHASOR}:periodic_single_exponential_model",
+        lambda f: f(T_NS, 3.0, 2.5, PERIOD_NS),
+    ),
     Case(f"{PHASOR}:pad_tensor", lambda f: f(_torch((6, 5)), 2, 3, 0), "reflect"),
-    Case(f"{PHASOR}:pad_tensor", lambda f: f(_torch((6, 5)), 2, 3, 1, mode="replicate"), "replicate"),
-    Case(f"{PHASOR}:pad_tensor", lambda f: f(_torch((6, 5)), 1, 2, 0, mode="constant"), "constant"),
-    Case(f"{PHASOR}:torch_median_filter", lambda f: f(_torch((8, 9))), "all dimensions"),
+    Case(
+        f"{PHASOR}:pad_tensor",
+        lambda f: f(_torch((6, 5)), 2, 3, 1, mode="replicate"),
+        "replicate",
+    ),
+    Case(
+        f"{PHASOR}:pad_tensor",
+        lambda f: f(_torch((6, 5)), 1, 2, 0, mode="constant"),
+        "constant",
+    ),
+    Case(
+        f"{PHASOR}:torch_median_filter", lambda f: f(_torch((8, 9))), "all dimensions"
+    ),
     Case(
         f"{PHASOR}:torch_median_filter",
         lambda f: f(_torch((8, 9)), window_size=5, dims=[1], mode="replicate"),
         "one dimension",
     ),
-    Case(f"{PHASOR}:partial_convolution_fft", lambda f: f(_torch((4, 6, 5)), _torch((6, 5, 3))), "spatial inputs"),
     Case(
         f"{PHASOR}:partial_convolution_fft",
-        lambda f: f(torch.fft.fftn(_torch((4, 6, 5)), dim=[1, 2]), _torch((6, 5, 3)), fourier=(True, False)),
+        lambda f: f(_torch((4, 6, 5)), _torch((6, 5, 3))),
+        "spatial inputs",
+    ),
+    Case(
+        f"{PHASOR}:partial_convolution_fft",
+        lambda f: f(
+            torch.fft.fftn(_torch((4, 6, 5)), dim=[1, 2]),
+            _torch((6, 5, 3)),
+            fourier=(True, False),
+        ),
         "Fourier volume",
     ),
     Case(
         f"{PHASOR}:partial_convolution_fft",
-        lambda f: f(_torch((4, 6, 5)), torch.fft.fftn(_torch((6, 5, 3)), dim=[0, 1]), fourier=(False, True)),
+        lambda f: f(
+            _torch((4, 6, 5)),
+            torch.fft.fftn(_torch((6, 5, 3)), dim=[0, 1]),
+            fourier=(False, True),
+        ),
         "Fourier kernel",
     ),
     Case(
         f"{PHASOR}:richardson_lucy_deconvolution",
-        lambda f: f(decay_histogram()[:64], SHORT_T_NS, 1.0, 2.5, PERIOD_NS, iterations=5),
+        lambda f: f(
+            decay_histogram()[:64], SHORT_T_NS, 1.0, 2.5, PERIOD_NS, iterations=5
+        ),
         "regularized",
     ),
     Case(
@@ -209,9 +248,15 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:estimate_irf",
-        lambda f: f(decay_histogram()[:64], SHORT_T_NS, 1.0, 2.5, PERIOD_NS, iterations=5),
+        lambda f: f(
+            decay_histogram()[:64], SHORT_T_NS, 1.0, 2.5, PERIOD_NS, iterations=5
+        ),
     ),
-    Case(f"{PHASOR}:estimate_lifetime_from_birfi", lambda f: f(T_NS, decay_histogram()), "one decay"),
+    Case(
+        f"{PHASOR}:estimate_lifetime_from_birfi",
+        lambda f: f(T_NS, decay_histogram()),
+        "one decay",
+    ),
     Case(
         f"{PHASOR}:estimate_lifetime_from_birfi",
         lambda f: f(
@@ -237,7 +282,9 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:estimate_lifetime_from_log",
-        lambda f: f(decay_histogram(), T_NS, 0.1, 256, PERIOD_NS, start_level=0.9, end_level=0.2),
+        lambda f: f(
+            decay_histogram(), T_NS, 0.1, 256, PERIOD_NS, start_level=0.9, end_level=0.2
+        ),
         "other levels",
     ),
     Case(
@@ -245,16 +292,31 @@ CASES: list[Case] = [
         lambda f: f(np.roll(decay_histogram(), 7) + 3.0, T_NS, 0.1, 256, PERIOD_NS),
         "peak away from the first bin",
     ),
-    Case(f"{PHASOR}:estimate_lifetime_from_circmean", lambda f: f(decay_histogram(), 0.5), "default"),
     Case(
         f"{PHASOR}:estimate_lifetime_from_circmean",
-        lambda f: f(decay_histogram(), 0.5, repetition_rate_MHz=20.0, background_per_bin=5.0, truncate_ns=30.0),
+        lambda f: f(decay_histogram(), 0.5),
+        "default",
+    ),
+    Case(
+        f"{PHASOR}:estimate_lifetime_from_circmean",
+        lambda f: f(
+            decay_histogram(),
+            0.5,
+            repetition_rate_MHz=20.0,
+            background_per_bin=5.0,
+            truncate_ns=30.0,
+        ),
         "background and truncation",
     ),
-    Case(f"{PHASOR}:flatten_and_remove_nan", lambda f: f(_lifetime_map()[1]), "one array"),
+    Case(
+        f"{PHASOR}:flatten_and_remove_nan", lambda f: f(_lifetime_map()[1]), "one array"
+    ),
     Case(
         f"{PHASOR}:flatten_and_remove_nan",
-        lambda f: f(_lifetime_map()[1], _lifetime_map()[0] * np.where(_lifetime_map()[0] > 90, np.nan, 1.0)),
+        lambda f: f(
+            _lifetime_map()[1],
+            _lifetime_map()[0] * np.where(_lifetime_map()[0] > 90, np.nan, 1.0),
+        ),
         "two arrays",
     ),
     Case(f"{PHASOR}:g0s0_to_m_phi", lambda f: f(*_lifetime_map())),
@@ -263,13 +325,30 @@ CASES: list[Case] = [
     Case(f"{PHASOR}:phasor", lambda f: f(flim_stack().sum(-1)), "last axis"),
     Case(
         f"{PHASOR}:phasor",
-        lambda f: f(flim_stack().sum(-1).transpose(2, 0, 1), threshold=300, harmonic=2, time_axis=0),
+        lambda f: f(
+            flim_stack().sum(-1).transpose(2, 0, 1),
+            threshold=300,
+            harmonic=2,
+            time_axis=0,
+        ),
         "first axis, threshold and harmonic",
     ),
     Case(f"{PHASOR}:calculate_phasor", lambda f: f(decay_histogram()), "1D"),
-    Case(f"{PHASOR}:calculate_phasor", lambda f: f(decay_histogram(), threshold=1e9), "1D below threshold"),
-    Case(f"{PHASOR}:calculate_phasor", lambda f: f(flim_stack().sum((0, 1)), harmonic=2), "2D"),
-    Case(f"{PHASOR}:calculate_phasor", lambda f: f(flim_stack().sum((0, 1)), threshold=9400), "2D, threshold"),
+    Case(
+        f"{PHASOR}:calculate_phasor",
+        lambda f: f(decay_histogram(), threshold=1e9),
+        "1D below threshold",
+    ),
+    Case(
+        f"{PHASOR}:calculate_phasor",
+        lambda f: f(flim_stack().sum((0, 1)), harmonic=2),
+        "2D",
+    ),
+    Case(
+        f"{PHASOR}:calculate_phasor",
+        lambda f: f(flim_stack().sum((0, 1)), threshold=9400),
+        "2D, threshold",
+    ),
     Case(f"{PHASOR}:calculate_phasor", lambda f: f(flim_stack().sum(-1)), "3D"),
     Case(
         f"{PHASOR}:calculate_phasor",
@@ -288,7 +367,9 @@ CASES: list[Case] = [
         lambda f: f(_phasor_map().real, _phasor_map().imag * 0.8, dfd_freq=40e6),
         "real and imaginary parts",
     ),
-    Case(f"{PHASOR}:calculate_m_phi_tau_phi_tau_m", lambda f: f(_phasor_map()), "complex"),
+    Case(
+        f"{PHASOR}:calculate_m_phi_tau_phi_tau_m", lambda f: f(_phasor_map()), "complex"
+    ),
     Case(
         f"{PHASOR}:calculate_m_phi_tau_phi_tau_m",
         lambda f: f(_phasor_map().real, _phasor_map().imag * 0.8, dfd_freq=40e6),
@@ -301,15 +382,26 @@ CASES: list[Case] = [
     Case(f"{PHASOR}:cmap2d", lambda f: _cmap2d(f, False), "not inverted"),
     Case(f"{PHASOR}:cmap2d", lambda f: _cmap2d(f, True), "inverted"),
     Case(f"{PHASOR}:linear_shift", lambda f: f(decay_histogram(), 5.5), "cyclic"),
-    Case(f"{PHASOR}:linear_shift", lambda f: f(decay_histogram(), 5.5, cyclic=False), "not cyclic"),
+    Case(
+        f"{PHASOR}:linear_shift",
+        lambda f: f(decay_histogram(), 5.5, cyclic=False),
+        "not cyclic",
+    ),
     Case(
         f"{PHASOR}:correction_phasor",
         lambda f: f(decay_histogram(), np.roll(decay_histogram(), 7) + 3.0),
     ),
     Case(f"{PHASOR}:threshold_intensity", lambda f: f(_lifetime_map()[0], 0.4)),
-    Case(f"{PHASOR}:threshold_phasor", lambda f: f(_phasor_map().real * 100, _phasor_map(), 0.7)),
+    Case(
+        f"{PHASOR}:threshold_phasor",
+        lambda f: f(_phasor_map().real * 100, _phasor_map(), 0.7),
+    ),
     Case(f"{PHASOR}:median_phasors", lambda f: f(_phasor_map().real), "real map"),
-    Case(f"{PHASOR}:median_phasors", lambda f: f(_phasor_map().imag, window=5), "real map, wider window"),
+    Case(
+        f"{PHASOR}:median_phasors",
+        lambda f: f(_phasor_map().imag, window=5),
+        "real map, wider window",
+    ),
     Case(f"{PHASOR}:calculate_irf_correction", lambda f: f(decay_histogram(), 256)),
     Case(f"{PHASOR}:align_decays", lambda f: f(flim_stack(), _shifts())),
     Case(f"{PHASOR}:align_image", lambda f: f(flim_stack(), _shifts())),
@@ -336,12 +428,20 @@ CASES: list[Case] = [
     ),
     Case(
         f"{PHASOR}:plot_flim_image",
-        lambda f: _drawn(lambda: f(flim_stack(), _phasor_map(), pxsize=0.05, pxdwelltime=50, log_scale=True)),
+        lambda f: _drawn(
+            lambda: f(
+                flim_stack(), _phasor_map(), pxsize=0.05, pxdwelltime=50, log_scale=True
+            )
+        ),
         "tau_phi",
     ),
     Case(
         f"{PHASOR}:plot_flim_image",
-        lambda f: _drawn(lambda: f(flim_stack(), _phasor_map(), method="tau_m", lifetime_bounds=(0.5, 3))),
+        lambda f: _drawn(
+            lambda: f(
+                flim_stack(), _phasor_map(), method="tau_m", lifetime_bounds=(0.5, 3)
+            )
+        ),
         "tau_m",
     ),
     Case(
@@ -360,9 +460,21 @@ CASES: list[Case] = [
         ),
         "weighted, other strength and bins",
     ),
-    Case(f"{PHASOR}:build_lifetime_equalizer", lambda f: f(_reference_lifetime(), (3.0, 3.0)), "empty range"),
-    Case(f"{PHASOR}:build_lifetime_equalizer", lambda f: f(_reference_lifetime(), (1.0, 5.0), strength=0.0), "no strength"),
-    Case(f"{PHASOR}:build_lifetime_equalizer", lambda f: f(_reference_lifetime(), (20.0, 30.0)), "no reference in range"),
+    Case(
+        f"{PHASOR}:build_lifetime_equalizer",
+        lambda f: f(_reference_lifetime(), (3.0, 3.0)),
+        "empty range",
+    ),
+    Case(
+        f"{PHASOR}:build_lifetime_equalizer",
+        lambda f: f(_reference_lifetime(), (1.0, 5.0), strength=0.0),
+        "no strength",
+    ),
+    Case(
+        f"{PHASOR}:build_lifetime_equalizer",
+        lambda f: f(_reference_lifetime(), (20.0, 30.0)),
+        "no reference in range",
+    ),
     Case(
         f"{PHASOR}:apply_lifetime_equalizer",
         lambda f: f(_lifetime_map()[1] * 1.5, *_equalizer()),
@@ -410,17 +522,35 @@ CASES: list[Case] = [
     ),
     Case(f"{GRAPH}:crop_2d", lambda f: f(_lifetime_map()[0], 3), "cropped"),
     Case(f"{GRAPH}:crop_2d", lambda f: f(_lifetime_map()[0]), "not cropped"),
-    Case(f"{GRAPH}:normalize_histogram", lambda f: f(decay_histogram()), "positive sum"),
+    Case(
+        f"{GRAPH}:normalize_histogram", lambda f: f(decay_histogram()), "positive sum"
+    ),
     Case(f"{GRAPH}:normalize_histogram", lambda f: f(np.zeros(8)), "zero sum"),
-    Case(f"{GRAPH}:threshold_lifetime_map", lambda f: f(*_lifetime_map()[::-1], threshold=0.3), "intensity"),
-    Case(f"{GRAPH}:threshold_lifetime_map", lambda f: f(_lifetime_map()[1]), "no intensity"),
+    Case(
+        f"{GRAPH}:threshold_lifetime_map",
+        lambda f: f(*_lifetime_map()[::-1], threshold=0.3),
+        "intensity",
+    ),
+    Case(
+        f"{GRAPH}:threshold_lifetime_map",
+        lambda f: f(_lifetime_map()[1]),
+        "no intensity",
+    ),
     Case(
         f"{GRAPH}:threshold_lifetime_map",
         lambda f: f(*_lifetime_map()[::-1], threshold=0.3, finite_only=False),
         "not only finite",
     ),
-    Case(f"{GRAPH}:weighted_lifetime_stats", lambda f: f(_lifetime_map()[1]), "unweighted"),
-    Case(f"{GRAPH}:weighted_lifetime_stats", lambda f: f(*_lifetime_map()[::-1]), "weighted"),
+    Case(
+        f"{GRAPH}:weighted_lifetime_stats",
+        lambda f: f(_lifetime_map()[1]),
+        "unweighted",
+    ),
+    Case(
+        f"{GRAPH}:weighted_lifetime_stats",
+        lambda f: f(*_lifetime_map()[::-1]),
+        "weighted",
+    ),
     Case(
         f"{GRAPH}:plot_calibration_lifetime_summary",
         lambda f: _drawn(lambda: f(_calibration_table())),
@@ -532,7 +662,9 @@ CASES: list[Case] = [
     ),
     Case(
         f"{GRAPH}:plot_equalized_lifetime_summary",
-        lambda f: _drawn(lambda: f(*_lifetime_map(), 0.05, 50, bins=50, equalization_bins=64)),
+        lambda f: _drawn(
+            lambda: f(*_lifetime_map(), 0.05, 50, bins=50, equalization_bins=64)
+        ),
         "default",
     ),
     Case(
@@ -556,11 +688,21 @@ CASES: list[Case] = [
         "cropped, with reference",
     ),
     Case(f"{DATA}:FlimData", lambda f: _flim_data(f), "no correction coefficient"),
-    Case(f"{DATA}:FlimData", lambda f: _flim_data(f, correction_coeff=[0.5, 0.25]), "coefficient from a list"),
-    Case(f"{DATA}:FlimData", lambda f: _flim_data(f, correction_coeff=0.5 + 0.25j), "complex coefficient"),
+    Case(
+        f"{DATA}:FlimData",
+        lambda f: _flim_data(f, correction_coeff=[0.5, 0.25]),
+        "coefficient from a list",
+    ),
+    Case(
+        f"{DATA}:FlimData",
+        lambda f: _flim_data(f, correction_coeff=0.5 + 0.25j),
+        "complex coefficient",
+    ),
 ]
 
-_SHIFT_ERROR = "fails with the old code too: ValueError: setting an array element with a sequence."
+_SHIFT_ERROR = (
+    "fails with the old code too: ValueError: setting an array element with a sequence."
+)
 
 SKIPPED: dict[str, str] = {
     f"{PHASOR}:calculate_phasor_on_img_ch": SKIP_FILE_IO,

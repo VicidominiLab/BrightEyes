@@ -67,7 +67,9 @@ def test_compare_rejects_different_values():
 def test_compare_accepts_equal_values():
     """Accept equal arrays with NaN, data frames, tensors, objects and self references."""
     nested = {"a": np.array([1.0, np.nan]), "b": [np.float64(2.0), (1, "x", None)]}
-    assert_same(nested, {"a": np.array([1.0, np.nan]), "b": [np.float64(2.0), (1, "x", None)]})
+    assert_same(
+        nested, {"a": np.array([1.0, np.nan]), "b": [np.float64(2.0), (1, "x", None)]}
+    )
     frame = pd.DataFrame({"x": [1, 2], "y": [0.5, np.nan]})
     assert_same(frame, frame.copy())
     assert_same(torch.arange(3.0), torch.arange(3.0))
@@ -95,9 +97,15 @@ def test_compare_rejects_unknown_type():
 def test_run_resolves_new_path():
     """Map each old package prefix to its new location."""
     assert new_path("brighteyes_ism.dataio.mcs:x") == "brighteyes.imaging.io.mcs:x"
-    assert new_path("brighteyes_ism.analysis.APR_lib:hann2d") == "brighteyes.imaging.analysis.APR_lib:hann2d"
+    assert (
+        new_path("brighteyes_ism.analysis.APR_lib:hann2d")
+        == "brighteyes.imaging.analysis.APR_lib:hann2d"
+    )
     assert new_path("brighteyes_flism.tools:x") == "brighteyes.imaging.flism.tools:x"
-    assert new_path("brighteyes_ffs.fcs.fcs_funcs:A.b") == "brighteyes.spectroscopy.fcs.fcs_funcs:A.b"
+    assert (
+        new_path("brighteyes_ffs.fcs.fcs_funcs:A.b")
+        == "brighteyes.spectroscopy.fcs.fcs_funcs:A.b"
+    )
 
 
 def test_run_seeds_each_call():
@@ -113,4 +121,8 @@ def test_run_seeds_each_call():
 def test_run_detects_a_change():
     """Raise when the old and the new object give different results."""
     with pytest.raises(AssertionError):
-        run(Case("brighteyes_ism.analysis.Tools_lib:sigmoid", call=lambda f: f.__module__))
+        run(
+            Case(
+                "brighteyes_ism.analysis.Tools_lib:sigmoid", call=lambda f: f.__module__
+            )
+        )

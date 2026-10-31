@@ -2,7 +2,13 @@ from types import ModuleType
 
 from _registry import Case
 
-from . import imaging_analysis, imaging_flism, imaging_simulation, spectroscopy_fcs, spectroscopy_other
+from . import (
+    imaging_analysis,
+    imaging_flism,
+    imaging_simulation,
+    spectroscopy_fcs,
+    spectroscopy_other,
+)
 
 _MODULES: tuple[ModuleType, ...] = (
     imaging_analysis,

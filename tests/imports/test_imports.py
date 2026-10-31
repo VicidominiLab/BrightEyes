@@ -1,5 +1,6 @@
 import importlib
 import pkgutil
+import sys
 
 import pytest
 
@@ -7,7 +8,7 @@ import brighteyes
 
 
 def _raise(name: str) -> None:
-    raise
+    raise sys.exception()
 
 
 MODULES = [

@@ -1,5 +1,6 @@
 import inspect
 import pkgutil
+import sys
 from importlib import import_module
 
 import brighteyes_ffs
@@ -9,7 +10,7 @@ from cases import ALL_CASES, ALL_SKIPPED
 
 
 def _raise(name: str) -> None:
-    raise
+    raise sys.exception()
 
 
 def public_names() -> set[str]:
@@ -18,7 +19,10 @@ def public_names() -> set[str]:
     for package in (brighteyes_ism, brighteyes_flism, brighteyes_ffs):
         modules = [package.__name__]
         modules += [
-            info.name for info in pkgutil.walk_packages(package.__path__, package.__name__ + ".", onerror=_raise)
+            info.name
+            for info in pkgutil.walk_packages(
+                package.__path__, package.__name__ + ".", onerror=_raise
+            )
         ]
         for module_name in modules:
             for name, obj in vars(import_module(module_name)).items():
@@ -34,7 +38,10 @@ def public_names() -> set[str]:
 def test_every_public_name_is_covered():
     """Give every public name of the old packages a case or a skip reason."""
     declared = {case.old for case in ALL_CASES} | ALL_SKIPPED.keys()
-    covered = {f"{module}:{qualname.partition('.')[0]}" for module, qualname in (p.split(":") for p in declared)}
+    covered = {
+        f"{module}:{qualname.partition('.')[0]}"
+        for module, qualname in (p.split(":") for p in declared)
+    }
     inventory = public_names()
     missing = sorted(inventory - covered)
     stale = sorted(covered - inventory)
