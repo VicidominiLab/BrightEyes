@@ -43,6 +43,11 @@ def _negative_step() -> pd.Series:
     return steps
 
 
+def _longer_steps() -> pd.Series:
+    steps = ttm_raw_frame()["cumulativeStep"]
+    return pd.concat([steps, pd.Series(np.arange(100) + 10**6)], ignore_index=True)
+
+
 def _with_column(name: str, dtype: type) -> pd.DataFrame:
     frame = ttm_raw_frame()
     frame[name] = frame[name].astype(dtype)
@@ -135,6 +140,20 @@ CASES = [
             lambda: f(ttm_raw_frame(), 10, _negative_step()),
         ),
         "negative pixelCorr",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _printed(lambda: f(ttm_raw_frame(), 10, _longer_steps())),
+        "cumulativeStep longer than the frame",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _error(
+            lambda: f(
+                ttm_raw_frame(), 10, ttm_raw_frame()["cumulativeStep"].iloc[:2000]
+            )
+        ),
+        "cumulativeStep shorter than the frame",
     ),
     Case(f"{TTP}:analysisForImg", _image_error(0), "StepPerPixel_in 0"),
     Case(f"{TTP}:analysisForImg", _image(10.5), "StepPerPixel_in float"),

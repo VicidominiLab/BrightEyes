@@ -16,7 +16,7 @@ pub enum KernelError {
     ZeroDivision,
     /// A value does not fit the integer type it is stored in.
     Overflow(String),
-    /// A column or row index falls outside the output array.
+    /// An index falls outside the array it reads or writes.
     Index(usize),
 }
 
@@ -157,7 +157,8 @@ pub fn count_pixels(
     let (mut frame, mut line, mut pixel) = (0i32, 0i32, 0i32);
     let (mut last_se, mut last_le) = (0, 0);
     for n in 0..length {
-        let (se, le, step) = (scan_enable[n], line_enable[n], cumulative_step[n]);
+        let (se, le) = (scan_enable[n], line_enable[n]);
+        let step = *cumulative_step.get(n).ok_or(KernelError::Index(0))?;
         if se == 1 && last_se == 0 {
             pixel = 0;
             line = 0;
@@ -295,7 +296,6 @@ fn image_indices<'py>(
         scan_enable.len()?,
         line_enable.len()?,
         pixel_enable.len()?,
-        cumulative_step.len()?,
         index.len()?,
     ])?;
     let ([pixel, pixel_corr, line, frame], index, last_frame) = count_pixels(
@@ -372,6 +372,23 @@ mod tests {
         assert_eq!(truncated[1], 3);
         let ([_, wrapped, _, _], _, _) = indices(&[1, 0], &[i64::MAX, i64::MIN], 1).unwrap();
         assert_eq!(wrapped[1], 1);
+    }
+
+    #[test]
+    fn step_series_shorter_than_flags_is_out_of_bounds() {
+        let flags = arr1(&[1u8, 0, 0]);
+        let steps = arr1(&[0i64, 1]);
+        let index = Array1::<i64>::zeros(3);
+        let result = count_pixels(
+            flags.view(),
+            flags.view(),
+            flags.view(),
+            steps.view(),
+            index.view(),
+            0,
+            1,
+        );
+        assert_eq!(result.unwrap_err(), KernelError::Index(0));
     }
 
     #[test]
