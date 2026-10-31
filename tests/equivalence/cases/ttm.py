@@ -1,5 +1,6 @@
 """Equivalence cases for `libttp.ttp`."""
 
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -27,9 +28,13 @@ TTP = "libttp.ttp"
 def _scrub(value: Any, folder: str) -> Any:
     match value:
         case str():
-            return value.replace(folder, "<dir>").replace(
-                Path(folder).as_posix(), "<dir>"
-            )
+            for variant in (
+                folder,
+                folder.replace("\\", "\\\\"),
+                Path(folder).as_posix(),
+            ):
+                value = value.replace(variant, "<dir>")
+            return value
         case h5py.Empty():
             return ("Empty", str(value.dtype))
         case dict():
@@ -216,11 +221,33 @@ def _tables(channels: int) -> list[pd.DataFrame]:
     ]
 
 
+def _receiver(**kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+    def call(f: Callable[..., Any]) -> Any:
+        def body(folder: Path) -> Any:
+            script = folder / "receiver.py"
+            script.write_text(
+                "import sys\nsys.stderr.write('log line\\nFilename: data-123\\n')\n"
+            )
+            return printed(
+                lambda: f(str(script), programm=sys.executable, cwd=folder, **kwargs)
+            )
+
+        return _in_folder(body)
+
+    return call
+
+
 def _counts() -> np.ndarray:
     return ttm_raw_frame()["t_0"].to_numpy().astype(np.float64) + 3.0
 
 
 CASES = [
+    Case(f"{TTP}:get_data_for_useconds", _receiver(), "stand-in receiver"),
+    Case(
+        f"{TTP}:get_data_for_useconds",
+        _receiver(verbose=True),
+        "stand-in receiver, verbose",
+    ),
     Case(f"{TTP}:dtypeAll", lambda f: (f().descr, f().itemsize)),
     Case(
         f"{TTP}:readParsedFile",
@@ -417,6 +444,5 @@ CASES = [
 ]
 
 SKIPPED: dict[str, str] = {
-    f"{TTP}:get_data_for_useconds": "runs the external program streamerParserWithFrame through subprocess, which is not installed",
     f"{TTP}:decoration_sysclk_laser_ps": SKIP_PLOT_ONLY,
 }
