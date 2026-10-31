@@ -26,3 +26,7 @@ for _module in _MODULES:
         if _path in ALL_SKIPPED:
             raise ValueError(f"{_path} is skipped twice")
         ALL_SKIPPED[_path] = _reason
+
+for _case in ALL_CASES:
+    if _case.old in ALL_SKIPPED:
+        raise ValueError(f"{_case.old} has a case and is skipped")

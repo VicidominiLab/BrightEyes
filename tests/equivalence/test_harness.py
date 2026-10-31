@@ -47,6 +47,8 @@ def test_compare_rejects_different_values():
     cases = [
         (np.array([1.0, 2.0]), np.array([1.0, 2.5])),
         (np.array([1, 2]), np.array([1.0, 2.0])),
+        (torch.tensor([1.0, 2.0, 3.0]), torch.tensor([1.0, 2.0, 3.5])),
+        (np.array([1, "a"], dtype=object), np.array([1, "b"], dtype=object)),
         ({"a": 1}, {"b": 1}),
         ((1, 2), [1, 2]),
         (True, 1),
@@ -113,7 +115,12 @@ def test_run_seeds_each_call():
     run(
         Case(
             "brighteyes_ism.analysis.Tools_lib:sigmoid",
-            call=lambda f: (f.__qualname__, np.random.rand(3), random.random()),
+            call=lambda f: (
+                f.__qualname__,
+                np.random.rand(3),
+                random.random(),
+                torch.rand(3),
+            ),
         )
     )
 

@@ -50,8 +50,9 @@ def run(case: Case) -> None:
     """Call the old and the moved object with equal seeds and compare the results."""
     results = []
     for path in (case.old, new_path(case.old)):
+        target = resolve(path)
         random.seed(0)
         np.random.seed(0)
         torch.manual_seed(0)
-        results.append(case.call(resolve(path)))
+        results.append(case.call(target))
     case.compare(*results)

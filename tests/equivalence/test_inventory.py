@@ -6,6 +6,7 @@ from importlib import import_module
 import brighteyes_ffs
 import brighteyes_flism
 import brighteyes_ism
+from _registry import new_path, resolve
 from cases import ALL_CASES, ALL_SKIPPED
 
 
@@ -45,9 +46,17 @@ def test_every_public_name_is_covered():
     inventory = public_names()
     missing = sorted(inventory - covered)
     stale = sorted(covered - inventory)
-    assert not missing and not stale, (
+    unresolved = []
+    for path in sorted(ALL_SKIPPED):
+        try:
+            resolve(new_path(path))
+        except Exception as error:
+            unresolved.append(f"{path}: {error!r}")
+    assert not missing and not stale and not unresolved, (
         f"{len(missing)} names have no case:\n"
         + "\n".join(missing)
         + f"\n{len(stale)} paths name nothing:\n"
         + "\n".join(stale)
+        + f"\n{len(unresolved)} skipped paths missing from brighteyes:\n"
+        + "\n".join(unresolved)
     )
