@@ -14,6 +14,15 @@ SKIP_PLOT_ONLY: Final[str] = "only draws a figure"
 SKIP_GUI: Final[str] = "needs a running Qt application"
 
 PREFIXES: Final[tuple[tuple[str, str], ...]] = (
+    ("brighteyes_mcs_reader", "brighteyes.mcs.reader"),
+    ("brighteyes_mcs_dataprep", "brighteyes.mcs.dataprep"),
+    ("libttp.ttpCython", "brighteyes.ttm._ttp"),
+    ("libttp", "brighteyes.ttm"),
+    ("s2ism", "brighteyes.imaging.s2ism"),
+    ("flus2ISM_lib", "brighteyes.imaging.flus2ism.flus2ISM_lib"),
+    ("varreg", "brighteyes.imaging.varreg"),
+    ("psf_ism_distiller", "brighteyes.imaging.psf_distiller"),
+    ("birfi", "brighteyes.imaging.birfi"),
     ("brighteyes_ism.dataio", "brighteyes.imaging.io"),
     ("brighteyes_ism", "brighteyes.imaging"),
     ("brighteyes_flism", "brighteyes.imaging.flism"),

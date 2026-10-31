@@ -1,4 +1,8 @@
+from pathlib import Path
+
+import h5py
 import numpy as np
+import pandas as pd
 
 SIZE = 32
 CHANNELS = 25
@@ -136,3 +140,109 @@ def bead_image() -> np.ndarray:
     )
     weights = np.random.default_rng(0).uniform(0.5, 1.0, size=4)
     return np.round(200 * spot[:, :, None] * weights[None, None, :])
+
+
+def mcs_h5_file(path: Path) -> Path:
+    """Write a small current-schema MCS file with `/raw/spad` and `/raw/aux`, and return its path."""
+    rng = np.random.default_rng(0)
+    shape = (1, 1, 4, 5, 8)
+    spad = rng.poisson(3.0, size=(*shape, 5)).astype(np.uint16)
+    aux = rng.poisson(2.0, size=(*shape, 2)).astype(np.uint16)
+    time_bin_ns = 0.5
+    with h5py.File(path, "w") as handle:
+        handle.attrs.update(
+            data_format_version="0.0.6",
+            schema_name="brighteyes_mcs_file",
+            default="/raw/spad",
+            data_path="/raw",
+            metadata_path="/raw/metadata",
+            axes_path="/raw/axes",
+            legacy_path="/raw/legacy",
+            calibration_path="/calibration",
+            output_path="/output",
+            contains_output=False,
+        )
+        raw = handle.create_group("raw")
+        for name, data, channel_axis in (
+            ("spad", spad, "detector_channel"),
+            ("aux", aux, "aux_channel"),
+        ):
+            dataset = raw.create_dataset(name, data=data)
+            dataset.attrs.update(
+                axis_order=f"repetition,z,y,x,time_bin,{channel_axis}",
+                time_axis_path="/raw/axes/digital_time_ns",
+                metadata_path="/raw/metadata",
+                units="counts",
+            )
+        metadata = raw.create_group("metadata")
+        metadata.attrs.update(
+            time_bin_ns=time_bin_ns,
+            digital_time_bin_ns=time_bin_ns,
+            laser_frequency_mhz=80.0,
+            nrep=shape[0],
+            nz=shape[1],
+            ny=shape[2],
+            nx=shape[3],
+            time_bins=shape[4],
+        )
+        axes = raw.create_group("axes")
+        axes.create_dataset("digital_time_ns", data=np.arange(shape[4]) * time_bin_ns)
+        raw.create_group("legacy")
+        handle.create_group("calibration")
+    return path
+
+
+def ttm_new_protocol_bytes() -> bytes:
+    """Return a uint16 stream of 200 events with channel, dummy, laser, pixel, scan and line words and `0x7FFF` fillers."""
+    rng = np.random.default_rng(0)
+    words = []
+    for event in range(200):
+        for channel in rng.choice([0, 3, 7, 24, 50], size=rng.integers(0, 4)):
+            valid = int(rng.random() < 0.7)
+            words.append(valid << 15 | int(channel) << 8 | int(rng.integers(0, 256)))
+        for word_id, enable_probability in (
+            (123, 0.3),
+            (124, 0.0),
+            (125, 0.2),
+            (126, 0.05 if event else 1.0),
+            (127, 0.1),
+        ):
+            valid = int(rng.random() < 0.5)
+            enable = int(rng.random() < enable_probability) << 7
+            words.append(
+                valid << 15 | word_id << 8 | enable | int(rng.integers(0, 127))
+            )
+        words += [0x7FFF] * int(rng.integers(0, 3))
+    return np.array(words, dtype=np.uint16).tobytes()
+
+
+def ttm_raw_frame() -> pd.DataFrame:
+    """Return 3000 parsed time-tagger rows with photons on channels 0 and 3, laser flags, and scan, line and pixel edges."""
+    rng = np.random.default_rng(0)
+    rows = 3000
+    cumulative_step = np.cumsum(rng.integers(1, 200, size=rows)).astype(np.int64)
+    row = np.arange(rows)
+    frame = pd.DataFrame(
+        {
+            "t_L": rng.integers(0, 256, size=rows),
+            "t_0": rng.integers(0, 256, size=rows),
+            "t_3": rng.integers(0, 256, size=rows),
+            "valid_tdc_0": rng.random(rows) < 0.3,
+            "valid_tdc_3": rng.random(rows) < 0.3,
+            "valid_tdc_L": rng.random(rows) < 0.4,
+            "scan_enable": row % 1000 < 10,
+            "line_enable": (row % 100 >= 20) & (row % 100 < 25),
+            "pixel_enable": row % 10 == 3,
+        }
+    ).astype(np.uint8)
+    frame["step"] = (cumulative_step % 2**16).astype(np.uint16)
+    frame["cumulativeStep"] = cumulative_step
+    return frame
+
+
+def flus2ism_inputs() -> tuple[np.ndarray, np.ndarray]:
+    """Return the central 21 by 21 pixels of the example PSF `(z, x, y, channels)` and phantom `(structures, x, y)`."""
+    folder = Path(__file__).parents[2] / "examples" / "imaging" / "flus2ism"
+    psf = np.load(folder / "PSFs.npy")[:, 40:61, 40:61]
+    phantom = np.load(folder / "simulated_tubulin.npz")["phantom"][:, 40:61, 40:61]
+    return psf, phantom

@@ -5,7 +5,10 @@ import pandas as pd
 import pytest
 import torch
 from _compare import assert_same
+from _inputs import mcs_h5_file, ttm_new_protocol_bytes, ttm_raw_frame
 from _registry import Case, new_path, run
+
+from brighteyes.mcs.reader import load_raw, read_signal
 
 
 class _Box:
@@ -110,6 +113,30 @@ def test_run_resolves_new_path():
     )
 
 
+def test_new_path_maps_the_new_packages():
+    """Map each moved package prefix to its location and refuse a lookalike name."""
+    assert (
+        new_path("brighteyes_mcs_reader.reader:read_signal")
+        == "brighteyes.mcs.reader.reader:read_signal"
+    )
+    assert (
+        new_path("brighteyes_mcs_dataprep.h5_output_writers:x")
+        == "brighteyes.mcs.dataprep.h5_output_writers:x"
+    )
+    assert (
+        new_path("libttp.ttpCython:timeProcessRAW")
+        == "brighteyes.ttm._ttp:timeProcessRAW"
+    )
+    assert new_path("libttp.ttp:fitGaus") == "brighteyes.ttm.ttp:fitGaus"
+    assert new_path("s2ism.s2ism:x") == "brighteyes.imaging.s2ism.s2ism:x"
+    assert new_path("flus2ISM_lib:x") == "brighteyes.imaging.flus2ism.flus2ISM_lib:x"
+    assert new_path("varreg.x:y") == "brighteyes.imaging.varreg.x:y"
+    assert new_path("psf_ism_distiller.x:y") == "brighteyes.imaging.psf_distiller.x:y"
+    assert new_path("birfi.x:y") == "brighteyes.imaging.birfi.x:y"
+    with pytest.raises(ValueError):
+        new_path("s2ism_extra:x")
+
+
 def test_run_seeds_each_call():
     """Seed the random generators identically before the old and the new call."""
     run(
@@ -133,3 +160,31 @@ def test_run_detects_a_change():
                 "brighteyes_ism.analysis.Tools_lib:sigmoid", call=lambda f: f.__module__
             )
         )
+
+
+def test_mcs_h5_file_is_readable(tmp_path):
+    """Open the generated file with the reader and read a signal and the raw payload."""
+    path = mcs_h5_file(tmp_path / "sample.h5")
+    assert read_signal(path).data.shape == (4, 5, 8)
+    assert load_raw(path, "aux").shape == (1, 1, 4, 5, 8, 2)
+
+
+def test_ttm_new_protocol_bytes_has_every_id_class():
+    """Hold channel words, the five flag words and `0x7FFF` fillers in the stream."""
+    words = np.frombuffer(ttm_new_protocol_bytes(), dtype=np.uint16)
+    ids = set((words >> 8) & 0x7F)
+    assert {0, 3, 123, 124, 125, 126, 127} <= ids
+    assert 0x7FFF in words
+    assert np.count_nonzero(words != 0x7FFF) > 1000
+
+
+def test_ttm_raw_frame_has_the_cython_dtypes():
+    """Give the frame the exact column and index dtypes the Cython functions index."""
+    frame = ttm_raw_frame()
+    uint8 = ["t_L", "t_0", "t_3", "valid_tdc_0", "valid_tdc_3", "valid_tdc_L"]
+    uint8 += ["scan_enable", "line_enable", "pixel_enable"]
+    assert all(frame[name].dtype == np.uint8 for name in uint8)
+    assert frame["step"].dtype == np.uint16
+    assert frame["cumulativeStep"].dtype == np.int64
+    assert frame.index.dtype == np.int64
+    assert len(frame) >= 1000

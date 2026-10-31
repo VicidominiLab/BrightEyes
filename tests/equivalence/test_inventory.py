@@ -3,11 +3,22 @@ import pkgutil
 import sys
 from importlib import import_module
 
-import brighteyes_ffs
-import brighteyes_flism
-import brighteyes_ism
 from _registry import new_path, resolve
 from cases import ALL_CASES, ALL_SKIPPED
+
+OLD_PACKAGES = (
+    "brighteyes_ism",
+    "brighteyes_flism",
+    "brighteyes_ffs",
+    "brighteyes_mcs_reader",
+    "brighteyes_mcs_dataprep",
+    "libttp",
+    "s2ism",
+    "varreg",
+    "psf_ism_distiller",
+    "birfi",
+)
+OLD_MODULES = ("flus2ISM_lib", "libttp.ttpCython")
 
 
 def _raise(name: str) -> None:
@@ -17,22 +28,24 @@ def _raise(name: str) -> None:
 def public_names() -> set[str]:
     """Return the `module:name` path of every public function and class of the old packages."""
     names = set()
-    for package in (brighteyes_ism, brighteyes_flism, brighteyes_ffs):
-        modules = [package.__name__]
+    modules = list(OLD_MODULES)
+    for name in OLD_PACKAGES:
+        package = import_module(name)
+        modules.append(name)
         modules += [
             info.name
             for info in pkgutil.walk_packages(
-                package.__path__, package.__name__ + ".", onerror=_raise
+                package.__path__, name + ".", onerror=_raise
             )
         ]
-        for module_name in modules:
-            for name, obj in vars(import_module(module_name)).items():
-                if (
-                    not name.startswith("_")
-                    and (inspect.isfunction(obj) or inspect.isclass(obj))
-                    and obj.__module__ == module_name
-                ):
-                    names.add(f"{module_name}:{name}")
+    for module_name in modules:
+        for name, obj in vars(import_module(module_name)).items():
+            if (
+                not name.startswith("_")
+                and (inspect.isroutine(obj) or inspect.isclass(obj))
+                and obj.__module__ == module_name
+            ):
+                names.add(f"{module_name}:{name}")
     return names
 
 
