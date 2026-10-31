@@ -74,3 +74,24 @@ def flim_stack() -> np.ndarray:
 def flim_reference_stack() -> np.ndarray:
     """Return a `flim_stack`-shaped array of a reference sample with another lifetime and delays."""
     return _flim_decays(0, tau=5.0, lag=2.0)
+
+
+def photon_streams() -> dict[int, np.ndarray]:
+    """Return a `(photons, 2)` array of macro and micro times in ps for each of 25 channels."""
+    rng = np.random.default_rng(0)
+    return {
+        channel: np.column_stack(
+            (
+                np.sort(rng.integers(0, 200_000, size=400)).astype(np.float64),
+                rng.integers(0, 25_000, size=400).astype(np.float64),
+            )
+        )
+        for channel in range(CHANNELS)
+    }
+
+
+def time_channel_array() -> np.ndarray:
+    """Return a `(time, 1 + channels)` array of sorted unique times and counts of 5 channels."""
+    rng = np.random.default_rng(0)
+    times = np.sort(rng.choice(20_000, size=1500, replace=False)).astype(np.float64)
+    return np.column_stack((times, rng.poisson(0.4, size=(1500, 5)).astype(np.float64)))
