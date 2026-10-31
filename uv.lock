@@ -27,6 +27,9 @@ required-markers = [
     "platform_machine == 'AMD64' and sys_platform == 'win32'",
 ]
 
+[manifest]
+overrides = [{ name = "tdqm", marker = "python_version < '0'" }]
+
 [[package]]
 name = "anyio"
 version = "4.15.1"
@@ -181,6 +184,20 @@ wheels = [
 ]
 
 [[package]]
+name = "birfi"
+version = "0.1.1"
+source = { git = "https://github.com/VicidominiLab/birfi?rev=4ea6c4d#4ea6c4d501c6a3b08d271838ec5205216cd75a21" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+]
+
+[[package]]
 name = "bleach"
 version = "6.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -243,14 +260,14 @@ source = { editable = "." }
 
 [package.optional-dependencies]
 imaging = [
-    { name = "brighteyes-mcs-dataprep" },
-    { name = "brighteyes-mcs-reader" },
+    { name = "einops" },
     { name = "h5py" },
     { name = "joblib" },
     { name = "matplotlib" },
     { name = "matplotlib-scalebar" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas" },
     { name = "psf-generator" },
     { name = "requests" },
     { name = "scikit-image" },
@@ -265,11 +282,23 @@ imaging = [
     { name = "tqdm" },
     { name = "zernikepy" },
 ]
+mcs = [
+    { name = "h5py" },
+    { name = "joblib" },
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "tqdm" },
+]
 spectroscopy = [
-    { name = "brighteyes-mcs-dataprep" },
-    { name = "brighteyes-mcs-reader" },
     { name = "czifile", version = "2019.7.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "czifile", version = "2026.10.14", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "einops" },
     { name = "h5py" },
     { name = "imutils" },
     { name = "joblib" },
@@ -306,6 +335,15 @@ spectroscopy = [
     { name = "tqdm" },
     { name = "zernikepy" },
 ]
+ttm = [
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "tqdm" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -317,32 +355,47 @@ examples = [
     { name = "nbformat" },
 ]
 reference = [
+    { name = "birfi" },
     { name = "brighteyes-ffs" },
     { name = "brighteyes-flism" },
     { name = "brighteyes-ism" },
+    { name = "brighteyes-mcs-dataprep" },
+    { name = "brighteyes-mcs-reader" },
+    { name = "libttp" },
+    { name = "psf-ism-distiller" },
+    { name = "s2ism" },
+    { name = "varreg" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "brighteyes", extras = ["imaging"], marker = "extra == 'spectroscopy'", editable = "." },
-    { name = "brighteyes-mcs-dataprep", marker = "extra == 'imaging'", specifier = ">=0.1.0" },
-    { name = "brighteyes-mcs-reader", marker = "extra == 'imaging'", specifier = ">=0.1.0" },
+    { name = "brighteyes", extras = ["imaging", "ttm"], marker = "extra == 'spectroscopy'", editable = "." },
+    { name = "brighteyes", extras = ["mcs"], marker = "extra == 'imaging'", editable = "." },
     { name = "czifile", marker = "extra == 'spectroscopy'", specifier = ">=2019.7.2.3" },
+    { name = "einops", marker = "extra == 'imaging'", specifier = ">=0.8.2" },
     { name = "h5py", marker = "extra == 'imaging'", specifier = ">=3.16.0" },
+    { name = "h5py", marker = "extra == 'mcs'", specifier = ">=3.16.0" },
     { name = "h5py", marker = "extra == 'spectroscopy'", specifier = ">=3.16.0" },
     { name = "imutils", marker = "extra == 'spectroscopy'", specifier = ">=0.5.4" },
     { name = "joblib", marker = "extra == 'imaging'", specifier = ">=1.6.0" },
+    { name = "joblib", marker = "extra == 'mcs'", specifier = ">=1.6.0" },
     { name = "joblib", marker = "extra == 'spectroscopy'", specifier = ">=1.6.0" },
     { name = "matplotlib", marker = "extra == 'imaging'", specifier = ">=3.11.2" },
+    { name = "matplotlib", marker = "extra == 'mcs'", specifier = ">=3.11.2" },
     { name = "matplotlib", marker = "extra == 'spectroscopy'", specifier = ">=3.3.2" },
+    { name = "matplotlib", marker = "extra == 'ttm'", specifier = ">=3.11.2" },
     { name = "matplotlib-scalebar", marker = "extra == 'imaging'", specifier = ">=0.9.0" },
     { name = "multipletau", marker = "extra == 'spectroscopy'", specifier = ">=0.3.3" },
     { name = "numpy", marker = "extra == 'imaging'", specifier = ">=2.4.6" },
+    { name = "numpy", marker = "extra == 'mcs'", specifier = ">=2.4.6" },
     { name = "numpy", marker = "extra == 'spectroscopy'", specifier = ">=1.19.4" },
+    { name = "numpy", marker = "extra == 'ttm'", specifier = ">=2.4.6" },
     { name = "ome-types", marker = "extra == 'spectroscopy'", specifier = ">=0.5.3" },
     { name = "opencv-python-headless", marker = "extra == 'spectroscopy'", specifier = ">=5.0.0.93" },
     { name = "openpyxl", marker = "extra == 'spectroscopy'", specifier = ">=3.1.5" },
+    { name = "pandas", marker = "extra == 'mcs'", specifier = ">=3.1.0" },
     { name = "pandas", marker = "extra == 'spectroscopy'", specifier = ">=1.1.4" },
+    { name = "pandas", marker = "extra == 'ttm'", specifier = ">=3.1.0" },
     { name = "phconvert", marker = "extra == 'spectroscopy'", specifier = ">=0.10.2" },
     { name = "psf-generator", marker = "extra == 'imaging'", specifier = "<=0.0.2" },
     { name = "ptufile", marker = "extra == 'spectroscopy'", specifier = ">=2026.2.6" },
@@ -354,16 +407,21 @@ requires-dist = [
     { name = "scikit-image", marker = "extra == 'imaging'", specifier = ">=0.26.0" },
     { name = "scikit-learn", marker = "extra == 'imaging'", specifier = ">=1.9.1" },
     { name = "scipy", marker = "extra == 'imaging'", specifier = ">=1.17.1" },
+    { name = "scipy", marker = "extra == 'mcs'", specifier = ">=1.17.1" },
     { name = "scipy", marker = "extra == 'spectroscopy'", specifier = ">=1.17.1" },
+    { name = "scipy", marker = "extra == 'ttm'", specifier = ">=1.17.1" },
     { name = "seaborn", marker = "extra == 'spectroscopy'", specifier = ">=0.13.2" },
     { name = "statsmodels", marker = "extra == 'imaging'", specifier = ">=0.15.0" },
     { name = "tifffile", marker = "extra == 'spectroscopy'", specifier = ">=2020.9.29" },
     { name = "torch", marker = "extra == 'imaging'", specifier = ">=2.15.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "extra == 'mcs'", specifier = ">=2.15.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", marker = "extra == 'imaging'", specifier = ">=0.29.2", index = "https://download.pytorch.org/whl/cpu" },
     { name = "tqdm", marker = "extra == 'imaging'", specifier = ">=4.70.1" },
+    { name = "tqdm", marker = "extra == 'mcs'", specifier = ">=4.70.1" },
+    { name = "tqdm", marker = "extra == 'ttm'", specifier = ">=4.70.1" },
     { name = "zernikepy", marker = "extra == 'imaging'", specifier = ">=0.0.5" },
 ]
-provides-extras = ["imaging", "spectroscopy"]
+provides-extras = ["imaging", "spectroscopy", "mcs", "ttm"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -375,9 +433,16 @@ examples = [
     { name = "nbformat", specifier = "==5.8.0" },
 ]
 reference = [
+    { name = "birfi", git = "https://github.com/VicidominiLab/birfi?rev=4ea6c4d" },
     { name = "brighteyes-ffs", git = "https://github.com/VicidominiLab/BrightEyes-FFS?rev=f6d640d" },
     { name = "brighteyes-flism", git = "https://github.com/VicidominiLab/BrightEyes-FLISM?rev=85f0d96" },
     { name = "brighteyes-ism", git = "https://github.com/VicidominiLab/BrightEyes-ISM?rev=d799720" },
+    { name = "brighteyes-mcs-dataprep", git = "https://github.com/VicidominiLab/BrightEyes-MCS-DataPrep?rev=821248e" },
+    { name = "brighteyes-mcs-reader", git = "https://github.com/VicidominiLab/BrightEyes-MCS-Reader?rev=8b81d62" },
+    { name = "libttp", git = "https://github.com/VicidominiLab/libttp?rev=7fe694a" },
+    { name = "psf-ism-distiller", git = "https://github.com/VicidominiLab/psf-distiller?rev=4d927b1" },
+    { name = "s2ism", git = "https://github.com/VicidominiLab/s2ISM?rev=10bb5fc" },
+    { name = "varreg", git = "https://github.com/VicidominiLab/Regularization-by-Noise?rev=bb6d0c6" },
 ]
 
 [[package]]
@@ -462,7 +527,7 @@ dependencies = [
 [[package]]
 name = "brighteyes-mcs-dataprep"
 version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/VicidominiLab/BrightEyes-MCS-DataPrep?rev=821248e#821248e08cf5a9e103f9e9fbed431d6d9013c3ae" }
 dependencies = [
     { name = "brighteyes-mcs-reader" },
     { name = "build" },
@@ -481,23 +546,15 @@ dependencies = [
     { name = "tqdm" },
     { name = "twine" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/26/4002c6bc68ba773476c3263a69a904760e8ef38ae6c8f757d43761e0ddc7/brighteyes_mcs_dataprep-0.1.0.tar.gz", hash = "sha256:f61092abb44a9c0d622e0e352adec9bbd0db45adccde62429059e00ba62450ae", size = 416563, upload-time = "2026-07-09T09:10:30.12Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/a9/0ff902915a0d896a29f93514c621a3349c8b716f1e04096e94c7f44b8f31/brighteyes_mcs_dataprep-0.1.0-py3-none-any.whl", hash = "sha256:02de7b110a85d0b13631312e07de653804fe93eaa93ec0741a883b1e22ca0c4f", size = 91292, upload-time = "2026-07-09T09:10:28.84Z" },
-]
 
 [[package]]
 name = "brighteyes-mcs-reader"
 version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/VicidominiLab/BrightEyes-MCS-Reader?rev=8b81d62#8b81d62b546862c182d5b9484fa6c7a769044334" }
 dependencies = [
     { name = "h5py" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/37/d909e8fba5045d290f377be9182afa42e0add6cb0462a2d2056af5112f4c/brighteyes_mcs_reader-0.1.0.tar.gz", hash = "sha256:67e8615e68917b162a1aab31a747f91d908577ccf89c52d572480b2e809999ca", size = 17101, upload-time = "2026-07-09T08:11:20.22Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/ac/bd33433116c074cb55cd78330d56caa55370e70def464d896bbac05cc6d2/brighteyes_mcs_reader-0.1.0-py3-none-any.whl", hash = "sha256:6d5b2a6035a82f5f128b3072e80a1ba5863a9865d814d0d96f0b813124eb3f92", size = 14957, upload-time = "2026-07-09T08:11:18.882Z" },
 ]
 
 [[package]]
@@ -1042,6 +1099,44 @@ wheels = [
 ]
 
 [[package]]
+name = "cython"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/d8/4981ef716ad0e3ff0d3ef383aefc6b03c4a88dee33b272bf8e0d833001ca/cython-3.3.0.tar.gz", hash = "sha256:eed0d93fbca7087f143b42c34b05a825849bdf17f101572c2105acfa49aa88b8", size = 3727515, upload-time = "2026-08-22T05:16:39.493Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/af/67/dffaf12b7203f7e936d98b967e065c50a7883f152c51ded44ed8762128f4/cython-3.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ec09dbf73ff4f7be2b339b995fadae9c4bb517bbbed7ec11d6fe99c2092b48fd", size = 3134644, upload-time = "2026-08-22T05:16:59.112Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/f2/9dc6a3bad9c9d11bf31903321553820a661ce00319a57c4181bf0dcb87f4/cython-3.3.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:11e437f086affee8051cec4bb531be3edb646ab66e325154aa6849377f365033", size = 3346108, upload-time = "2026-08-22T05:17:01.082Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/9b/dd726d11b2aff24f0c3fa68ce9e3934097a058aca471a8cc9888aeae5471/cython-3.3.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e6035b5231a9316edc19d6415f4296fd1d0370e2a165a714b3edc167b9ca00e1", size = 3479260, upload-time = "2026-08-22T05:17:03.476Z" },
+    { url = "https://files.pythonhosted.org/packages/43/55/7408773fdadb2b3434501109696533555ba89f233366519c661372c69098/cython-3.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:8566ea804cfc265f5e9dda71d1b716aa24ee4c3423a5da4b28a248a78c33e3f9", size = 2862883, upload-time = "2026-08-22T05:17:06.008Z" },
+    { url = "https://files.pythonhosted.org/packages/da/0f/95bad838a80ac52c9e982dad00bd9a0b2bad57fb4c688e5f53ac3ef65ff0/cython-3.3.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:03bc5333932f5dda3ba9315298ecdd21daa1b58410bb1f8ce04c78ec8337130a", size = 3143472, upload-time = "2026-08-22T05:17:07.956Z" },
+    { url = "https://files.pythonhosted.org/packages/91/8b/53d4a84de853b39940a0e35a6a2a9ed5f54cb05468daee95bc0fd1c2a178/cython-3.3.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7e321ae700995a16dc3055ada06ffb8d61e1a7434e5d0e811547a45ac1015ebd", size = 3258974, upload-time = "2026-08-22T05:17:09.908Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/4e/6b1c5a4e6bbe1726104de007aa2fdf01a3e2e386b4ec93c7be5f5085d53f/cython-3.3.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:428fafed98ea26927000a287b4dfc9ef07339f56656a5329a34eaa593f79a4f8", size = 3412225, upload-time = "2026-08-22T05:17:12.281Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/9b/cd724d91c500116769bdb853450a2197ba3d640dbbe3b02fc54ebdfdbd1b/cython-3.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:333449cc0350baedee5a6af27929eac8a71eac4ec59333c45ff476b33c6c660d", size = 2872123, upload-time = "2026-08-22T05:17:14.322Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/cc/abc977cf683140e372714acea42164ecfc5cd3d3984ed025860e6d830ee4/cython-3.3.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:03056533fe4fdbc4f1d34a39178f9a4937ff35196f8bcdde2a67b5b5809c61fe", size = 3134892, upload-time = "2026-08-22T05:17:16.675Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/60/5367e7c80776a185ac11e0ea738fdaf18b9d0bc21d2c2bafc4d87eb19964/cython-3.3.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:bc2f2a6b65a991666cfd35a35bab0cd88ffba4df2f601edb6e76cc8116de24b9", size = 3251835, upload-time = "2026-08-22T05:17:18.458Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/b8/fc595c60a7b6f5f08b4f6ad65e60688e8c61f76064ebe847eaf85d0c59fa/cython-3.3.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:23942b0662642927a55676e4b26e6840fb166dd7d76436384685227e7e8619a4", size = 3407705, upload-time = "2026-08-22T05:17:20.387Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/d7/376572ff69ef39a9bdcd727124f6c38aa066300e97734a4902a3ae0d2af0/cython-3.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:ab24d1a4fb6aaf0b5b6fcd75a6d70255fbd3130fa78884c26991f8d5502616b5", size = 2866216, upload-time = "2026-08-22T05:17:22.348Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/7f/e409f76bb955ecdcb746b80350b945fbb808846d797346d647a37e1790ca/cython-3.3.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:0deedc2e9a5a664e1adfa4c2d310aa7b54903e1a647c274b6c9213f77a02d637", size = 3186700, upload-time = "2026-08-22T05:17:24.288Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/6b/4a623ab6e4a5b9814b22849665cb212273f9735399a7ebca4f3e8c254f1a/cython-3.3.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:46072c0d404616b5e652a63882c79cc3f8a1d62635a8692f56ed0e416a4dfed8", size = 3330606, upload-time = "2026-08-22T05:17:26.041Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/57/6d620ebee4fc24d89340427702f6ceaf7b956511d1f2222a88c92c1a72b7/cython-3.3.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:82f94565b6001bab8e31bf52a0911672910b5735910612a2c0f772c719670006", size = 3454681, upload-time = "2026-08-22T05:17:28.449Z" },
+    { url = "https://files.pythonhosted.org/packages/73/4e/26e0a584d06c5b3f345df491d2546479606c89217627ee163f1aa55e899f/cython-3.3.0-cp314-cp314-win_amd64.whl", hash = "sha256:51999fb834365721b6c7f689cf6e2ec7c8667aae783df9eb5e589c290a414d9c", size = 2925966, upload-time = "2026-08-22T05:17:30.549Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/45/7f6988070013e16918e39b1b3dab9c5f2c8e404253a7fd10ee685bbd6902/cython-3.3.0-cp315-cp315-macosx_11_0_arm64.whl", hash = "sha256:596e8df019372a2cd417805015022d42cb8ee4e1803ccdc11ed00e451625fb66", size = 3177681, upload-time = "2026-08-22T05:17:32.523Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/5d/afb6866ab10236bb208dff0f172ea4b397c9693c5250280c4d9d26057218/cython-3.3.0-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4a36c34d1950845b8ac148653b07cdc62421a4b0d9abfcc849e69f1c4ff9919d", size = 3328312, upload-time = "2026-08-22T05:17:34.511Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/aa/4c0b6773ecf6bc1ec6cda7db8312a566611b330fb6dae87d740e44a47822/cython-3.3.0-cp315-cp315-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b447f6906e0555f05dc4742ef1f99091b1e5d9aa9f16616e772fbf9ff6271616", size = 3454285, upload-time = "2026-08-22T05:17:36.538Z" },
+    { url = "https://files.pythonhosted.org/packages/44/bb/3e2631122f96300723d6fc42b9cf65550bdcda570a6ad5c4e0226e2e787c/cython-3.3.0-cp315-cp315-win_amd64.whl", hash = "sha256:b55c72e8eccdd508c8de3cf3bbc543aafbb3bf6a518e1ee20358d3241cd780ef", size = 2924709, upload-time = "2026-08-22T05:17:38.65Z" },
+    { url = "https://files.pythonhosted.org/packages/14/59/bc1a84b434cb5bebb0cd6f50da8f239d35a5c141b20fdeafc2817fd87778/cython-3.3.0-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:e0d2713d2b292c826bc21dc8732bd9e47628103aa3764180c881e04b3fef95dc", size = 3063660, upload-time = "2026-08-22T05:17:40.923Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/6d/542e32908fb421d88354f327ed6450e14240f9825d25393065bc65f4723f/cython-3.3.0-cp39-abi3-manylinux1_i686.manylinux_2_28_i686.manylinux_2_5_i686.whl", hash = "sha256:169e56fd411f4cd5bba51c82f8239421d547a846099db2b261e4aed48ba9f51f", size = 3358395, upload-time = "2026-08-22T05:17:43.036Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/7c/ddaf197bc65b581e1891657940bc4f7cb1f740e822115e828920b3a119ce/cython-3.3.0-cp39-abi3-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:29f38ebafdf23e3da2516f40c4d065da38bfe002181bf93e2b8cf1262449aba6", size = 3041760, upload-time = "2026-08-22T05:17:44.907Z" },
+    { url = "https://files.pythonhosted.org/packages/19/a7/ae5ec3e34d43da846ed4c425734752d83aae0dae49feb929f09c90fc9afa/cython-3.3.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:75c4ae8a6d3a5ccf3cdaba8ab32e6a8d0cd38e3a476aa7ac12df8f8171a8d570", size = 3156152, upload-time = "2026-08-22T05:17:46.884Z" },
+    { url = "https://files.pythonhosted.org/packages/31/44/c60b601fc43f0b08e9d6f14b94e0dd02eb0ca8d60f46e242ace7191ac1be/cython-3.3.0-cp39-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:b94fb5613b9fe34c27d13ec9972dc0dcd2a2155db2902e93921cadc162610a38", size = 3046690, upload-time = "2026-08-22T05:17:48.731Z" },
+    { url = "https://files.pythonhosted.org/packages/b0/9e/d735c26ed907563d3365534006acb263651c2d3b87fee804f7a483dd1714/cython-3.3.0-cp39-abi3-musllinux_1_2_i686.whl", hash = "sha256:c4558ba85849ab65dc57e10fd0efb13fabd9d3c09981a2566e18dec7cf47586a", size = 3373534, upload-time = "2026-08-22T05:17:50.7Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/e8/aa7b4f3a28d6e8117c76e2cf78a0df7a503486cdf7243c5b53200c9533a1/cython-3.3.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:311a016369adfd1e0015c4f9819168fc0e518451d7efb4435c30d65a3a26d52b", size = 3265110, upload-time = "2026-08-22T05:17:52.577Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/66/37892a8999d6bbd3f92d691a9701cb720c8ddd6171e16f5148eee6e8cb7f/cython-3.3.0-cp39-abi3-win32.whl", hash = "sha256:90869072e50b7c8904fe1dd7810321ae901fd5637a6eec6646ed9c57f9eb1081", size = 2587733, upload-time = "2026-08-22T05:17:54.547Z" },
+    { url = "https://files.pythonhosted.org/packages/19/a2/5f4d305cbd4489d21570e5491ad5c483c478cdab032853e2125c280e3bd5/cython-3.3.0-cp39-abi3-win_arm64.whl", hash = "sha256:dce56c26d388f00a19426371b6926bf2f77c5c03b71d5273e4556c68be98c2dd", size = 2608078, upload-time = "2026-08-22T05:17:56.386Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/77/67b0b24e45073a699610e50f00c18474ff9b09ea29ecc95083bdf5e60acd/cython-3.3.0-py3-none-any.whl", hash = "sha256:9b24b5c8cd536946b62086fcafee6d5509d3f549f72d553d2336af87ffbe0da1", size = 1349151, upload-time = "2026-08-22T05:16:36.741Z" },
+]
+
+[[package]]
 name = "czifile"
 version = "2019.7.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1137,6 +1232,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/39/a4/5180d9afc57e8fca05601dd652bdff19604c218814037fe90ffc7625a50a/docutils-0.23.tar.gz", hash = "sha256:746f5060322511280a1e50eb76846ed6bf2342984b2ac04dc42caa1a8d78799e", size = 2303823, upload-time = "2026-05-27T17:41:06.934Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/91/30151a39f7570f448ed84529390628a651d7f27c87d73c9b887f8189695e/docutils-0.23-py3-none-any.whl", hash = "sha256:25d013af9bf23bc1c7b2b093dff4208166c53a94786c9e447808335ef1185fea", size = 634701, upload-time = "2026-05-27T17:40:58.442Z" },
+]
+
+[[package]]
+name = "einops"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/77/850bef8d72ffb9219f0b1aac23fbc1bf7d038ee6ea666f331fa273031aa2/einops-0.8.2.tar.gz", hash = "sha256:609da665570e5e265e27283aab09e7f279ade90c4f01bcfca111f3d3e13f2827", size = 56261, upload-time = "2026-01-26T04:13:17.638Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl", hash = "sha256:54058201ac7087911181bfec4af6091bb59380360f069276601256a76af08193", size = 65638, upload-time = "2026-01-26T04:13:18.546Z" },
 ]
 
 [[package]]
@@ -2152,6 +2256,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/8c/0f2ff2a8b7513e68871a74740c17a504b0488c679b379e6445ebb7bd78dc/lazy_loader-0.6.tar.gz", hash = "sha256:2f4b7824d6401958639008a0cae20c776b61dff619accd6890693e2de8260167", size = 18438, upload-time = "2026-09-21T21:31:32.982Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/23/93/4e45e37f26c820216704b36b8e67cc55c490a7abd287a78a26a2c0e21386/lazy_loader-0.6-py3-none-any.whl", hash = "sha256:77253be3391b06124a0e16105bd663b6c54470af1a9ca8e1cf026f38d58ed056", size = 8791, upload-time = "2026-09-21T21:31:31.632Z" },
+]
+
+[[package]]
+name = "libttp"
+version = "0.1.42"
+source = { git = "https://github.com/VicidominiLab/libttp?rev=7fe694a#7fe694ae10b929db7a127e6f5396352f75fdc78f" }
+dependencies = [
+    { name = "cython" },
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [[package]]
@@ -3337,6 +3455,22 @@ wheels = [
 ]
 
 [[package]]
+name = "psf-ism-distiller"
+version = "0.0.1"
+source = { git = "https://github.com/VicidominiLab/psf-distiller?rev=4d927b1#4d927b1aaa14c3820e15c489a8c68bf58882708e" }
+dependencies = [
+    { name = "brighteyes-ism" },
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "s2ism" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+]
+
+[[package]]
 name = "psutil"
 version = "7.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -4133,6 +4267,24 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/d9/47171a16739eb7a353936b31c20cf54340531e68c9af7d72fd7a784e235d/ruff-0.17.3-py3-none-win32.whl", hash = "sha256:46539cb031b01fd29ae0a02142483c46640b233ee12bb1c1b690bffa1555d5ca", size = 9908481, upload-time = "2026-10-27T00:34:00.087Z" },
     { url = "https://files.pythonhosted.org/packages/d0/a0/f08c1631bfd81faa6a90eaf70c37c786c11bed2046302b56bb506c25e1a0/ruff-0.17.3-py3-none-win_amd64.whl", hash = "sha256:56b8ffb3f3b3cbccb8b76b71b38261b7ed982ef5d20f5b447b1b61a7f4949b24", size = 10341333, upload-time = "2026-10-27T00:34:02.099Z" },
     { url = "https://files.pythonhosted.org/packages/99/d5/4ad4ed31413c301430918e70d3d38ae6f097af0766cb9ab8c9d502b2a4d6/ruff-0.17.3-py3-none-win_arm64.whl", hash = "sha256:81fce74bcd6be0e9da7c67c7553fd0f1f12964a2052cd728ef917b937a5ca1d9", size = 9854332, upload-time = "2026-10-27T00:34:03.847Z" },
+]
+
+[[package]]
+name = "s2ism"
+version = "0.2.0"
+source = { git = "https://github.com/VicidominiLab/s2ISM?rev=10bb5fc#10bb5fc224faa9bb98bf698ee999bc890801ef1d" }
+dependencies = [
+    { name = "brighteyes-ism" },
+    { name = "brighteyes-mcs-reader" },
+    { name = "matplotlib" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scikit-image" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "tqdm" },
 ]
 
 [[package]]
@@ -5001,6 +5153,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e3/05/b17359e1cefb4f909b5e40b1b90a496d987258916dbbf88e842c729f510e/urllib3-2.8.0.tar.gz", hash = "sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63", size = 458972, upload-time = "2026-09-15T19:29:36.253Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl", hash = "sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3", size = 135717, upload-time = "2026-09-15T19:29:34.577Z" },
+]
+
+[[package]]
+name = "varreg"
+version = "0.0.1"
+source = { git = "https://github.com/VicidominiLab/Regularization-by-Noise?rev=bb6d0c6#bb6d0c6e84a416524ce4e3d1bec460ee1cc97670" }
+dependencies = [
+    { name = "einops" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.15.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "tqdm" },
 ]
 
 [[package]]

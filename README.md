@@ -11,5 +11,7 @@ Install the extra of each subpackage you need:
 | Subpackage | Content | Extra |
 |---|---|---|
 | `brighteyes.core` | empty for now, reserved for code shared by the other subpackages | none |
-| `brighteyes.imaging` | ISM, with FLISM as `brighteyes.imaging.flism` | `imaging` |
-| `brighteyes.spectroscopy` | FFS | `spectroscopy` |
+| `brighteyes.mcs` | Reading and preparing HDF5 files from the MCS acquisition software | `mcs` |
+| `brighteyes.ttm` | Reading data from the time-tagging module | `ttm` |
+| `brighteyes.imaging` | ISM, FLISM, s2ISM, flus2ISM, varreg, psf-distiller and birfi; also installs `mcs` | `imaging` |
+| `brighteyes.spectroscopy` | FFS; also installs `imaging` and `ttm` | `spectroscopy` |

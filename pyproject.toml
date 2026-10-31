@@ -23,8 +23,8 @@ Issues = "https://github.com/VicidominiLab/brighteyes/issues"
 
 [project.optional-dependencies]
 imaging = [
-    "brighteyes-mcs-dataprep>=0.1.0",
-    "brighteyes-mcs-reader>=0.1.0",
+    "brighteyes[mcs]",
+    "einops>=0.8.2",
     "h5py>=3.16.0",
     "joblib>=1.6.0",
     "matplotlib>=3.11.2",
@@ -42,7 +42,7 @@ imaging = [
     "zernikepy>=0.0.5",
 ]
 spectroscopy = [
-    "brighteyes[imaging]",
+    "brighteyes[imaging,ttm]",
     "czifile>=2019.7.2.3",
     "h5py>=3.16.0",
     "imutils>=0.5.4",
@@ -64,6 +64,23 @@ spectroscopy = [
     "seaborn>=0.13.2",
     "tifffile>=2020.9.29",
 ]
+mcs = [
+    "h5py>=3.16.0",
+    "joblib>=1.6.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.4.6",
+    "pandas>=3.1.0",
+    "scipy>=1.17.1",
+    "torch>=2.15.0",
+    "tqdm>=4.70.1",
+]
+ttm = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.4.6",
+    "pandas>=3.1.0",
+    "scipy>=1.17.1",
+    "tqdm>=4.70.1",
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -76,10 +93,17 @@ module-name = "brighteyes"
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
-brighteyes = { workspace = true }
 brighteyes-ism = { git = "https://github.com/VicidominiLab/BrightEyes-ISM", rev = "d799720" }
 brighteyes-flism = { git = "https://github.com/VicidominiLab/BrightEyes-FLISM", rev = "85f0d96" }
 brighteyes-ffs = { git = "https://github.com/VicidominiLab/BrightEyes-FFS", rev = "f6d640d" }
+brighteyes = { workspace = true }
+brighteyes-mcs-reader = { git = "https://github.com/VicidominiLab/BrightEyes-MCS-Reader", rev = "8b81d62" }
+brighteyes-mcs-dataprep = { git = "https://github.com/VicidominiLab/BrightEyes-MCS-DataPrep", rev = "821248e" }
+s2ism = { git = "https://github.com/VicidominiLab/s2ISM", rev = "10bb5fc" }
+varreg = { git = "https://github.com/VicidominiLab/Regularization-by-Noise", rev = "bb6d0c6" }
+psf-ism-distiller = { git = "https://github.com/VicidominiLab/psf-distiller", rev = "4d927b1" }
+birfi = { git = "https://github.com/VicidominiLab/birfi", rev = "4ea6c4d" }
+libttp = { git = "https://github.com/VicidominiLab/libttp", rev = "7fe694a" }
 
 [dependency-groups]
 dev = [
@@ -91,19 +115,32 @@ examples = [
     "nbformat==5.8.0",
 ]
 reference = [
+    "birfi",
     "brighteyes-ffs",
     "brighteyes-flism",
     "brighteyes-ism",
+    "brighteyes-mcs-dataprep",
+    "brighteyes-mcs-reader",
+    "libttp",
+    "psf-ism-distiller",
+    "s2ism",
+    "varreg",
 ]
 
 [tool.uv]
 required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
+override-dependencies = ["tdqm; python_version < '0'"]
 
 [tool.ruff]
 line-length = 88
 extend-exclude = [
     "src/brighteyes/imaging",
     "src/brighteyes/spectroscopy",
+    "src/brighteyes/mcs",
+    "src/brighteyes/ttm/ttp.py",
+    "src/brighteyes/ttm/__init__.py",
+    "tests/mcs",
+    "tests/equivalence/reference",
     "examples",
     "docs/imaging-ism",
 ]
