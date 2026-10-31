@@ -1,3 +1,5 @@
+.. Origin: VicidominiLab/BrightEyes-ISM, docs/source/brighteyes_ism.analysis.Deconv_lib.rst at d799720.
+
 Deconv\_lib
 ===========================================
 

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/simulation/simulator.py at d799720.
 import numpy as np
 from scipy.signal import convolve
 import copy as cp

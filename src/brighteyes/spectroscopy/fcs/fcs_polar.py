@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs_polar.py at f6d640d.
 import numpy as np
 from ..tools.find_nearest import find_nearest
 

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/np2hdf5.py at f6d640d.
 import h5py
 import numpy as np
 from datetime import datetime

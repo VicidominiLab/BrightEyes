@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/birfi, src/birfi/utils.py at 4ea6c4d.
 import torch
 from torch.fft import fftn, ifftn, ifftshift
 import numpy as np

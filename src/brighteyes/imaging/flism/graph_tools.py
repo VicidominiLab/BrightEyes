@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FLISM, src/brighteyes_flism/graph_tools.py at 85f0d96.
 """Common plotting helpers for BrightEyes FLISM notebooks."""
 
 import h5py

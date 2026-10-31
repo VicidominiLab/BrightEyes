@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/regularizers.py at bb6d0c6.
 """Centroids and split-gradient terms for the supported RbN regularizers.
 
 Array convention

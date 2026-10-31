@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/fit_psf.py at f6d640d.
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import least_squares

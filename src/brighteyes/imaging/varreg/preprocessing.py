@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/preprocessing.py at bb6d0c6.
 """Preprocessing utilities for temporal rebinning and photon-count splitting.
 
 Array-axis convention used throughout this module:

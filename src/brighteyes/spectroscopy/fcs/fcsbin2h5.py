@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcsbin2h5.py at f6d640d.
 import h5py
 import numpy as np
 from .meas_to_count import file_to_fcs_count

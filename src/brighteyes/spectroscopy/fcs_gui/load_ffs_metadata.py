@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/load_ffs_metadata.py at f6d640d.
 from ..fcs.get_fcs_info import get_file_info, get_metafile_from_file
 from .analysis_settings import FFSmetadata
 

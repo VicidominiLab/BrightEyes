@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/fitmodel_class.py at f6d640d.
 """
 Fitmodels fields:
     model                   str                 name of the model

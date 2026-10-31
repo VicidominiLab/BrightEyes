@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/read_binfile.py at f6d640d.
 def read_binfile(fname, start_index=0, length=1024):
     """
     Read a binary fcs data file, containing a list of U64 numbers that

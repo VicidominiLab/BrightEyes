@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/extract_spad_data.py at f6d640d.
 import numpy as np
 import re
 from .extract_spad_data_kw import keyword_2_ch

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/s2ISM, src/s2ism/s2ism.py at 10bb5fc.
 import gc
 from collections.abc import Iterable
 import warnings

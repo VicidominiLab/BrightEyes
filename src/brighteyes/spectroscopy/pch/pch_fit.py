@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/pch/pch_fit.py at f6d640d.
 import numpy as np
 from scipy.optimize import least_squares, minimize
 from .simulate_pch import simulate_pch_1c, simulate_pch_1c_mc_ntimes, simulate_pch_nc

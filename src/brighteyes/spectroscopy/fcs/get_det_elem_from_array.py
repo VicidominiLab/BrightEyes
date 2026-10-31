@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/get_det_elem_from_array.py at f6d640d.
 import numpy as np
 
 def get_elsum(n, s):

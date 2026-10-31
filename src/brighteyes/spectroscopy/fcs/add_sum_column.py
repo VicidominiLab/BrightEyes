@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/add_sum_column.py at f6d640d.
 def add_sum_column(data):
     """
     Add a column to a 2D array with the sum of all the other columns

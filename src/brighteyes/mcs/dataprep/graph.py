@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/graph.py at 821248e.
 """Calibration plotting helpers for BrightEyes MCS files."""
 
 import numpy as np

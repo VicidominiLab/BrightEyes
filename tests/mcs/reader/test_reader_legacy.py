@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-Reader, tests/test_reader_legacy.py at 8b81d62.
 import h5py
 import numpy as np
 

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/analyze_fit_result.py at f6d640d.
 import numpy as np
 
 def calc_bic(yfit, y, sigmay, n_params):

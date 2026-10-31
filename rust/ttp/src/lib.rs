@@ -1,3 +1,4 @@
+// Ported from VicidominiLab/libttp, libttp/ttpCython.pyx at 7fe694a.
 //! Loops of the time-tagger decoding in `brighteyes.ttm._ttp`.
 //!
 //! Each kernel repeats the arithmetic of the Cython loop it replaces with the

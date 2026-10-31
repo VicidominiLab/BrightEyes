@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs2corr.py at f6d640d.
 import multipletau
 import matplotlib.pyplot as plt
 import numpy as np

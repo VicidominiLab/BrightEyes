@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs2arrivaltimes.py at f6d640d.
 # import numpy as np
 # from .get_fcs_info import get_file_info
 # from .meas_to_count import file_to_fcs_count

@@ -1,3 +1,5 @@
+.. Origin: VicidominiLab/BrightEyes-ISM, docs/source/brighteyes_ism.dataio.rst at d799720.
+
 dataio
 ==============================
 

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/meas_to_analogcount.py at f6d640d.
 import numpy as np
 
 def file_to_analogcount(fname, dtype=">u8", print_info=False):

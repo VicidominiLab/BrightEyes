@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/print_tools.py at f6d640d.
 """
 Created on Fri Nov 21 09:18:22 2025
 

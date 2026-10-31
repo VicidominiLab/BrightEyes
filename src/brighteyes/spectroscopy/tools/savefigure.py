@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/savefigure.py at f6d640d.
 import pickle
 
 

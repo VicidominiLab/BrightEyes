@@ -1,3 +1,4 @@
+# Ported from VicidominiLab/libttp, libttp/ttpCython.pyx at 7fe694a.
 """Decode time-tagger streams, with the per-event loops in `_ttp_core`."""
 
 import math

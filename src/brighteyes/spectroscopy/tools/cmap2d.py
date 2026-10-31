@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/cmap2d.py at f6d640d.
 import matplotlib.pyplot as plt
 import numpy as np
 

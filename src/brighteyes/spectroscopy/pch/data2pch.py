@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/pch/data2pch.py at f6d640d.
 """
 Created on Fri Jul  4 10:59:51 2025
 

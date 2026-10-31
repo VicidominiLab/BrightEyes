@@ -1,3 +1,5 @@
+.. Origin: VicidominiLab/BrightEyes-ISM, docs/source/index.rst at d799720.
+
 .. BrightEyes-ISM documentation master file, created by
    sphinx-quickstart on Mon Feb  6 14:30:58 2023.
    You can adapt this file completely to your liking, but it should at least

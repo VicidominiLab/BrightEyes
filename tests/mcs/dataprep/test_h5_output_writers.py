@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, tests/test_h5_output_writers.py at 821248e.
 import json
 
 import h5py

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/libttp, libttp/ttp.py at 7fe694a.
 import os
 import shutil
 import subprocess

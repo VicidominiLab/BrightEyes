@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-Reader, src/brighteyes_mcs_reader/reader_legacy.py at 8b81d62.
 """Legacy reader helpers for BrightEyes MCS HDF5 files."""
 
 import re

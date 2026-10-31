@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/calcdist_from_coord.py at f6d640d.
 import numpy as np
 
 

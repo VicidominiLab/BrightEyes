@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/plot_intensity_traces.py at f6d640d.
 import matplotlib.pyplot as plt
 import numpy as np
 from ..tools.bindata import bindata

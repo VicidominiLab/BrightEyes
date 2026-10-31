@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/psf-distiller, src/psf_ism_distiller/distiller.py at 4d927b1.
 import numpy as np
 
 import sys

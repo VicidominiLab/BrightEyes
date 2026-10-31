@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/extract_spad_data_kw.py at f6d640d.
 
 """
 Get channel numbers from predefined keywords

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-Reader, tests/test_reader.py at 8b81d62.
 """Tests for the BrightEyes-MCS HDF5 reader."""
 
 from __future__ import annotations

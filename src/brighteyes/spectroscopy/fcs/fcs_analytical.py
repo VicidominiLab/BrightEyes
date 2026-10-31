@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs_analytical.py at f6d640d.
 import numpy as np
 from scipy.special import erfcx
 

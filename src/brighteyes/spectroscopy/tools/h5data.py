@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/h5data.py at f6d640d.
 import h5py
 
 # how to use

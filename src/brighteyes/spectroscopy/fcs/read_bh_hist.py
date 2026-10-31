@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/read_bh_hist.py at f6d640d.
 import numpy as np
 from ..tools.savevar import savevar
 

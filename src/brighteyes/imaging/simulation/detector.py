@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/simulation/detector.py at d799720.
 import numpy as np
 from torchvision.transforms.functional import rotate
 from skimage.draw import polygon

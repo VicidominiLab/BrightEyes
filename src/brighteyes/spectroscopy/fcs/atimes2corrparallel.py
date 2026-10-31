@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/atimes2corrparallel.py at f6d640d.
 import multiprocessing
 import re
 from joblib import Parallel, delayed

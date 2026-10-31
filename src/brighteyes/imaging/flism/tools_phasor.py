@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FLISM, src/brighteyes_flism/tools_phasor.py at 85f0d96.
 """Phasor utilities, lifetime estimators, and plotting helpers."""
 
 import math

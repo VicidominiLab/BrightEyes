@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/w0_from_fingerprint.py at f6d640d.
 import numpy as np
 from scipy.optimize import least_squares
 import scipy.signal as scisig

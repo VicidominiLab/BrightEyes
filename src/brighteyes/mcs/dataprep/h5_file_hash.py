@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/h5_file_hash.py at 821248e.
 """Stable hash helpers for BrightEyes HDF5 source files."""
 
 from __future__ import annotations

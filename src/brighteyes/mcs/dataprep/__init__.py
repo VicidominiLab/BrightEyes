@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/__init__.py at 821248e.
 """Data preparation utilities for BrightEyes MCS HDF5 files."""
 
 from __future__ import annotations

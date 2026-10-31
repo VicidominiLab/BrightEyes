@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/s2ISM, src/s2ism/dataio.py at 10bb5fc.
 """BrightEyes-MCS file loading helpers for s2ISM workflows."""
 
 from __future__ import annotations

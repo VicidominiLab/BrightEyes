@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/cmaps.py at f6d640d.
 from matplotlib.colors import ListedColormap
 import matplotlib.pyplot as plt
 import numpy as np

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/channel_skew_estimator.py at 821248e.
 
 """Standalone channel skew estimation utilities.
 

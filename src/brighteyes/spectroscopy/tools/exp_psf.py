@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/exp_psf.py at f6d640d.
 import numpy as np
 from skimage import measure
 from imutils import contours

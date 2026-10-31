@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/s2ISM, src/s2ism/mag_finder.py at 10bb5fc.
 import numpy as np
 from scipy.special import jv
 from scipy.optimize import minimize

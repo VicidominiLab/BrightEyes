@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/analysis/APR_lib.py at d799720.
 import numpy as np
 from scipy.ndimage import fourier_shift, shift
 from skimage.registration import phase_cross_correlation

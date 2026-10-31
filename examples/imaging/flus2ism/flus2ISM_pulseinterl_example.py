@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/flus2ISM, flus2ISM_pulseinterl_example.py at 164a45b.
 import numpy as np
 import matplotlib.pyplot as plt
 

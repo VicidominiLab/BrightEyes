@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/get_fcs_info.py at f6d640d.
 from pathlib import Path
 from os import path as pth
 from ..tools.h5data import h5data

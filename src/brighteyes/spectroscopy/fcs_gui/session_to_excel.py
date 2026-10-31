@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/session_to_excel.py at f6d640d.
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 import numpy as np

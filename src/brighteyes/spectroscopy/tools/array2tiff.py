@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/array2tiff.py at f6d640d.
 import numpy as np
 from .checkfname import checkfname
 from tifffile import imwrite, imread

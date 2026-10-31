@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/h5_output_writers.py at 821248e.
 """Helpers for adding BrightEyes analysis outputs to current-schema HDF5 files.
 
 The current schema keeps measured data under ``/raw`` and calibration artifacts

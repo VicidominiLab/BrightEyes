@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/analysis/FocusISM_lib.py at d799720.
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector

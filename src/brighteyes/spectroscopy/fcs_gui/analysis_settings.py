@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/analysis_settings.py at f6d640d.
 #from functions.appearance import corr_long_label as cll
 import numpy as np
 import matplotlib.image as mpimg

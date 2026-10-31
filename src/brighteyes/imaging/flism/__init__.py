@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FLISM, src/brighteyes_flism/__init__.py at 85f0d96.
 """Public package API for BrightEyes FLISM utilities."""
 
 from brighteyes.mcs.dataprep import (

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/__init__.py at f6d640d.
 from .color_from_map import *
 from .array2tiff import *
 from .array2video import *

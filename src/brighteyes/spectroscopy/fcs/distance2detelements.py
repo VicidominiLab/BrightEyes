@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/distance2detelements.py at f6d640d.
 import numpy as np
 
 def distance2detelements(det1, det2):

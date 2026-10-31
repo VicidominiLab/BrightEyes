@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs_fit.py at f6d640d.
 import numpy as np
 from scipy.optimize import least_squares
 from .fcs_analytical import fcs_analytical, fcs_dualfocus, fcs_2c_analytical, fcs_2c_2d_analytical, fcs_analytical_2c_anomalous, nanosecond_fcs_analytical, uncoupled_reaction_diffusion

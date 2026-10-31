@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/loss.py at bb6d0c6.
 """Data-fidelity and realization-consistency losses used by ``varreg``.
 
 Array convention

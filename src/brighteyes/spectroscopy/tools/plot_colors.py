@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/plot_colors.py at f6d640d.
 import numpy as np
 
 def plot_colors(info):

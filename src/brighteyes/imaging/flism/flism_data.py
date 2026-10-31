@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FLISM, src/brighteyes_flism/flism_data.py at 85f0d96.
 """Legacy FLIM data containers."""
 
 import warnings

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/analysis/Deconv_lib.py at d799720.
 import numpy as np
 from scipy.linalg import toeplitz
 from scipy.linalg import inv

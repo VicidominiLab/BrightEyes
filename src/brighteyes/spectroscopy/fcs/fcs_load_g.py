@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs_load_g.py at f6d640d.
 import os
 from .fcs2corr import Correlations
 from ..tools.list_files import list_files

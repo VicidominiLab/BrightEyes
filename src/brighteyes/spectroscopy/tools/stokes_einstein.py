@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/stokes_einstein.py at f6d640d.
 from .constants import constants
 import numpy as np
 

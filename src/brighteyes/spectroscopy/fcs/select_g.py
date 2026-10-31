@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/select_g.py at f6d640d.
 """
 Created on Wed May 22 10:46:35 2019
 

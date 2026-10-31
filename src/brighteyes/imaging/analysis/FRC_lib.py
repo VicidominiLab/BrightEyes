@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/analysis/FRC_lib.py at d799720.
 import numpy as np
 from numpy import pi
 import matplotlib.pyplot as plt

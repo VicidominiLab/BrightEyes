@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/imsd.py at f6d640d.
 from ..tools.fit_gauss_2d import fit_gauss_2d
 from ..tools.fit_curve import fit_curve
 import numpy as np

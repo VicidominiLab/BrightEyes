@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/binfile2data.py at f6d640d.
 import numpy as np
 import os
 from .u64_to_counts import u64_to_counts

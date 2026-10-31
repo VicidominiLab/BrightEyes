@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/plot_corrs_scheme.py at f6d640d.
 from .detectors import detector_element_coordinates
 import matplotlib.pyplot as plt
 import numpy as np

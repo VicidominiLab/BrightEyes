@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/simulation/PSF_sim.py at d799720.
 import numpy as np
 import torch
 from numbers import Number

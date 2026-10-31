@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/path2fname.py at f6d640d.
 from os.path import split
 
 def path2fname(path, properWay=False):

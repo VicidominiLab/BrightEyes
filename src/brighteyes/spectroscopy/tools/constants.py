@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/constants.py at f6d640d.
 def constants(c):
     """
     Physical constants

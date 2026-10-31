@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/s2ISM, src/s2ism/shift_vectors_minimizer.py at 10bb5fc.
 import numpy as np
 from scipy.optimize import minimize
 

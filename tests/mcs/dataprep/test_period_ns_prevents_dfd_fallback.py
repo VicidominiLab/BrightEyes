@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, tests/test_period_ns_prevents_dfd_fallback.py at 821248e.
 import json
 
 import h5py

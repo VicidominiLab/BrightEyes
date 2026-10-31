@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/psf-distiller, demo/plot_phase_space.py at 4d927b1.
 import numpy as np
 import matplotlib.pyplot as plt
 

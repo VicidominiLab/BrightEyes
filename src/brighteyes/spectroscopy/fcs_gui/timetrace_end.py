@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/timetrace_end.py at f6d640d.
 import numpy as np
 
 def timetrace_end(tt):

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/bh_atimes2csv.py at f6d640d.
 from .read_bh_spc import read_spc
 from .arrivaltimes2timetrace import atimes2timetrace_bh
 from .fcs2corr import fcs2corrsplit, plot_fcs_correlations

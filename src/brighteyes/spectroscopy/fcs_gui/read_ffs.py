@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/read_ffs.py at f6d640d.
 from .restore_session import restorelib
 import numpy as np
 

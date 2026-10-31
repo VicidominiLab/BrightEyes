@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/utils.py at bb6d0c6.
 # Array-dimension conventions used throughout this module:
 # Nx, Ny   : lateral image dimensions
 # Mx, My   : unpadded kernel or PSF dimensions

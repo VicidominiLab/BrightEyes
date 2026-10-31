@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/alignment.py at 821248e.
 """Alignment, fitting, and IRF estimation utilities."""
 
 from __future__ import annotations

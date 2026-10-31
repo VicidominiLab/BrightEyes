@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/correlation_functions_class.py at f6d640d.
 """
 CorrelationFunction fields:
     mode        str             name of the correlation, e.g. 'Pair-correlation fcs'

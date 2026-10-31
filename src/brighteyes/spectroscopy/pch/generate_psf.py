@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/pch/generate_psf.py at f6d640d.
 """
 Created on Fri Jul  4 14:02:39 2025
 

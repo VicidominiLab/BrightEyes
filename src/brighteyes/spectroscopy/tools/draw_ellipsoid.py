@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/draw_ellipsoid.py at f6d640d.
 import numpy as np
 import matplotlib.pyplot as plt
 

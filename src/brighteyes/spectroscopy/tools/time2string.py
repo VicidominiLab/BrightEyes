@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/time2string.py at f6d640d.
 import numpy as np
 
 def time2string(seconds):

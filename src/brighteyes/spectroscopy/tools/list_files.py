@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/list_files.py at f6d640d.
 import os
 
 def list_files(directory='C:/Users/SPAD-fcs/OneDrive - Fondazione Istituto Italiano Tecnologia', filetype='bin', substr=False):

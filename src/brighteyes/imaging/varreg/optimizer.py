@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/optimizer.py at bb6d0c6.
 """Iterative optimizers for variance-regularized reconstruction.
 
 All modalities are converted once to the most general internal layout:

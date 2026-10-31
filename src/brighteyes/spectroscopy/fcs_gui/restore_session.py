@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs_gui/restore_session.py at f6d640d.
 """
     Stored in memory:
     root.image

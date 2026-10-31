@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, notebooks/Analyise_Argolight.py at bb6d0c6.
 
 #%% Import
 import numpy as np

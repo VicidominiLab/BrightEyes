@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/atimes2corr.py at f6d640d.
 import numpy as np
 from .extract_spad_photon_streams import extract_spad_photon_streams
 from scipy.sparse import csr_array

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FLISM, src/brighteyes_flism/_fit_maps.py at 85f0d96.
 """Fit-map helpers exported by :mod:`brighteyes.imaging.flism`."""
 
 from __future__ import annotations

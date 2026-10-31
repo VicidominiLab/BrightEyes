@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/moving_average.py at f6d640d.
 import numpy as np
 
 

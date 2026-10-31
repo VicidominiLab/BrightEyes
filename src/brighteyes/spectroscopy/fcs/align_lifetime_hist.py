@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/align_lifetime_hist.py at f6d640d.
 import numpy as np
 from ..tools.moving_average import moving_average
 import copy

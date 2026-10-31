@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/csv2array.py at f6d640d.
 import numpy as np
 import os
 from numpy import genfromtxt

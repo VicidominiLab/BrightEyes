@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/plots.py at f6d640d.
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/filter_ap.py at f6d640d.
 import numpy as np
 import matplotlib.pyplot as plt
 from .atimes_data import atimes_data_2_channels

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/corr_input_from_kw.py at f6d640d.
 """
 Created on Fri Nov  7 16:30:32 2025
 

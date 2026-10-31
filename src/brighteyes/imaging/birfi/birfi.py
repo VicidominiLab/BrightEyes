@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/birfi, src/birfi/birfi.py at 4ea6c4d.
 import torch
 from torch.fft import fftn
 from scipy.signal import savgol_filter

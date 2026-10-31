@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/mem_fit.py at f6d640d.
 import numpy as np
 from .fcs_analytical import fcs_analytical
 import copy

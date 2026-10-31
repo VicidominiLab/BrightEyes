@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/array2video.py at f6d640d.
 from .checkfname import checkfname
 import numpy as np
 import matplotlib.pyplot as plt

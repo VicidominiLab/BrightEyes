@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/pch/simulate_pch.py at f6d640d.
 import numpy as np
 from scipy.special import factorial
 from joblib import Parallel, delayed

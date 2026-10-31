@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/timetrace2corr.py at f6d640d.
 
 import numpy as np
 

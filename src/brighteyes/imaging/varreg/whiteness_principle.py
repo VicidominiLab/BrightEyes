@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/whiteness_principle.py at bb6d0c6.
 
 import numpy as np
 import torch

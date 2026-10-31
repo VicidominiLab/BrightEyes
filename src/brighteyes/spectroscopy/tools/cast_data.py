@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/cast_data.py at f6d640d.
 def cast_data(data, type='int64'):
     """
     Convert data array to type cast

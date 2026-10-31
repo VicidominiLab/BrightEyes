@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/phantom_simulator.py at bb6d0c6.
 """Utilities for generating simple synthetic 2D fluorescence phantoms.
 
 Array convention

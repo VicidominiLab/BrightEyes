@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/fcs_file.py at f6d640d.
 """
 Created on Mon Jul 27 12:00:11 2026
 

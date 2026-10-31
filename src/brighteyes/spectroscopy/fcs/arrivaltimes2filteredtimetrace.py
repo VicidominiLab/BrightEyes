@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/arrivaltimes2filteredtimetrace.py at f6d640d.
 import numpy as np
 
 

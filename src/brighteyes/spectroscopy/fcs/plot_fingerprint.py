@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/plot_fingerprint.py at f6d640d.
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon
 import numpy as np

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/bindata.py at f6d640d.
 import numpy as np
 
 def bindata(data, binsize, interleaved_binning=False):

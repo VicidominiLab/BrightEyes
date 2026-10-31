@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-Reader, src/brighteyes_mcs_reader/__init__.py at 8b81d62.
 """Read-only helpers for BrightEyes MCS HDF5 files."""
 
 from __future__ import annotations

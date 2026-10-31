@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-ISM, src/brighteyes_ism/simulation/utils.py at d799720.
 import torch
 from torch.fft import fftn, ifftn, ifftshift
 

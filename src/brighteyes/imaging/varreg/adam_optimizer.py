@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/Regularization-by-Noise, src/varreg/adam_optimizer.py at bb6d0c6.
 import torch
 
 import numpy as np

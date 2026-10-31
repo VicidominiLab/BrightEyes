@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/lifetimehist.py at f6d640d.
 import numpy as np
 
 

@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/checkfname.py at f6d640d.
 def checkfname(fname, extension):
     """
     Check if string ends with given extension

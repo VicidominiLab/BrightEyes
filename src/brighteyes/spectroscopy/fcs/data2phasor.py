@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/data2phasor.py at f6d640d.
 import numpy as np
 from ..tools.phasor import phasor
 

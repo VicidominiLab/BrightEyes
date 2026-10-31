@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/atimes2hist.py at f6d640d.
 from .atimes_data import atimes_data_2_channels, atimes_data_2_duration
 import numpy as np
 

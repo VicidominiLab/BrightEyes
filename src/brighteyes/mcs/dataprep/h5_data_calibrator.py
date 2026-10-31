@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-MCS-DataPrep, src/brighteyes_mcs_dataprep/h5_data_calibrator.py at 821248e.
 """HDF5 calibration, output-building, and structure inspection helpers."""
 
 from __future__ import annotations

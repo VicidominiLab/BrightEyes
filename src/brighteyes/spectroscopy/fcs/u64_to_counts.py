@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/u64_to_counts.py at f6d640d.
 def u64_to_counts(number):
     """
     Convert an unsigned 64 bit number to a 25 element array containing the

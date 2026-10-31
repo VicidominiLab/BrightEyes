@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/read_bh_spc.py at f6d640d.
 import numpy as np
 
 

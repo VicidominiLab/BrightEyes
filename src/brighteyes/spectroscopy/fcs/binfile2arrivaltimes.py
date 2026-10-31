@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/binfile2arrivaltimes.py at f6d640d.
 import numpy as np
 import os
 from .read_binfile import read_binfile

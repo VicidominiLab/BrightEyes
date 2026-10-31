@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/tools/fit_polynomial_2d.py at f6d640d.
 import numpy as np
 from scipy.optimize import least_squares
 

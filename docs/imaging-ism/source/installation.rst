@@ -1,3 +1,5 @@
+.. Origin: VicidominiLab/BrightEyes-ISM, docs/source/installation.rst at d799720.
+
 Description
 ===============================
 

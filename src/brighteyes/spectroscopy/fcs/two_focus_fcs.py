@@ -1,3 +1,4 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/two_focus_fcs.py at f6d640d.
 import numpy as np
 from .fcs2corr import Correlations
 
