@@ -4,9 +4,12 @@ from _registry import Case
 
 from . import (
     imaging_analysis,
+    imaging_birfi,
     imaging_flism,
     imaging_s2ism,
     imaging_simulation,
+    imaging_varreg,
+    imaging_varreg_solvers,
     mcs_alignment,
     mcs_calibrator,
     mcs_dataprep,
@@ -19,9 +22,12 @@ from . import (
 
 _MODULES: tuple[ModuleType, ...] = (
     imaging_analysis,
+    imaging_birfi,
     imaging_flism,
     imaging_s2ism,
     imaging_simulation,
+    imaging_varreg,
+    imaging_varreg_solvers,
     mcs_alignment,
     mcs_calibrator,
     mcs_dataprep,

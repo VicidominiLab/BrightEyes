@@ -3,6 +3,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+import torch
 
 SIZE = 32
 CHANNELS = 25
@@ -536,3 +537,61 @@ def shifted_spot_dataset() -> np.ndarray:
                 -((x - px - dx) ** 2 + (y - py - dy) ** 2) / (2 * 2.0**2)
             )
     return rng.poisson(data * 500).astype(np.float64)
+
+
+def varreg_counts(channels: int | None = None, k: int = 3) -> np.ndarray:
+    """Return 16 by 16 Poisson counts shaped `(x, y, k)`, or `(x, y, channels, k)` when `channels` is given."""
+    data = ism_dataset()[:16, :16]
+    if channels is None:
+        return data[..., :k]
+    return data[..., : channels * k].reshape(16, 16, channels, k)
+
+
+def varreg_psf(layers: int | None = None, channels: int | None = 2) -> np.ndarray:
+    """Return a 9 by 9 PSF shaped `(x, y)`, `(x, y, channels)` or, with `layers`, `(layers, x, y, channels)`."""
+    psf = ism_psf()[11:20, 11:20]
+    if layers is None and channels is None:
+        return psf[..., 0]
+    if layers is None:
+        return psf[..., :channels]
+    return np.stack([psf[..., :channels], ism_psf()[11:20, 11:20, 2 : 2 + channels]])
+
+
+def varreg_layout(name: str) -> tuple[np.ndarray, np.ndarray]:
+    """Return the data and PSF of the `confocal`, `MID` or `s2ISM` layout."""
+    match name:
+        case "confocal":
+            return varreg_counts(), varreg_psf(channels=None)
+        case "MID":
+            return varreg_counts(2), varreg_psf()
+        case "s2ISM":
+            return varreg_counts(2), varreg_psf(layers=2)
+    raise ValueError(name)
+
+
+def varreg_canonical() -> tuple[torch.Tensor, torch.Tensor]:
+    """Return float32 tensors of the s2ISM data `(x, y, channels, k)` and PSF `(layers, x, y, channels)`."""
+    return (
+        torch.from_numpy(varreg_counts(2)).float(),
+        torch.from_numpy(varreg_psf(layers=2)).float(),
+    )
+
+
+def varreg_confocal_image() -> tuple[torch.Tensor, torch.Tensor]:
+    """Return float32 tensors of the confocal data `(x, y, k)` and PSF `(x, y)`."""
+    return (
+        torch.from_numpy(varreg_counts()).float(),
+        torch.from_numpy(varreg_psf(channels=None)).float(),
+    )
+
+
+def positive_tensor(*shape: int, seed: int = 1) -> torch.Tensor:
+    """Return a float32 tensor of the given shape with values in 0.5 to 2."""
+    return torch.from_numpy(
+        np.random.default_rng(seed).uniform(0.5, 2.0, shape)
+    ).float()
+
+
+def unit_tensor(*shape: int, seed: int = 4) -> torch.Tensor:
+    """Return a float64 tensor of the given shape with values in 0 to 1."""
+    return torch.from_numpy(np.random.default_rng(seed).uniform(0, 1, shape))
