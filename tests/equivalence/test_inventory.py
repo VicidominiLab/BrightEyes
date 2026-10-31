@@ -1,0 +1,75 @@
+import inspect
+import pkgutil
+import sys
+from importlib import import_module
+
+from _registry import new_path, resolve
+from cases import ALL_CASES, ALL_SKIPPED
+
+OLD_PACKAGES = (
+    "brighteyes_ism",
+    "brighteyes_flism",
+    "brighteyes_ffs",
+    "brighteyes_mcs_reader",
+    "brighteyes_mcs_dataprep",
+    "libttp",
+    "s2ism",
+    "varreg",
+    "psf_ism_distiller",
+    "birfi",
+)
+OLD_MODULES = ("flus2ISM_lib", "libttp.ttpCython")
+
+
+def _raise(name: str) -> None:
+    raise sys.exception()
+
+
+def public_names() -> set[str]:
+    """Return the `module:name` path of every public function and class of the old packages."""
+    names = set()
+    modules = list(OLD_MODULES)
+    for name in OLD_PACKAGES:
+        package = import_module(name)
+        modules.append(name)
+        modules += [
+            info.name
+            for info in pkgutil.walk_packages(
+                package.__path__, name + ".", onerror=_raise
+            )
+        ]
+    for module_name in modules:
+        for name, obj in vars(import_module(module_name)).items():
+            if (
+                not name.startswith("_")
+                and (inspect.isroutine(obj) or inspect.isclass(obj))
+                and obj.__module__ == module_name
+            ):
+                names.add(f"{module_name}:{name}")
+    return names
+
+
+def test_every_public_name_is_covered():
+    """Give every public name of the old packages a case or a skip reason."""
+    declared = {case.old for case in ALL_CASES} | ALL_SKIPPED.keys()
+    covered = {
+        f"{module}:{qualname.partition('.')[0]}"
+        for module, qualname in (p.split(":") for p in declared)
+    }
+    inventory = public_names()
+    missing = sorted(inventory - covered)
+    stale = sorted(covered - inventory)
+    unresolved = []
+    for path in sorted(ALL_SKIPPED):
+        try:
+            resolve(new_path(path))
+        except (ImportError, AttributeError) as error:
+            unresolved.append(f"{path}: {error!r}")
+    assert not missing and not stale and not unresolved, (
+        f"{len(missing)} names have no case:\n"
+        + "\n".join(missing)
+        + f"\n{len(stale)} paths name nothing:\n"
+        + "\n".join(stale)
+        + f"\n{len(unresolved)} skipped paths missing from brighteyes:\n"
+        + "\n".join(unresolved)
+    )

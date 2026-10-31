@@ -1,0 +1,781 @@
+# Origin: VicidominiLab/flus2ISM, flus2ISM_lib.py at 164a45b.
+import gc
+from collections.abc import Iterable
+
+import numpy as np
+from tqdm import tqdm
+import string
+import torch
+import torch.nn.functional as torchpad
+from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
+from torch import real, einsum
+
+def partial_convolution_rfft(kernel: torch.Tensor, volume: torch.Tensor, dim1: str = 'ijk', dim2: str = 'jkl',
+                             axis: str = 'jk',  dim3: str = None, fourier: tuple = (False, False),
+                             padding: list = None):
+
+    kernel = torch.as_tensor(kernel)
+    volume = torch.as_tensor(volume)
+
+    if dim3 is None:
+        dim3 = dim1 + dim2
+        dim3 = ''.join(sorted(set(dim3), key=dim3.index))
+    elif not isinstance(dim3, str):
+        raise ValueError("dim3 must be a string")
+
+    dims = [dim1, dim2, dim3]
+
+    axis_list = [[d.find(c) for c in axis] for d in dims]
+
+    if padding is None:
+        padding = [volume.size(d) for d in axis_list[1]]
+
+    if fourier[0] == False:
+        #kernel_shifted = ifftshift(kernel, dim=axis_list[0])  # Centra il kernel
+        kernel_fft = rfftn(kernel, dim=axis_list[0], s=padding)
+    else:
+        kernel_fft = kernel
+
+    if fourier[1] == False:
+        #volume_shifted = ifftshift(volume, dim=axis_list[1])  # Centra il volume
+        volume_fft = rfftn(volume, dim=axis_list[1], s=padding)
+    else:
+        volume_fft = volume
+
+    print(f'kernel_fft shape: {kernel_fft.shape}, volume_fft shape: {volume_fft.shape}')
+
+    conv = einsum(f'{dim1},{dim2}->{dim3}', kernel_fft, volume_fft)
+    
+    conv = irfftn(conv, dim=axis_list[2], s=padding)  # inverse FFT of the product
+    conv = ifftshift(conv, dim=axis_list[2])  # Rotation of 180 degrees of the phase of the FFT
+    conv = real(conv)  # Clipping to zero the residual imaginary part
+
+    return conv
+
+# def torch_conv(signal, kernel_fft):
+#     """
+#     It calculates the circular convolution of a real signal with a real kernel using the FFT method using pytorch.
+
+#     Parameters
+#     ----------
+#     signal : torch.Tensor
+#         Tensor with N dimensions to be convolved.
+#     kernel_fft : torch.Tensor
+#         Kernel in the frequency domain of the convolution. It has the same number of dimensions of the signal.
+
+#     Returns
+#     -------
+#         conv : torch.Tensor
+#             Circular convolution of signal with kernel.
+#     """
+
+#     conv = fftn(signal) * kernel_fft  # product of FFT
+#     conv = ifftn(conv)  # inverse FFT of the product
+#     conv = ifftshift(conv)  # Rotation of 180 degrees of the phase of the FFT
+#     conv = torch.real(conv)  # Clipping to zero the residual imaginary part
+
+#     return conv
+
+
+def flus2ism_update(img, obj, psf_fft, psf_m_fft, eps: float, device: str):
+    """
+    It performs an iteration of the AMD algorithm.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    obj : np.ndarray
+        Object estimated from the previous iteration ( Nz x Ntau x Nx x Ny ) .
+    psf : np.ndarray
+        Point spread function ( Nz x Ntau x Nx x Ny x Nt x Nch ).
+    psf_m : np.ndarray
+        Point spread function with flipped X and Y axis ( Nz x Ntau x Nx x Ny x Nt x Nch ).
+    eps : float
+        Division threshold (usually set at the error machine value).
+    device : str
+        Pytorch device, either 'cpu' or 'cuda:0'.
+
+    Returns
+    -------
+    obj_new : np.ndarray ( Nz x Ntau x Nx x Ny )
+        New estimate of the object.
+
+    """
+
+    # Variables initialization
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    sz_o = obj.shape
+    Nz = sz_o[0]
+    Ntau = sz_o[1]
+
+    sz_i = img.shape
+    Nch = sz_i[-1]
+    T = sz_i[-2]
+
+    szt = [Nz] + [Ntau] + list(sz_i)
+    den = torch.empty(szt).to(device)
+
+    # Update
+    alphabet = string.ascii_lowercase
+    num_axis_to_conv = 2
+    str_psf = alphabet[:psf_fft.ndim]
+    obj_str = alphabet[:obj.ndim]
+    axis_to_conv = alphabet[obj.ndim-num_axis_to_conv : obj.ndim]
+    
+    den = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(True, False))
+
+    # Update
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 den[z,tau, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau, ...,t, c])
+    img_estimate = den.sum(axis=(0,1))
+
+    del den
+
+    fraction = torch.where(img_estimate < eps, 0, img / img_estimate)
+
+    del img_estimate
+    
+    diff_dim = psf_m_fft.ndim - fraction.ndim
+    fraction_str = alphabet[diff_dim:fraction.ndim+diff_dim]
+    axis_to_conv = fraction_str[:num_axis_to_conv]
+    up = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=fraction_str, axis=axis_to_conv, fourier=(True, False))
+
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+                
+    #                 up[z,tau, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau, ...,t, c])
+                
+    update = up.sum(-1)
+    
+    update_f = update.sum(-1)
+
+    del up, fraction
+
+    obj_new = obj * update_f
+
+    return obj_new
+
+
+def flus2ism_pulseinterl__update(img, obj, psf_fft, psf_m_fft, eps: float, device: str):
+    """
+    It performs an iteration of the AMD algorithm.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    obj : np.ndarray
+        Object estimated from the previous iteration ( Nz x Ntau x Nx x Ny ) .
+    psf : np.ndarray
+        Point spread function ( Nz x Ntau x Np x Nx x Ny x Nt x Nch )
+    psf_m : np.ndarray
+        Point spread function with flipped X and Y axis ( Nz x Ntau x Nx x Ny x Nt x Nch ).
+    eps : float
+        Division threshold (usually set at the error machine value).
+    device : str
+        Pytorch device, either 'cpu' or 'cuda:0'.
+
+    Returns
+    -------
+    obj_new : np.ndarray ( Nz x Ntau x Nx x Ny )
+        New estimate of the object.
+
+    """
+
+    # Variables initialization
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    sz_o = obj.shape
+    Nz = sz_o[0]
+    Ntau = sz_o[1]
+    
+    Np = psf_fft.shape[2]
+
+    sz_i = img.shape
+    Nch = sz_i[-1]
+    T = sz_i[-2]
+
+    szt = [Nz] + [Ntau] + [Np] + list(sz_i)
+    den = torch.empty(szt).to(device)
+
+    # Update
+    alphabet = string.ascii_lowercase
+    num_axis_to_conv = 2
+    str_psf = alphabet[:psf_fft.ndim]
+    obj_str = alphabet[:obj.ndim]
+    axis_to_conv = alphabet[obj.ndim-num_axis_to_conv : obj.ndim]
+    print(f'str_psf: {str_psf}, obj_str: {obj_str}, axis_to_conv: {axis_to_conv}')
+    
+    den = partial_convolution_rfft(psf_fft, obj, dim1=str_psf, dim2=obj_str, axis=axis_to_conv, fourier=(True, False))
+
+    # # Update
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 for p in range(Np):
+    #                     den[z,tau,p, ...,t, c] = torch_conv(obj[z,tau], psf_fft[z,tau,p, ...,t, c])
+                    
+    img_estimate = den.sum(axis=(0,1,2))
+
+    del den
+
+    fraction = torch.where(img_estimate < eps, 0, img / img_estimate)
+
+    del img_estimate
+
+    diff_dim = psf_m_fft.ndim - fraction.ndim
+    fraction_str = alphabet[diff_dim:fraction.ndim+diff_dim]
+    axis_to_conv = fraction_str[:num_axis_to_conv]
+    up = partial_convolution_rfft(psf_m_fft, fraction, dim1=str_psf, dim2=fraction_str, axis=axis_to_conv, fourier=(True, False))
+
+    # for z in range(Nz):
+    #     for c in range(Nch):
+    #         for tau in range(Ntau):
+    #             for t in range(T):
+    #                 for p in range(Np):                
+    #                     up[z,tau,p, ...,t, c] = torch_conv(fraction[...,t, c], psf_m_fft[z,tau,p, ...,t, c])
+                
+    update = up.sum(-1)
+    
+    update_f = update.sum(-1)
+    upfin = update_f.sum(2)
+
+    del up, fraction
+
+    obj_new = obj * upfin
+
+    return obj_new
+
+
+def amd_stop(o_old, o_new, pre_flag: bool, flag: bool, stop, max_iter: int, threshold: float,
+             tot: float, nz: int, k: int):
+    """
+    function dealing with the iteration stop of the algorithm
+
+    Parameters
+    ----------
+    o_old : np.ndarray
+        Object obtained at the latter iteration ( Nz x Nx x Ny ).
+    o_new : np.ndarray
+        Object obtained at the current iteration ( Nz x Nx x Ny ).
+    pre_flag : bool
+        first alert that the derivative of the photon counts has reached the threshold.
+        To stop the algorithm both flags must turn into False.
+    flag : bool
+        second alert that the derivative of the photon counts has reached the threshold.
+    stop : string
+        If set to 'auto' the algorithm will stop when the derivative of the photon counts function reaches the desired
+        threshold. If set to 'fixed' the algorithm will stop when the maximum number of iterations is reached.
+    max_iter : int
+        maximum number of iterations for the algorithm.
+    threshold : float
+        if stop is set to 'auto', when the derivative of the photon counter function reaches this value the algorithm
+        halt.
+    tot : float
+        total number of photons in the ISM dataset.
+    nz : int
+        number of axial planes of interest.
+    k : int
+        indexing the current algorithm iteration.
+
+    Returns
+    -------
+    pre_flag : boolean
+        first alert that the derivative of the photon counts has reached the threshold. To stop the algorithm both
+        flags must turn into False.
+    flag : boolean
+        second alert that the derivative of the photon counts has reached the threshold.
+    list
+        [total number of photons in the focal plane, total number of photons in the out-of-focus planes]
+    list
+        [derivative of the photons count at the current iteration in the focal plane, derivative of the photons count
+        at the current iteration in the out-of-focus planes]
+
+    """
+
+    # calculating photon flux in the focal plane reconstruction at the previous iteration
+    int_f_old = (o_old[nz // 2]).sum()
+
+    # calculating the photon flux in the focal plane reconstruction at the current iteration
+    int_f_new = (o_new[nz // 2]).sum()
+
+    # calculating the derivative of the photon count function in the focal plane
+    d_int_f = (int_f_new - int_f_old) / tot
+
+    # calculating the photon flux in the out-of-focus planes reconstruction at the previous iteration
+    int_bkg_old = o_old.sum() - int_f_old
+
+    # calculating the photon flux in the out-of-focus planes reconstruction at the current iteration
+    int_bkg_new = o_new.sum() - int_f_new
+
+    # calculating the derivative of the photon count function in the out-of-focus planes
+    d_int_bkg = (int_bkg_new - int_bkg_old) / tot
+
+    # controlling if the derivative value is under the threshold. The algorithm derivative has to lye under the
+    # threshold for two consecutive iterations to stop.
+    if isinstance(stop, str) and stop == 'auto':
+        if torch.abs(d_int_f) < threshold:
+            if not pre_flag:
+                flag = False
+            else:
+                pre_flag = False
+        elif k == max_iter:
+            flag = False
+            print('Reached maximum number of iterations.')
+    # if the iteration stop rule il claimed to be fixed, the algorithm stop when the maximum number of iterations is
+    # reached, default value is 100.
+    elif isinstance(stop, str) and stop == 'fixed':
+        if k == max_iter:
+            flag = False
+
+    return pre_flag, flag, torch.Tensor([int_f_new, int_bkg_new]), torch.Tensor([d_int_f, d_int_bkg])
+
+
+
+def flus2ism(dset, psf, stop='fixed', max_iter: int = 100,
+                                  threshold: float = 1e-3, rep_to_save: str = 'last', initialization: str = 'flat',
+                                  process: str = 'gpu'):
+    """
+    Core function of the algorithm
+
+    Parameters
+    ----------
+    dset : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    psf : np.ndarray
+        Point spread function ( Nz x Ntau x Nx x Ny x Nt x Nch ). 
+   
+    -------
+    O : np.ndarray ( Nz x Ntau x Nx x Ny ) if rep_to_save is equal to 'last'
+        reconstructed object.
+    counts : np.ndarray ( k x 2 )
+            It describes the number of photons on the focal plane and on the out-of-focus planes for every iteration of
+            the algorithm.
+    diff : np.ndarray ( k x 2 )
+        It describes the derivative of the photon counts on the focal plane and on the out-of-focus planes for every
+        iteration of the algorithm.
+    k : int
+        iteration in which the algorithm stops.
+
+    """
+
+    # Variables initialization taking into account if the data is spread along the axial dimension or not
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
+
+    data = torch.from_numpy(dset * 1.).to(device)
+    h = torch.from_numpy(psf * 1.).to(device)
+
+
+    oddeven_check_x = data.shape[0] % 2
+    oddeven_check_y = data.shape[1] % 2
+    check_x = False
+    check_y = False
+
+    data_check = data
+    if oddeven_check_x == 0:
+        check_x = True
+        data_check = data_check[1:]
+    if oddeven_check_y == 0:
+        check_y = True
+        data_check = data_check[:, 1:]
+
+    Nz = h.shape[0]
+    Ntau = h.shape[1]
+    shape_data = data_check.shape
+    Nx = shape_data[0]
+    Ny = shape_data[1]
+    O = torch.ones((Nz,Ntau,Nx,Ny)).to(device)
+    
+    crop_pad_x = int((shape_data[0] - h.shape[2]) / 2)
+    crop_pad_y = int((shape_data[1] - h.shape[3]) / 2)
+ 
+    if crop_pad_x > 0 or crop_pad_y > 0:
+        pad_array = np.zeros(2 * h.ndim, dtype='int')
+        pad_array[4:6] = crop_pad_x
+        pad_array[6:8] = crop_pad_y
+        pad_array = tuple(np.flip(pad_array))
+ 
+        h = torchpad.pad(h, pad_array, 'constant')
+        
+       
+    elif crop_pad_x < 0 or crop_pad_y < 0:
+        raise Exception('The PSF is bigger than the image. Warning.')
+        
+    print(h.shape)
+
+
+
+    flip_ax = list(np.arange(2, len(data_check.shape)))
+    
+    for j in range(Nz):
+        for m in range(Ntau):
+            h[j,m] = h[j,m] / (h[j,m].sum())
+
+    ht = torch.flip(h, flip_ax)
+
+    b = torch.finfo(torch.float).eps  # assigning the error machine value
+
+    # user can decide how to initialize the object, either with the photon flux of the input image or with
+    # a flat initialization
+
+    if initialization == 'sum':
+        S = data_check.sum(-1) / Nz
+        for z in range(Nz):
+            O[z, ...] = S
+    elif initialization == 'flat':
+        O *= data_check.sum() / Nz / Nx / Ny
+    else:
+        raise Exception('Initialization mode unknown.')
+
+    k = 0
+
+    counts = torch.zeros([2, max_iter + 1]).to(device)
+    diff = torch.zeros([2, max_iter + 1]).to(device)
+    tot = data.sum()
+
+    if isinstance(rep_to_save, str) and rep_to_save == 'all':
+        size = [max_iter + 1] + list(O.shape)
+        O_all = torch.empty(size).to(device)
+    elif isinstance(rep_to_save, Iterable):
+        l = len(rep_to_save)
+        size_b = [l] + list(O.shape)
+        O_all = torch.empty(size_b).to(device)
+
+    pre_flag = True
+    flag = True
+
+    # PSF normalization axial plane wise, with respect to the flux of each plane
+
+    # Iterative reconstruction process
+    if stop != 'auto':
+        total = max_iter
+    else:
+        total = None
+    cont = 0
+    pbar = tqdm(total=total, desc='Progress', position=0)
+    
+    # FFT transform on the spatial dimensions of the 2 given PSFs
+    h_fft = rfftn(h, dim=flip_ax)
+    del h
+    ht_fft = rfftn(ht, dim=flip_ax)
+    del ht
+
+    while flag:
+        O_new = flus2ism_update(data_check, O, h_fft, ht_fft, b, device=device)
+
+        pre_flag, flag, counts[:, k], diff[:, k] = amd_stop(O, O_new, pre_flag, flag, stop, max_iter, threshold, tot,
+                                                            Nz, k)
+
+        if isinstance(rep_to_save, Iterable) and not isinstance(rep_to_save, str):
+            if k in rep_to_save:
+                O_all[cont, ...] = O.clone()
+                cont += 1
+        elif isinstance(rep_to_save, str) and rep_to_save == 'all':
+            O_all[k, ...] = O.clone()
+
+        O = O_new.clone()
+
+        k += 1
+        pbar.update(1)
+    pbar.close()
+    #
+    if check_x:
+        if rep_to_save == 'last':
+            pad_arr = np.zeros(2 * len(O.shape), dtype='int')
+            pad_arr[-5] = 1
+            O = torchpad.pad(O, tuple(pad_arr), 'constant')
+        else:
+            pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
+            pad_arr[-7] = 1
+            O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
+    if check_y:
+        if rep_to_save == 'last':
+            pad_arr = np.zeros(2 * len(O.shape), dtype='int')
+            pad_arr[-7] = 1
+            O = torchpad.pad(O, tuple(pad_arr), 'constant')
+        else:
+            pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
+            pad_arr[-9] = 1
+            O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
+
+    if isinstance(rep_to_save, str) and rep_to_save == 'last':
+        obj = O.detach().cpu().numpy()
+    else:
+        obj = O_all.detach().cpu().numpy()
+
+    counts = counts[:, :k].detach().cpu().numpy()
+    diff = diff[:, :k].detach().cpu().numpy()
+
+    if torch.cuda.is_available():
+        gc.collect()
+        torch.cuda.empty_cache()
+    
+    
+    print(obj.shape)
+
+    return obj, counts, diff, k
+
+
+
+
+def flus2ism_pulseinterl(dset, psf, stop='fixed', max_iter: int = 100,
+                                  threshold: float = 1e-3, rep_to_save: str = 'last', initialization: str = 'flat',
+                                  process: str = 'gpu'):
+    """
+    Core function of the algorithm
+
+    Parameters
+    ----------
+    dset : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    psf : np.ndarray
+        Point spread function ( Nz x Ntau x Np x Nx x Ny x Nt x Nch ). 
+   
+    -------
+    O : np.ndarray ( Nz x Ntau x Nx x Ny ) if rep_to_save is equal to 'last'
+        reconstructed object.
+
+    """
+
+    # Variables initialization taking into account if the data is spread along the axial dimension or not
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() and process == 'gpu' else "cpu")
+
+    data = torch.from_numpy(dset * 1.).to(device)
+    h = torch.from_numpy(psf * 1.).to(device)
+
+   
+    oddeven_check_x = data.shape[0] % 2
+    oddeven_check_y = data.shape[1] % 2
+    check_x = False
+    check_y = False
+
+    data_check = data
+    if oddeven_check_x == 0:
+        check_x = True
+        data_check = data_check[1:]
+    if oddeven_check_y == 0:
+        check_y = True
+        data_check = data_check[:, 1:]
+        
+    Nz = h.shape[0]
+    Ntau = h.shape[1]
+    Np = h.shape[2]
+    
+    shape_data = data_check.shape
+    Nx = shape_data[0]
+    Ny = shape_data[1]
+    
+    crop_pad_x = int((shape_data[0] - h.shape[3]) / 2)
+    crop_pad_y = int((shape_data[1] - h.shape[4]) / 2)
+ 
+    if crop_pad_x > 0 or crop_pad_y > 0:
+        pad_array = np.zeros(2 * h.ndim, dtype='int')
+        pad_array[6:8] = crop_pad_x
+        pad_array[8:10] = crop_pad_y
+        pad_array = tuple(np.flip(pad_array))
+ 
+        h = torchpad.pad(h, pad_array, 'constant')
+       
+    elif crop_pad_x < 0 or crop_pad_y < 0:
+        raise Exception('The PSF is bigger than the image. Warning.')
+        
+    O = torch.ones((Nz,Ntau,Nx,Ny)).to(device)
+    
+
+    flip_ax = list(np.arange(3, len(data_check.shape)+1))
+    
+    for j in range(Nz):
+        for m in range(Ntau):
+            for p in range(Np):
+                h[j,m,p] = h[j,m,p] / (h[j,m,p].sum())
+
+    ht = torch.flip(h, flip_ax)
+
+    b = torch.finfo(torch.float).eps  # assigning the error machine value
+
+    # user can decide how to initialize the object, either with the photon flux of the input image or with
+    # a flat initialization
+
+    if initialization == 'sum':
+        S = data_check.sum(-1) / Nz
+        for z in range(Nz):
+            O[z, ...] = S
+    elif initialization == 'flat':
+        O *= data_check.sum() / Nz / Nx / Ny
+    else:
+        raise Exception('Initialization mode unknown.')
+
+    k = 0
+
+    counts = torch.zeros([2, max_iter + 1]).to(device)
+    diff = torch.zeros([2, max_iter + 1]).to(device)
+    tot = data.sum()
+
+    if isinstance(rep_to_save, str) and rep_to_save == 'all':
+        size = [max_iter + 1] + list(O.shape)
+        O_all = torch.empty(size).to(device)
+    elif isinstance(rep_to_save, Iterable):
+        l = len(rep_to_save)
+        size_b = [l] + list(O.shape)
+        O_all = torch.empty(size_b).to(device)
+
+    pre_flag = True
+    flag = True
+
+    # PSF normalization axial plane wise, with respect to the flux of each plane
+
+    # Iterative reconstruction process
+    if stop != 'auto':
+        total = max_iter
+    else:
+        total = None
+    cont = 0
+    pbar = tqdm(total=total, desc='Progress', position=0)
+    
+    # FFT transform on the spatial dimensions of the 2 given PSFs
+    h_fft = fftn(h, dim=flip_ax)
+    del h
+    ht_fft = fftn(ht, dim=flip_ax)
+    del ht
+
+    while flag:
+        O_new = flus2ism_pulseinterl__update(data_check, O, h_fft, ht_fft, b, device=device)
+
+        pre_flag, flag, counts[:, k], diff[:, k] = amd_stop(O, O_new, pre_flag, flag, stop, max_iter, threshold, tot,
+                                                            Nz, k)
+
+        if isinstance(rep_to_save, Iterable) and not isinstance(rep_to_save, str):
+            if k in rep_to_save:
+                O_all[cont, ...] = O.clone()
+                cont += 1
+        elif isinstance(rep_to_save, str) and rep_to_save == 'all':
+            O_all[k, ...] = O.clone()
+
+        O = O_new.clone()
+
+        k += 1
+        pbar.update(1)
+    pbar.close()
+    
+    if check_x:
+        if rep_to_save == 'last':
+            pad_arr = np.zeros(2 * len(O.shape), dtype='int')
+            pad_arr[-5] = 1
+            O = torchpad.pad(O, tuple(pad_arr), 'constant')
+        else:
+            pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
+            pad_arr[-7] = 1
+            O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
+    if check_y:
+        if rep_to_save == 'last':
+            pad_arr = np.zeros(2 * len(O.shape), dtype='int')
+            pad_arr[-7] = 1
+            O = torchpad.pad(O, tuple(pad_arr), 'constant')
+        else:
+            pad_arr = np.zeros(2 * len(O_all.shape), dtype='int')
+            pad_arr[-9] = 1
+            O_all = torchpad.pad(O_all, tuple(pad_arr), 'constant')
+
+
+    if isinstance(rep_to_save, str) and rep_to_save == 'last':
+        obj = O.detach().cpu().numpy()
+    else:
+        obj = O_all.detach().cpu().numpy()
+
+    counts = counts[:, :k].detach().cpu().numpy()
+    diff = diff[:, :k].detach().cpu().numpy()
+
+    if torch.cuda.is_available():
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+
+    return obj, counts, diff, k
+
+
+
+
+def batch_reconstruction_flus2ism_pulse_inter(dset: np.ndarray, psf_irf: np.ndarray, batch_size: list, overlap: int, stop='fixed',
+                         max_iter: int = 100, threshold: float = 1e-3, rep_to_save: str = 'last',
+                         initialization: str = 'flat', process: str = 'gpu'):
+    """
+
+    Parameters
+    ----------
+    dset : np.ndarray
+        Input image ( Nx x Ny x Nt x Nch ).
+    psf_irf : np.ndarray
+        Point spread function ( Nz x Ntau x Np x Nx x Ny x Nt x Nch ). 
+   
+    -------
+    O : np.ndarray ( Nz x Ntau x Nx x Ny ) if rep_to_save is equal to 'last'
+        reconstructed object.
+    """
+
+    wx, wy = batch_size
+    reconstruction = np.zeros((psf_irf.shape[0],) + (psf_irf.shape[1],) + dset.shape[:-2])
+
+    nx = dset.shape[0] // (wx - overlap) + int(dset.shape[0] % (wx - overlap) > 0)
+    ny = dset.shape[1] // (wy - overlap) + int(dset.shape[1] % (wy - overlap) > 0)
+
+    k_iter = 1
+    n_batch = nx * ny
+
+    rx = np.mod(dset.shape[0], wx - overlap)
+    ry = np.mod(dset.shape[1], wy - overlap)
+    thx = psf_irf.shape[3]
+    thy = psf_irf.shape[4]
+    
+
+    if np.logical_and(rx > 0, rx < thx) or np.logical_and(ry > 0, ry < thy):
+        raise Exception('The PSF is bigger than the last batch size.')
+    
+    for i in range(nx):
+        for j in range(ny):
+            print(f'Batch {k_iter}/{n_batch}')
+
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+
+            overlap_x = overlap if i > 0 else 0
+            overlap_y = overlap if j > 0 else 0
+            
+        
+
+
+            indx = np.s_[i * (wx - overlap_x): (i + 1) * wx - i * overlap_x]
+            
+            indy = np.s_[j * (wy - overlap_y): (j + 1) * wy - j * overlap_y]
+            
+
+            crop_dset = dset[indx, indy]
+            
+
+
+            recon, *_ = flus2ism_pulseinterl(dset=crop_dset, psf=psf_irf, stop=stop,
+                                                      max_iter=max_iter, threshold=threshold,
+                                                      rep_to_save=rep_to_save,
+                                                      initialization=initialization, process=process)
+            
+
+            indx = np.s_[i * (wx - overlap_x) + overlap_x // 2: (i + 1) * wx - i * overlap_x]
+            
+            indy = np.s_[j * (wy - overlap_y) + overlap_y // 2: (j + 1) * wy - j * overlap_y]
+
+            reconstruction[:,:, indx, indy] = recon[:,:, overlap_x // 2:, overlap_y // 2:]
+            k_iter += 1
+
+    return reconstruction

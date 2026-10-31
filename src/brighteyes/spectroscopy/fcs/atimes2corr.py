@@ -1,0 +1,387 @@
+# Origin: VicidominiLab/BrightEyes-FFS, src/brighteyes_ffs/fcs/atimes2corr.py at f6d640d.
+import numpy as np
+from .extract_spad_photon_streams import extract_spad_photon_streams
+from scipy.sparse import csr_array
+
+
+class Correlations:
+    pass
+
+
+def atimes_2_corrs(data, list_of_corr, accuracy=50, taumax="auto", perform_coarsening=True, logtau=True, split=10):
+    """
+    Calculate correlations between several photon streams with arrival times
+    stored in macrotimes
+
+    Parameters
+    ----------
+    data : object
+        Object having fields det0, det1, ..., det24 which contain
+            the macrotimes of the photon arrivals [in a.u.].
+    list_of_corr : list
+        List of correlations to calculate.
+    accuracy : int, optional
+        Accurracy with which to calulcate the correlation. The default is 50.
+    taumax : float or string, optional
+        Maximum tau value for which to calculate G. The default is "auto".
+    perform_coarsening : Boolean, optional
+        Apply coarsening. The default is True.
+    logtau : TYPE, optional
+        Use logarithmically spaced tau values. The default is True.
+    split : float, optional
+        Chunk size with which to split the data [s]. The default is 10.
+
+    Returns
+    -------
+    G : object
+        correlations.
+
+    """
+    
+    if taumax == "auto":
+        taumax = 1 / data.macrotime
+    
+    G = Correlations()
+    
+    Ndet = 21
+    calcAv = False
+    if 'av' in list_of_corr:
+        # calculate the correlations of all channels and calculate average
+        list_of_corr.remove('av')
+        list_of_corr += list(range(Ndet))
+        calcAv = True
+    
+    for corr in list_of_corr:
+        # EXTRACT DATA
+        if type(corr) == int:
+            dataExtr = getattr(data, 'det' + str(corr))
+            t0 = dataExtr[:, 0]
+            corrname = 'det' + str(corr)
+        else:
+            dataExtr = extract_spad_photon_streams(data, corr)
+            t0 = dataExtr[:, 0]
+            corrname = corr
+        
+        # CALCULATE CORRELATIONS
+        duration = t0[-1] * data.macrotime
+        Nchunks = int(np.floor(duration / split))
+        # go over all filters
+        for j in range(np.shape(dataExtr)[1] - 1):
+            for chunk in range(Nchunks):
+                corrstring = corrname + "F" + str(j) + "_chunk" + str(chunk)
+                print("Calculating correlation " + corrstring)
+                tstart = chunk * split / data.macrotime
+                tstop = (chunk + 1) * split / data.macrotime
+                tchunk = t0[(t0 >= tstart) & (t0 < tstop)]
+                tchunk -= tchunk[0]
+                print("   Nphotons: " + str(len(tchunk)))
+                if j == 0:
+                    # no filter
+                    Gtemp = atimes_2_corr(tchunk, tchunk, [1], [1], data.macrotime, accuracy, taumax, perform_coarsening, logtau)
+                else:
+                    # filters
+                    w0 = dataExtr[:, j+1]
+                    wchunk = w0[(t0 >= tstart) & (t0 < tstop)]
+                    Gtemp = atimes_2_corr(tchunk, tchunk, wchunk, wchunk, data.macrotime, accuracy, taumax, perform_coarsening, logtau)
+                setattr(G, corrstring, Gtemp)
+            # average over all chunks
+            print("   Calculating average correlation")
+            listOfFields = list(G.__dict__.keys())
+            listOfFields = [i for i in listOfFields if i.startswith(corrname + "F" + str(j) + "_chunk")]
+            Gav = sum(getattr(G, i) for i in listOfFields) / len(listOfFields)
+            setattr(G, corrname + "F" + str(j) + '_average', Gav)
+    
+    if calcAv:
+        # calculate average correlation (depricated)
+        for f in range(np.shape(dataExtr)[1] - 1):
+            # start with correlation of detector 20 (last one)
+            Gav = getattr(G, 'det' + str(Ndet-1) + 'F' + str(f) + '_average')
+            # add correlations detector elements 0-19
+            for det in range(Ndet - 1):
+                Gav += getattr(G, 'det' + str(det) + 'F' + str(f) + '_average')
+            # divide by the number of detector elements to get the average
+            Gav = Gav / Ndet
+            # store average in G
+            setattr(G, 'F' + str(f) + '_average', Gav)
+    
+    return G
+
+def atimes_2_corr(t0, t1, w0, w1, macroTime, accuracy=50, taumax="auto", perform_coarsening=True, logtau=True, min_step=10):
+    """
+    Calculate correlation between two photon streams with arrival times t0 and t1
+    Inspired by Wahl et al., Opt. Expr. 11 (26), 2003
+
+    Parameters
+    ----------
+    t0 : np.array()
+        Vector with arrival times channel 1 [a.u.].
+    t1 : np.array()
+        Vector with arrival times channel 2 [a.u.]..
+    w0 : np.array()
+        Vector with (filtered) weights channel 1 [a.u.].
+    w1 : np.array()
+        Vector with (filtered) weights channel 2 [a.u.]..
+    macroTime : float
+        Multiplication factor for the arrival times vectors [s].
+    accuracy : int, optional
+        Number of tau values for which G is calculated before delta tau is
+        doubled
+        E.g. accuracy = 3 yields:
+            tau = [1, 2, 3, 5, 7, 9, 13, 17, 21, 29, 37, 45,...]. The default is 50.
+    taumax : float or string, optional
+        Maximum tau value for which to calculate the correlation
+        If left empty, 1/10th of the measurement duration is used. The default is "auto".
+    perform_coarsening : Boolean, optional
+        Apply time trace coarsening for more efficient (and more accurate)
+        correlation calculation. The default is True.
+    logtau : Boolean, optional
+        Use logarithmically spaced tau values. The default is True.
+
+    Returns
+    -------
+    np.array()
+        [N x 2] matrix with tau and G values.
+
+    """
+    
+    # convert t0 and t1 lists to array
+    t0 = np.asarray(t0)
+    t1 = np.asarray(t1)
+    
+    # check max tau value
+    if taumax=="auto":
+        taumax = t0[-1] / 10 # units of macrotime
+    else:
+        taumax = taumax / macroTime
+    
+    # weights
+    if len(w0) == 1:
+        w0 = np.ones(len(t0))
+    if len(w1) == 1:
+        w1 = np.ones(len(t1))
+    
+    # coarse factor
+    c = 1
+    
+    for i in range(min_step):
+    # change in step size: perform coarsening
+        c *= 2
+        [t0, w0] = time_coarsening(t0, w0)
+        [t1, w1] = time_coarsening(t1, w1)
+    
+    # generate list [tau] with logarithmically distributed tau values
+    tau = generate_list_of_tau_values(taumax, accuracy, min_step, logtau)
+    
+    # create array for g and weights
+    N = len(tau)
+    g = np.zeros(N)
+    
+    for i in range(N):
+        t = tau[i]
+        g[i] = atimes_2_corr_single(t0, t1, w0, w1, t/c, c)
+        if perform_coarsening and np.mod(i, accuracy) == 0 and i != 0:
+            # change in step size: perform coarsening
+            c *= 2
+            [t0, w0] = time_coarsening(t0, w0)
+            [t1, w1] = time_coarsening(t1, w1)
+        
+    tau = np.asarray(tau) * macroTime
+    
+    return np.transpose([tau, g])
+
+def atimes_2_all_crosscorr(data, macroTime, accuracy=50, taumax="auto", perform_coarsening=True, logtau=True, min_step=0):
+    # start from zero
+    data[:,0] =  data[:,0] - data[0, 0]
+
+    # duration in macrotime units
+    duration = data[-1, 0]
+
+    # coarse factor
+    c = 1
+
+    for i in range(min_step):
+        # change in step size: perform coarsening
+        c *= 2
+        data = time_coarsening_all_ch(data)
+
+    if taumax=="auto":
+        taumax = duration / 10 # macrotime units
+    else:
+        taumax = taumax / macroTime
+
+    tau = generate_list_of_tau_values(taumax, accuracy, min_step, logtau)
+
+    N = len(tau)
+    n_ch = np.shape(data)[1]-1
+    g_all = np.zeros((n_ch, n_ch, N))
+
+    for i in range(N):
+        t = tau[i]
+        g_all[:, :, i] = all_crosscorr_at_tau(data, t / c)
+        if perform_coarsening and np.mod(i, accuracy) == 0 and i != 0:
+            # change in step size: perform coarsening
+            c *= 2
+            data = time_coarsening_all_ch(data)
+
+    tau = np.asarray(tau) * macroTime
+
+    return tau, g_all
+
+def atimes_2_corr_single(t0, t1, w0, w1, tau, c):
+    """
+    Calculate single correlation value between two photon streams with arrival
+    times t0 and t1, weight vectors w0 and w1, and tau value tau
+
+    Parameters
+    ----------
+    t0 : np.array()
+        Vector with arrival times channel 1
+        [multiples of minimum coarsed macrotime].
+    t1 : np.array()
+        Vector with arrival times channel 2
+        [multiples of minimum coarsed macrotime].
+    w0 : np.array()
+        Vector with weight values channel 1.
+    w1 : np.array()
+        Vector with weight values channel 2.
+    tau : np.array()
+        tau value for which to calculate the correlation
+        [multiples of minimum coarsed macrotime].
+    c : int
+        Coarsening factor (power of 2).
+
+    Returns
+    -------
+    g : float
+        Single value g(tau).
+
+    """
+    # overlap time
+    T = (t0[-1] - t0[0] - tau + 1) * c
+    if T <= 0:
+        return 0
+    
+    # calculate time shifted vector
+    t1 = t1 + tau
+    
+    # find intersection between t0 and t1_tau
+    [tauDouble, idxt0, idxt1] = np.intersect1d(t0, t1, return_indices=True)
+    
+    # calculate autocorrelation value
+    G = np.sum(w0[idxt0] * w1[idxt1]) / T / c
+   
+    # normalize G
+    I0 = np.sum(w0[t0 >= tau]) / T
+    I1 = np.sum(w1[t1<=t0[-1]]) / T
+    
+    if I0 == 0 or I1 == 0:
+        return 0
+    
+    g = G / I0 / I1 - 1
+    
+    return g
+
+def all_crosscorr_at_tau(data, tau):
+    # overlap time
+    T = (data[-1, 0] - data[0, 0] - tau + 1)
+    if T <= 0:
+        return 0
+
+    times = data[:, 0]
+
+    # `idx_late` indexes rows at time T.
+    # `idx_early` indexes rows originally at time T - tau.
+    _, idx_late, idx_early = np.intersect1d(times, times + tau, assume_unique=True, return_indices=True,)
+
+    late_counts = data[idx_late, 1:]    # shape: (n_matches, 25)
+    early_counts = data[idx_early, 1:]  # shape: (n_matches, 25)
+
+    A_sparse = csr_array(late_counts.T)
+    B_sparse = csr_array(early_counts)
+
+    g_sparse = A_sparse @ B_sparse
+    g = g_sparse.toarray()
+    g = g / T
+
+    index = np.searchsorted(times, tau, side="left")
+    I0 = np.sum((data[index:,1:]), 0)
+    index = np.searchsorted(times, data[-1, 0]-tau, side="right")
+    I1 = np.sum((data[:index,1:]), 0)
+
+    norm = np.outer(I0/T, I1/T)
+    result = np.zeros_like(norm, dtype=np.result_type(norm, float))
+    np.divide(1, norm, out=result, where=norm != 0)
+
+    return g * result - 1
+
+def time_coarsening(t, w):
+    """Bin consecutive time bins: 0,1 -> 0; 2,3 -> 1; ...,
+    summing every weight that falls in the same new bin.
+    """
+    t = np.asarray(t)
+    w = np.asarray(w)
+
+    coarse_t = np.floor_divide(t, 2)
+
+    # `group[k]` is the output bin to which input photon k belongs.
+    unique_t, group = np.unique(coarse_t, return_inverse=True)
+    coarse_w = np.zeros(unique_t.size, dtype=np.result_type(w.dtype, float))
+    np.add.at(coarse_w, group, w)
+
+    return unique_t, coarse_w
+
+def time_coarsening_all_ch(data):
+    # Bin each pair of consecutive time bins into one:
+    # 0, 1 -> 0; 2, 3 -> 1; 4, 5 -> 2; ...
+    coarse_time = np.floor_divide(data[:, 0], 2)
+
+    # `group` gives the output row for every input row.
+    unique_time, group = np.unique(coarse_time, return_inverse=True)
+
+    reduced = np.zeros((unique_time.size, data.shape[1]), dtype=np.result_type(data.dtype, coarse_time.dtype),)
+    reduced[:, 0] = unique_time
+
+    # Add all 25 photon-count columns for rows in the same coarse bin.
+    np.add.at(reduced[:, 1:], group, data[:, 1:])
+
+    return reduced
+
+def generate_list_of_tau_values(taumax, accuracy, min_step, logtau):
+    """
+    generate list of tau values
+    Parameters
+    ----------
+    taumax : float
+        max tau value in units of original macrotime (before coarsing)
+    accuracy : int
+        number of correlation points per octave
+    min_step : int
+        number of coarsing cycles before starting the calculation of G
+    logtau : bool
+        Logarithmically spaced tau values
+
+    Returns
+    -------
+    tau : list
+        list of tau values in units of original macrotime
+
+    """
+    t = 0
+    tau = []
+    step = int(2 ** min_step)
+    if logtau:
+        while t <= taumax:
+            for i in range(accuracy):
+                t += step
+                # make sure t is multiple of step (needed for coarsing)
+                t = int(np.floor(t / step) * step)
+                tau.append(t)
+            step *= 2
+        tau = [i for i in tau if i <= taumax]
+        tau = [0] + tau
+        return tau
+
+    taumax = int(taumax)
+    tau = np.linspace(0, taumax, taumax + 1, dtype=int)
+
+    return tau

@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Install the linter
+        run: uv sync --locked --only-group dev
+
+      - name: Check the code
+        run: uv run --no-sync ruff check
+
+      - name: Check the formatting
+        run: uv run --no-sync ruff format --check
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check the formatting
+        run: cargo fmt --manifest-path rust/ttp/Cargo.toml --check
+
+      - name: Lint the code
+        run: cargo clippy --manifest-path rust/ttp/Cargo.toml -- -D warnings
+
+      - name: Run the tests
+        run: cargo test --manifest-path rust/ttp/Cargo.toml
+
+  imports:
+    name: Imports (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install the package and its extras
+        run: uv sync --locked --all-extras --group dev
+
+      - name: Run the import tests
+        run: uv run --no-sync pytest tests/imports
+
+      - name: Run the moved MCS tests
+        run: uv run --no-sync pytest tests/mcs
+
+  equivalence:
+    name: Equivalence (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install the package, its extras and the reference packages
+        run: uv sync --locked --all-extras --group dev --group reference
+
+      - name: Run the equivalence tests
+        run: uv run --no-sync pytest tests/equivalence
