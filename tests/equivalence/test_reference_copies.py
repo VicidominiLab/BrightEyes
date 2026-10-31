@@ -1,7 +1,6 @@
 import hashlib
-from pathlib import Path
 
-REFERENCE_DIR = Path(__file__).parent / "reference"
+from _registry import REFERENCE_DIR
 
 
 def test_copies_match_their_commits():

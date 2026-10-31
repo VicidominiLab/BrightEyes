@@ -3,11 +3,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Final
 
 import numpy as np
 import torch
 from _compare import assert_same
+
+REFERENCE_DIR: Final[Path] = Path(__file__).parent / "reference"
 
 SKIP_FILE_IO: Final[str] = "reads or writes files"
 SKIP_PLOT_ONLY: Final[str] = "only draws a figure"

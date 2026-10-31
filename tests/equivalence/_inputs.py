@@ -244,5 +244,6 @@ def flus2ism_inputs() -> tuple[np.ndarray, np.ndarray]:
     """Return the central 21 by 21 pixels of the example PSF `(z, x, y, channels)` and phantom `(structures, x, y)`."""
     folder = Path(__file__).parents[2] / "examples" / "imaging" / "flus2ism"
     psf = np.load(folder / "PSFs.npy")[:, 40:61, 40:61]
-    phantom = np.load(folder / "simulated_tubulin.npz")["phantom"][:, 40:61, 40:61]
+    with np.load(folder / "simulated_tubulin.npz") as data:
+        phantom = data["phantom"][:, 40:61, 40:61]
     return psf, phantom
