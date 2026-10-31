@@ -688,7 +688,7 @@ CASES: list[Case] = [
     ),
     Case(
         f"{ALIGN}.generate_fit_maps",
-        _maps(min_nonzero_bins=20, catch_exceptions=False),
+        _maps(min_nonzero_bins=40, catch_exceptions=False),
         "bin count limit",
     ),
     Case(

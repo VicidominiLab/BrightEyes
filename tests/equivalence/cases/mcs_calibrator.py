@@ -6,6 +6,7 @@ from collections.abc import Callable
 from importlib import import_module
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import h5py
 import numpy as np
@@ -333,8 +334,10 @@ def _structure(**kwargs: Any) -> Callable[[Any], Any]:
 
 def _structure_html(**kwargs: Any) -> Callable[[Any], Any]:
     def call(f: Callable[..., Any]) -> Any:
-        f.__globals__["_WIDGET_COUNTER"] = 0
-        with tempfile.TemporaryDirectory() as name:
+        with (
+            patch.dict(f.__globals__, {"_WIDGET_COUNTER": 0}),
+            tempfile.TemporaryDirectory() as name,
+        ):
             path = mcs_output_h5_file(Path(name) / "file.h5")
             return printed(lambda: f(path, **kwargs))
 
