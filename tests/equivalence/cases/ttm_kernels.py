@@ -43,9 +43,36 @@ def _negative_step() -> pd.Series:
     return steps
 
 
+def _jump_at_500(offset: int) -> pd.Series:
+    steps = ttm_raw_frame()["cumulativeStep"].copy()
+    steps.iloc[500] = steps.iloc[499] + offset
+    return steps
+
+
 def _longer_steps() -> pd.Series:
     steps = ttm_raw_frame()["cumulativeStep"]
     return pd.concat([steps, pd.Series(np.arange(100) + 10**6)], ignore_index=True)
+
+
+def _on_flat(
+    f: Callable[..., Any], steps: list[int], step_per_pixel: int, pixel_enable: int = 0
+) -> Any:
+    """Call `f` on rows that start a frame on row 0, never start a line, and step by `steps`."""
+    rows = len(steps)
+    scan_enable = np.zeros(rows, dtype=np.uint8)
+    scan_enable[0] = 1
+    frame = pd.DataFrame(
+        {
+            "scan_enable": scan_enable,
+            "line_enable": np.zeros(rows, dtype=np.uint8),
+            "pixel_enable": np.full(rows, pixel_enable, dtype=np.uint8),
+            "cumulativeStep": np.array(steps, dtype=np.int64),
+        }
+    )
+    return f(frame, step_per_pixel, frame["cumulativeStep"])
+
+
+INT64 = np.iinfo(np.int64)
 
 
 def _with_column(name: str, dtype: type) -> pd.DataFrame:
@@ -154,6 +181,33 @@ CASES = [
             )
         ),
         "cumulativeStep shorter than the frame",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _error(lambda: f(ttm_raw_frame(), 1, _jump_at_500(2**40))),
+        "pixelCorr outside int32",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _error(lambda: f(ttm_raw_frame(), 10, _jump_at_500(70000 * 10))),
+        "pixelCorr above uint16",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _error(lambda: _on_flat(f, [0] * 70000, 1, pixel_enable=1)),
+        "pixel above uint16",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _printed(
+            lambda: _on_flat(f, [INT64.max] + [INT64.min + n for n in range(99)], 1)
+        ),
+        "step difference wraps around int64",
+    ),
+    Case(
+        f"{TTP}:analysisForImg",
+        lambda f: _printed(lambda: _on_flat(f, [100] + [95] * 99, 10)),
+        "small negative distance truncates toward zero",
     ),
     Case(f"{TTP}:analysisForImg", _image_error(0), "StepPerPixel_in 0"),
     Case(f"{TTP}:analysisForImg", _image(10.5), "StepPerPixel_in float"),
