@@ -1,6 +1,6 @@
 [build-system]
-requires = ["uv_build>=0.13,<0.14"]
-build-backend = "uv_build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "brighteyes"
@@ -87,9 +87,6 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv.build-backend]
-module-name = "brighteyes"
-
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
@@ -130,6 +127,16 @@ reference = [
 [tool.uv]
 required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
 override-dependencies = ["tdqm; python_version < '0'"]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "rust/ttp/Cargo.toml" },
+    { file = "rust/ttp/src/**/*.rs" },
+]
+
+[tool.maturin]
+python-source = "src"
+module-name = "brighteyes.ttm._ttp_core"
+manifest-path = "rust/ttp/Cargo.toml"
 
 [tool.ruff]
 line-length = 88

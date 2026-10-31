@@ -1,2 +1,2 @@
 from .ttp import *
-from .ttpCython import *
+from ._ttp import *

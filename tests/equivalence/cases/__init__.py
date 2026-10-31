@@ -8,6 +8,7 @@ from . import (
     imaging_simulation,
     spectroscopy_fcs,
     spectroscopy_other,
+    ttm_kernels,
 )
 
 _MODULES: tuple[ModuleType, ...] = (
@@ -16,6 +17,7 @@ _MODULES: tuple[ModuleType, ...] = (
     imaging_simulation,
     spectroscopy_fcs,
     spectroscopy_other,
+    ttm_kernels,
 )
 
 ALL_CASES: list[Case] = [case for module in _MODULES for case in module.CASES]

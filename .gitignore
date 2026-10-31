@@ -2,3 +2,6 @@
 dist/
 __pycache__/
 *.egg-info/
+rust/ttp/target/
+*.pyd
+*.so
