@@ -54,3 +54,23 @@ def ism_series() -> np.ndarray:
     weights = np.exp(-radius2 / (2 * 1.2**2)) * rng.uniform(0.9, 1.1, size=CHANNELS)
     mean = 400.0 * sample[:, :, None, None] * weights[None, None, None, :] + 2.0
     return rng.poisson(np.broadcast_to(mean, (SIZE, SIZE, 4, CHANNELS))).astype(np.float64)
+
+
+def _flim_decays(seed: int, tau: float, lag: float) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    bins = 64
+    time = np.arange(bins)[:, None]
+    lags = lag * (np.arange(CHANNELS) % 5)[None, :]
+    decay = np.exp(-np.mod(time - lags, bins) / tau)
+    amplitude = rng.uniform(5.0, 30.0, size=(8, 8))
+    return rng.poisson(amplitude[:, :, None, None] * decay[None, None]).astype(np.float64)
+
+
+def flim_stack() -> np.ndarray:
+    """Return an `(x, y, time, channels)` array of photon counts with a decay per pixel."""
+    return _flim_decays(0, tau=8.0, lag=1.0)
+
+
+def flim_reference_stack() -> np.ndarray:
+    """Return a `flim_stack`-shaped array of a reference sample with another lifetime and delays."""
+    return _flim_decays(0, tau=5.0, lag=2.0)
