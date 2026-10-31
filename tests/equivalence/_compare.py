@@ -47,17 +47,19 @@ def _compare(old: object, new: object, path: str, seen: set[tuple[int, int]]) ->
                 raise _fail(path, _kinds(old, new))
             _check_array(old.detach().cpu().numpy(), new.detach().cpu().numpy(), path)
         case np.ndarray() | np.generic():
-            if isinstance(old, np.ndarray) != isinstance(new, np.ndarray) or not isinstance(
-                new, np.ndarray | np.generic
-            ):
+            if type(old) is not type(new):
                 raise _fail(path, _kinds(old, new))
-            _check_array(old, new, path)
+            if isinstance(old, np.ma.MaskedArray):
+                _check_array(np.ma.getmaskarray(old), np.ma.getmaskarray(new), path + ".mask")
+                _check_array(np.ma.getdata(old), np.ma.getdata(new), path + ".data")
+            else:
+                _check_array(old, new, path)
         case pd.DataFrame() | pd.Series():
             if type(old) is not type(new):
                 raise _fail(path, _kinds(old, new))
             check = pd.testing.assert_frame_equal if isinstance(old, pd.DataFrame) else pd.testing.assert_series_equal
             try:
-                check(old, new)
+                check(old, new, check_exact=True)
             except AssertionError as error:
                 raise _fail(path, str(error)) from None
         case Mapping():

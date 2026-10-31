@@ -50,6 +50,12 @@ def test_compare_rejects_different_values():
         ({"a": 1}, {"b": 1}),
         ((1, 2), [1, 2]),
         (True, 1),
+        (pd.Series([1.0]), pd.Series([1.0 + 1e-9])),
+        (pd.DataFrame({"x": [1.0]}), pd.DataFrame({"x": [1.0 + 1e-9]})),
+        (np.ma.array([1, 2], mask=[0, 1]), np.ma.array([1, 3], mask=[0, 1])),
+        (np.ma.array([1, 2], mask=[0, 1]), np.ma.array([1, 2], mask=[0, 0])),
+        (np.ma.array([1, 2], mask=[0, 1]), np.array([1, 2])),
+        (np.matrix([[1, 2]]), np.array([[1, 2]])),
         _same_named_boxes(1, 2),
         _same_named_callables(1, 2),
     ]
@@ -65,6 +71,7 @@ def test_compare_accepts_equal_values():
     frame = pd.DataFrame({"x": [1, 2], "y": [0.5, np.nan]})
     assert_same(frame, frame.copy())
     assert_same(torch.arange(3.0), torch.arange(3.0))
+    assert_same(np.ma.array([1, 2], mask=[0, 1]), np.ma.array([1, 2], mask=[0, 1]))
     assert_same(*_same_named_boxes(1, 1))
     assert_same(*_same_named_callables(1, 1))
 
