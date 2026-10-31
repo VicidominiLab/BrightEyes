@@ -20,12 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check the changelog has a section for a final release
-        run: |
-          if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            python3 scripts/release_notes.py extract "${GITHUB_REF_NAME#v}" > /dev/null
-          fi
-
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.0
 
@@ -57,23 +51,3 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
-  github-release:
-    name: Write the GitHub release notes
-    needs: publish
-    if: ${{ !contains(github.ref_name, 'rc') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Write the release's notes from its changelog section
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 scripts/release_notes.py extract "${GITHUB_REF_NAME#v}" > notes.md
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
-          else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
-          fi
