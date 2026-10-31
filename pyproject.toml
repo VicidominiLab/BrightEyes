@@ -130,6 +130,7 @@ override-dependencies = ["tdqm; python_version < '0'"]
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "rust/ttp/Cargo.toml" },
+    { file = "rust/ttp/Cargo.lock" },
     { file = "rust/ttp/src/**/*.rs" },
 ]
 
