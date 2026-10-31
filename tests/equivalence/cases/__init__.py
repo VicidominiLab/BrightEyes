@@ -5,6 +5,7 @@ from _registry import Case
 from . import (
     imaging_analysis,
     imaging_flism,
+    imaging_s2ism,
     imaging_simulation,
     mcs_alignment,
     mcs_calibrator,
@@ -19,6 +20,7 @@ from . import (
 _MODULES: tuple[ModuleType, ...] = (
     imaging_analysis,
     imaging_flism,
+    imaging_s2ism,
     imaging_simulation,
     mcs_alignment,
     mcs_calibrator,

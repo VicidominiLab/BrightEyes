@@ -517,3 +517,22 @@ def ttm_calibration_h5_file(path: Path) -> Path:
         index=[0],
     ).to_hdf(path, key="metadata")
     return path
+
+
+def shifted_spot_dataset() -> np.ndarray:
+    """Return a Poisson `(x, y, channels)` array of 41 by 41 pixels and 9 channels, each channel six Gaussian spots shifted by 1.5 pixels per detector step."""
+    rng = np.random.default_rng(0)
+    size = 41
+    axis = np.arange(size)
+    x, y = np.meshgrid(axis, axis, indexing="ij")
+    spots = rng.integers(8, 33, (6, 2))
+    amplitudes = rng.uniform(1, 3, 6)
+    data = np.zeros((size, size, 9))
+    for channel, (dx, dy) in enumerate(
+        (i * 1.5, j * 1.5) for i in (-1, 0, 1) for j in (-1, 0, 1)
+    ):
+        for (px, py), amplitude in zip(spots, amplitudes):
+            data[..., channel] += amplitude * np.exp(
+                -((x - px - dx) ** 2 + (y - py - dy) ** 2) / (2 * 2.0**2)
+            )
+    return rng.poisson(data * 500).astype(np.float64)
