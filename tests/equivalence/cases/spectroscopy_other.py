@@ -1532,6 +1532,7 @@ CASES += [
         ),
         "half automatic, not equalized",
     ),
+    # the old code leaves the image at zeros in this branch, so the case pins that output
     Case(
         f"{TOOLS}.cmap2d:cmap2d",
         lambda f: _color_image(

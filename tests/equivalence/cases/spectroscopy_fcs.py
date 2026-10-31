@@ -115,6 +115,14 @@ def _atimes(obj, channels=range(CHANNELS), filters=0, tcspc=True):
     return data
 
 
+def _uneven_atimes(obj, channels=range(CHANNELS)):
+    data = _atimes(obj, channels)
+    for channel in channels:
+        name = f"det{channel}"
+        setattr(data, name, getattr(data, name)[: 100 + 12 * channel])
+    return data
+
+
 def _in_place(function, data, *args, **kwargs):
     function(data, *args, **kwargs)
     return data
@@ -657,6 +665,7 @@ CASES += [
 
 
 def _parallel(function, data, list_of_g, **kwargs):
+    # n_jobs is fixed to cpu_count() - 1 inside the function and threads keep chunk order, so the result is exact
     return function(
         data,
         list_of_g,
@@ -1929,17 +1938,20 @@ def _g_curves(n_curves, n_lags=6):
     return _rng().uniform(0.1, 1.0, (n_lags, n_curves))
 
 
-def _imsd_curves():
+def _imsd_curves(outlier=False):
     axis = np.arange(9) - 4.0
     x, y = np.meshgrid(axis, axis)
     widths = 4.0 + 500.0 * np.arange(1, 13) * 1e-3
+    if outlier:
+        # fcs2imsd averages curves in pairs, so one pair is widened to push its variance past 3 * median
+        widths[6:8] *= 5
     noise = _rng().normal(0, 1e-3, (12, 9, 9))
     return np.exp(-(x**2 + y**2) / (2 * widths[:, None, None])) + noise
 
 
-def _imsd(function, **kwargs):
+def _imsd(function, outlier=False, **kwargs):
     return function(
-        _imsd_curves(),
+        _imsd_curves(outlier),
         np.arange(1, 13) * 1e-3,
         fitparam=np.array([True, True, False, False]),
         startvalues=np.array([1.0, 1.0, 2.0, 50.0]),
@@ -2201,8 +2213,8 @@ CASES += [
     Case(f"{IMSD}:fcs2imsd", lambda f: _imsd(f), "default"),
     Case(
         f"{IMSD}:fcs2imsd",
-        lambda f: _imsd(f, remove_outliers=True, remove_afterpulsing=False),
-        "outlier removal, afterpulsing kept",
+        lambda f: _imsd(f, outlier=True, remove_outliers=True),
+        "outlier removal",
     ),
 ]
 
@@ -2349,12 +2361,12 @@ CASES += [
     ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint5x5",
-        lambda f: _figure(f, _atimes(f)),
+        lambda f: _figure(f, _uneven_atimes(f)),
         "arrival times, 25 detectors",
     ),
     Case(
         f"{FINGERPRINT}:plot_fingerprint5x5",
-        lambda f: _figure(f, _atimes(f, range(21))),
+        lambda f: _figure(f, _uneven_atimes(f, range(21))),
         "arrival times, 21 detectors",
     ),
 ]

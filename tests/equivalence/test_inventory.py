@@ -50,7 +50,7 @@ def test_every_public_name_is_covered():
     for path in sorted(ALL_SKIPPED):
         try:
             resolve(new_path(path))
-        except Exception as error:
+        except (ImportError, AttributeError) as error:
             unresolved.append(f"{path}: {error!r}")
     assert not missing and not stale and not unresolved, (
         f"{len(missing)} names have no case:\n"

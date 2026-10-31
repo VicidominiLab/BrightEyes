@@ -83,16 +83,18 @@ def _gaussian_psf(module):
     return module.singlePSF(settings, 40, NX, [-50, 50], 3)
 
 
-def _psf_3d(module, settings=None, **options):
+def _psf_3d(module, settings=None, emission=None, **options):
     grid = options.pop("grid", None) or _grid(module)
     settings = settings or _settings(module)
-    return module.SPAD_PSF_3D(grid, settings, settings, process="cpu", **options)
+    return module.SPAD_PSF_3D(
+        grid, settings, emission or settings, process="cpu", **options
+    )
 
 
-def _psf_2d(module, **options):
+def _psf_2d(module, emission=None, **options):
     settings = _settings(module)
     return module.SPAD_PSF_2D(
-        _grid(module), settings, settings, process="cpu", **options
+        _grid(module), settings, emission or settings, process="cpu", **options
     )
 
 
@@ -236,7 +238,17 @@ CASES: list[Case] = [
         lambda f: _psf_3d(_module(f), spad=_precomputed_spad(_module(f))),
         "precomputed detector",
     ),
+    Case(
+        f"{PSF}:SPAD_PSF_3D",
+        lambda f: _psf_3d(_module(f), emission=_settings(_module(f), wl=600.0)),
+        "distinct emission",
+    ),
     Case(f"{PSF}:SPAD_PSF_2D", lambda f: _psf_2d(_module(f)), "default"),
+    Case(
+        f"{PSF}:SPAD_PSF_2D",
+        lambda f: _psf_2d(_module(f), emission=_settings(_module(f), wl=600.0)),
+        "distinct emission",
+    ),
     Case(f"{PSF}:SPAD_PSF_2D", lambda f: _psf_2d(_module(f), z_shift=50), "z shift"),
     Case(
         f"{PSF}:SPAD_PSF_2D",
