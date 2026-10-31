@@ -11,7 +11,9 @@ from . import _ttp_core
 
 
 def _c_integer(value, dtype):
-    """Convert `value` as Cython does when it assigns an object to a C integer.
+    """Return `value` as a Python integer within the range of `dtype`.
+
+    A value that is not an `int` is converted with its type's `__int__`.
 
     Raises
     ------
@@ -35,7 +37,7 @@ def _c_integer(value, dtype):
 
 
 def _typed(values, dtype):
-    """Return `values` as an array, refusing it as a Cython typed memoryview would.
+    """Return `values` as a one-dimensional array of `dtype`, without converting it.
 
     Raises
     ------
@@ -52,7 +54,7 @@ def _typed(values, dtype):
 
 
 def _check_period(length, pbar_period):
-    """Raise `ZeroDivisionError` where the loop would take `n % 0`."""
+    """Raise `ZeroDivisionError` when there are rows but the progress period is zero."""
     if length > 0 and pbar_period == 0:
         raise ZeroDivisionError("integer modulo by zero")
 

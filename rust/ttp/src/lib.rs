@@ -1,15 +1,16 @@
 // Ported from VicidominiLab/libttp, libttp/ttpCython.pyx at 7fe694a.
-//! Loops of the time-tagger decoding in `brighteyes.ttm._ttp`.
+//! Per-row loops of the time-tagger decoding in `brighteyes.ttm._ttp`.
 //!
-//! Each kernel repeats the arithmetic of the Cython loop it replaces with the
-//! same integer widths, so its results match bit for bit.
+//! Each kernel walks its input arrays once and returns new arrays. A failure
+//! comes back as a [`KernelError`], which Python receives as the matching
+//! built-in exception.
 
 use numpy::ndarray::{Array2, ArrayView1};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1};
 use pyo3::exceptions::{PyIndexError, PyOverflowError, PyValueError, PyZeroDivisionError};
 use pyo3::prelude::*;
 
-/// Failure of a kernel, raised in Python as the exception the Cython loop raised.
+/// Failure of a kernel, raised in Python as `ZeroDivisionError`, `OverflowError` or `IndexError`.
 #[derive(Debug, PartialEq)]
 pub enum KernelError {
     /// `StepPerPixel` is zero.
