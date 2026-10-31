@@ -247,3 +247,162 @@ def flus2ism_inputs() -> tuple[np.ndarray, np.ndarray]:
     with np.load(folder / "simulated_tubulin.npz") as data:
         phantom = data["phantom"][:, 40:61, 40:61]
     return psf, phantom
+
+
+def mcs_output_h5_file(path: Path) -> Path:
+    """Write the `mcs_h5_file` layout plus an `/output` group with a sum run, IRF and reference traces, virtual channels and a calibration lifetime, and return its path."""
+    mcs_h5_file(path)
+    rng = np.random.default_rng(1)
+    with h5py.File(path, "a") as handle:
+        handle.attrs["contains_output"] = True
+        output = handle.create_group("output")
+        output.attrs.update(
+            default="/output/sum_channels_001/products/spad",
+            default_run="/output/sum_channels_001",
+            default_irf_trace_id="sum_irf_001",
+            default_ref_trace_id="sum_ref_001",
+        )
+        run = output.create_group("sum_channels_001")
+        run.attrs.update(output_type="image_tool", output_id="sum_channels_001")
+        product = run.create_group("products").create_dataset(
+            "spad", data=rng.poisson(8.0, size=(1, 1, 4, 5, 8)).astype(np.uint32)
+        )
+        product.attrs.update(
+            axis_order="repetition,z,y,x,time_bin",
+            time_axis_path="/output/sum_channels_001/axes/time_ns",
+            metadata_path="/raw/metadata",
+            product_name="spad",
+        )
+        run.create_group("axes").create_dataset("time_ns", data=np.arange(8) * 0.5)
+        for run_id, kind, shape in (
+            ("sum_irf_001", "sum_irf_trace", (8,)),
+            ("sum_ref_001", "sum_reference_trace", (8, 2)),
+        ):
+            trace_run = output.create_group(run_id)
+            trace = trace_run.create_group("products").create_dataset(
+                "trace", data=rng.poisson(20.0, size=shape).astype(np.float64)
+            )
+            trace.attrs.update(output_type="trace", trace_kind=kind)
+            trace_run.attrs["output_type"] = "trace"
+        virtual = output.create_group("virtual_channels")
+        for kind, channels in (("spad", 5), ("aux", 2)):
+            group = virtual.create_group(kind)
+            for channel in range(channels):
+                dataset = group.create_dataset(
+                    f"channel_{channel}",
+                    data=rng.poisson(3.0, size=(1, 1, 4, 5, 8)).astype(np.uint16),
+                )
+                dataset.attrs.update(
+                    virtual_channel_type=kind, axis_order="repetition,z,y,x,time_bin"
+                )
+        fit = handle["calibration"].create_group("results/spad/fit")
+        fit.create_dataset("tau_reference_ns", data=np.array([np.nan, 3.5, 4.0]))
+    return path
+
+
+def mcs_flim_h5_file(
+    path: Path,
+    tau_ns: float = 2.5,
+    seed: int = 0,
+    silent_channel: int | None = None,
+    circular: bool = False,
+) -> Path:
+    """Write a legacy-layout MCS file of 64 time bins at 40 MHz holding a decay of `tau_ns`, shifted differently on each of 6 SPAD channels and 2 auxiliary channels, and return its path.
+
+    The SPAD channel `silent_channel` holds no counts. With `circular`, the pixels carry circular repetition and point axes (8 dimensions instead of 6).
+    """
+    rng = np.random.default_rng(seed)
+    bins = 64
+    period_ns = 1e3 / 40.0
+    time = np.arange(bins) * period_ns / bins
+
+    prefix = (1, 1, 2, 2, 2, 3) if circular else (1, 1, 3, 3)
+
+    def counts(delays: list[float]) -> np.ndarray:
+        shape = np.stack(
+            [
+                np.exp(-np.mod(time - delay * period_ns / bins, period_ns) / tau_ns)
+                for delay in delays
+            ],
+            axis=-1,
+        )
+        rate = 300.0 * shape / shape.sum(axis=0)
+        return rng.poisson(np.broadcast_to(rate, (*prefix, bins, len(delays))))
+
+    with h5py.File(path, "w") as handle:
+        handle.attrs.update(data_format_version="0.0.4", comment="flim file")
+        spad = counts([0.0, 1.0, 2.0, -1.0, 0.5, 1.5]).astype(np.uint16)
+        if silent_channel is not None:
+            spad[..., silent_channel] = 0
+        handle.create_dataset("data", data=spad)
+        handle.create_dataset(
+            "data_channels_extra", data=counts([0.0, 3.0]).astype(np.uint16)
+        )
+        gui = handle.create_group("configurationGUI")
+        gui.attrs.update(
+            range_x=6.0,
+            range_y=6.0,
+            range_z=1.0,
+            timebin_per_pixel=bins,
+            time_resolution=0.01,
+            nx=3,
+            ny=3,
+            nframe=1,
+            nrep=1,
+            bitFile="C:/bits/DFD_40M64.bit",
+        )
+        handle.create_group("configurationFPGA").attrs.update(DFD_Activate=True)
+    return path
+
+
+def mcs_legacy_h5_file(path: Path) -> Path:
+    """Write a legacy-layout MCS file with root `/data` and `/data_channels_extra` and `configurationGUI` and `configurationFPGA` groups, and return its path."""
+    rng = np.random.default_rng(2)
+    with h5py.File(path, "w") as handle:
+        handle.attrs.update(data_format_version="0.0.4", comment="legacy file")
+        handle.create_dataset(
+            "data", data=rng.poisson(3.0, size=(1, 2, 4, 5, 8, 5)).astype(np.uint16)
+        )
+        handle.create_dataset(
+            "data_channels_extra",
+            data=rng.poisson(2.0, size=(1, 2, 4, 5, 8, 2)).astype(np.uint16),
+        )
+        gui = handle.create_group("configurationGUI")
+        gui.attrs.update(
+            calib_x=2.0,
+            calib_y=3.0,
+            calib_z=4.0,
+            range_x=10.0,
+            range_y=12.0,
+            range_z=6.0,
+            offset_x=0.5,
+            offset_y=0.25,
+            offset_z=0.125,
+            timebin_per_pixel=8,
+            time_resolution=1.0,
+            nx=5,
+            ny=4,
+            nframe=2,
+            nrep=1,
+            bitFile="C:/bits/DFD_40M91.bit",
+        )
+        fpga = handle.create_group("configurationFPGA")
+        fpga.attrs.update(
+            DFD_Activate=True, DFD_Trig_Selector=2, DFD_LaserSyncDebug=False
+        )
+    return path
+
+
+def periodic_decay(
+    tau_ns: float = 2.5,
+    delay_ns: float = 5.0,
+    bins: int = 64,
+    period_ns: float = 25.0,
+    counts: float = 3000.0,
+    seed: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the time axis in ns and a Poisson histogram of a decay repeating every `period_ns`, starting at `delay_ns`."""
+    time = np.arange(bins) * period_ns / bins
+    shape = np.exp(-np.mod(time - delay_ns, period_ns) / tau_ns)
+    rate = counts * shape / shape.sum()
+    return time, np.random.default_rng(seed).poisson(rate).astype(np.float64)
