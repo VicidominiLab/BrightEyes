@@ -386,14 +386,18 @@ def _pulse_data():
     return dataset[:, :1], psf[:, :, None, :, :1]
 
 
-def _pulse(function, **options):
+def _pulse(function, even=False, padded=False, **options):
     dataset, psf = _pulse_data()
+    if even:
+        dataset = dataset[:20]
+    if even or padded:
+        psf = psf[:, :, :, 5:16]
     return _printed(
         lambda: function(dataset, psf, **{"max_iter": 3, "process": "cpu", **options})
     )
 
 
-def _pulse_batch(function):
+def _pulse_batch(function, **options):
     dataset, psf = _pulse_data()
     return _printed(
         lambda: function(
@@ -401,8 +405,7 @@ def _pulse_batch(function):
             psf[:, :, :, 8:13],
             [15, 15],
             5,
-            max_iter=2,
-            process="cpu",
+            **{"max_iter": 2, "process": "cpu", **options},
         )
     )
 
@@ -1042,7 +1045,36 @@ CASES: list[Case] = [
         lambda f: _pulse(f, rep_to_save="all"),
         "all iterations",
     ),
-    Case(f"{FLUS2ISM}:batch_reconstruction_flus2ism_pulse_inter", _pulse_batch),
+    Case(
+        f"{FLUS2ISM}:flus2ism_pulseinterl",
+        lambda f: _pulse(f, rep_to_save=[0, 2]),
+        "chosen iterations",
+    ),
+    Case(
+        f"{FLUS2ISM}:flus2ism_pulseinterl",
+        lambda f: _pulse(f, stop="auto", max_iter=5, threshold=1e-1),
+        "auto stop",
+    ),
+    Case(
+        f"{FLUS2ISM}:flus2ism_pulseinterl",
+        lambda f: _pulse(f, even=True),
+        "even image, padded PSF",
+    ),
+    Case(
+        f"{FLUS2ISM}:flus2ism_pulseinterl",
+        lambda f: _pulse(f, padded=True),
+        "odd image, padded PSF",
+    ),
+    Case(
+        f"{FLUS2ISM}:batch_reconstruction_flus2ism_pulse_inter",
+        _pulse_batch,
+        "fixed stop",
+    ),
+    Case(
+        f"{FLUS2ISM}:batch_reconstruction_flus2ism_pulse_inter",
+        lambda f: _pulse_batch(f, stop="auto", max_iter=5, threshold=1e-1),
+        "auto stop",
+    ),
     Case(
         f"{DISTILLER}:disk",
         lambda f: f(_distiller_inputs(_module(f))[2], 100.0),
