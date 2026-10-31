@@ -8,11 +8,18 @@ import torch
 from _capture import error, warned
 from _inputs import periodic_decay
 from _registry import Case
+from brighteyes_mcs_dataprep.alignment import Alignment as OldAlignment
+
+from brighteyes.mcs.dataprep.alignment import Alignment as NewAlignment
 
 ALIGN = "brighteyes_mcs_dataprep.alignment:Alignment"
 PERIOD = 25.0
 BINS = 64
 TIME = np.arange(BINS) * PERIOD / BINS
+GENERATE_FIT_MAPS = {
+    False: OldAlignment.generate_fit_maps,
+    True: NewAlignment.generate_fit_maps,
+}
 
 
 def _data(**kwargs: Any) -> np.ndarray:
@@ -163,8 +170,17 @@ def _image(**kwargs: Any) -> np.ndarray:
     )
 
 
+def _unpatched(f: Callable[..., Any]) -> Callable[..., Any]:
+    """Return the `generate_fit_maps` the class had before the flism package replaced it."""
+    # Importing the flism package, old or moved, swaps this method for another
+    # function on the shared class, so a case run after a flism case would
+    # otherwise compare that function instead of the method it names.
+    return GENERATE_FIT_MAPS[f.__module__.startswith("brighteyes.")]
+
+
 def _maps(**kwargs: Any) -> Callable[[Any], Any]:
     def call(f: Callable[..., Any]) -> Any:
+        f = _unpatched(f)
         options = dict(kwargs)
         data = options.pop("data", _image())
         irf = options.pop("irf", _irf())
@@ -178,6 +194,7 @@ def _maps(**kwargs: Any) -> Callable[[Any], Any]:
 
 def _maps_error(**kwargs: Any) -> Callable[[Any], Any]:
     def call(f: Callable[..., Any]) -> Any:
+        f = _unpatched(f)
         options = dict(kwargs)
         data = options.pop("data", _image())
         irf = options.pop("irf", _irf())
