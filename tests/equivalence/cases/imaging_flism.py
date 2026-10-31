@@ -16,6 +16,10 @@ PERIOD_NS = 25.6
 SHORT_T_NS = np.arange(64) * 0.4
 
 
+def _patch_vertices(patch):
+    return patch.get_patch_transform().transform(patch.get_path().vertices)
+
+
 def _drawn(call):
     plt.close("all")
     result = call()
@@ -23,13 +27,22 @@ def _drawn(call):
         (
             [line.get_xydata() for line in axes.lines],
             [image.get_array() for image in axes.images],
-            [collection.get_array() for collection in axes.collections],
+            [
+                (
+                    collection.get_array(),
+                    collection.get_offsets(),
+                    [path.vertices for path in collection.get_paths()],
+                )
+                for collection in axes.collections
+            ],
+            [(type(patch).__name__, _patch_vertices(patch)) for patch in axes.patches],
             [text.get_text() for text in axes.texts],
             [axes.get_title(), axes.get_xlabel(), axes.get_ylabel()],
             axes.get_xscale(),
             axes.get_yscale(),
         )
-        for axes in plt.gcf().axes
+        for number in plt.get_fignums()
+        for axes in plt.figure(number).axes
     ]
     plt.close("all")
     return result, content
@@ -281,6 +294,7 @@ CASES: list[Case] = [
         lambda f: f(_phasor_map().real, _phasor_map().imag * 0.8, dfd_freq=40e6),
         "real and imaginary parts",
     ),
+    # The old code writes complex values into a float array, so only the real part is compared.
     Case(f"{PHASOR}:calculate_phasor_on_img", lambda f: f(_decays(2)), "4D"),
     Case(f"{PHASOR}:calculate_phasor_on_img", lambda f: f(_decays(1, 2), 2, 2), "5D"),
     Case(f"{PHASOR}:fourier_shift", lambda f: f(flim_stack().sum((0, 1)), 0.1)),
