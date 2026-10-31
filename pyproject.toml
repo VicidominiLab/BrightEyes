@@ -9,7 +9,7 @@ description = "Toolbox for image scanning microscopy and fluorescence fluctuatio
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "src/brighteyes/mcs/reader/LICENSE"]
 authors = [
   { name = "Alessandro Zunino", email = "alessandro.zunino@iit.it" },
   { name = "Eli Slenders", email = "eli.slenders@iit.it" },
