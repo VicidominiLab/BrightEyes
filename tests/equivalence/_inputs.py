@@ -406,3 +406,114 @@ def periodic_decay(
     shape = np.exp(-np.mod(time - delay_ns, period_ns) / tau_ns)
     rate = counts * shape / shape.sum()
     return time, np.random.default_rng(seed).poisson(rate).astype(np.float64)
+
+
+def _ttm_channel_columns(rows: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return random times and valid flags `(rows, 21)` of the 21 channels beyond `ttm_raw_frame`."""
+    rng = np.random.default_rng(1)
+    return (
+        rng.integers(0, 256, size=(rows, 21)).astype(np.uint8),
+        (rng.random((rows, 21)) < 0.3).astype(np.uint8),
+    )
+
+
+def ttm_raw_bytes(no_data_rows: tuple[int, ...] = ()) -> bytes:
+    """Return the packed RAW stream of the rows of `ttm_raw_frame`: 32 bytes a row, 21 channels, and the rows in `no_data_rows` flagged as no data."""
+    frame = ttm_raw_frame()
+    rows = len(frame)
+    times, valid = _ttm_channel_columns(rows)
+    names = [("step", "<u2"), ("t_L", "u1"), ("WORD_HEAD", "u1")]
+    for word in range(7):
+        names += [(f"t_{3 * word + k}", "u1") for k in (2, 1, 0)]
+        names.append((f"WORD_{word}", "u1"))
+    stream = np.zeros(rows, dtype=names)
+    head = (
+        frame["scan_enable"].to_numpy()
+        | frame["line_enable"].to_numpy() << 1
+        | frame["pixel_enable"].to_numpy() << 2
+        | frame["valid_tdc_L"].to_numpy() << 3
+    )
+    head[list(no_data_rows)] |= 15 << 4
+    stream["step"] = frame["step"]
+    stream["t_L"] = frame["t_L"]
+    stream["WORD_HEAD"] = head
+    for word in range(7):
+        for k in range(3):
+            stream[f"t_{3 * word + k}"] = times[:, 3 * word + k]
+        stream[f"WORD_{word}"] = (
+            valid[:, 3 * word] << 1
+            | valid[:, 3 * word + 1] << 2
+            | valid[:, 3 * word + 2] << 3
+        )
+    return stream.tobytes()
+
+
+def ttm_parsed_bytes() -> bytes:
+    """Return the "parsed" stream of the rows of `ttm_raw_frame`: 96 bytes a row, a 12-byte header and seven 12-byte payloads."""
+    frame = ttm_raw_frame()
+    rows = len(frame)
+    times, valid = _ttm_channel_columns(rows)
+    names = [
+        ("event", "<u4"),
+        ("step", "<u2"),
+        ("t_L", "u1"),
+        ("scan_enable", "u1"),
+        ("line_enable", "u1"),
+        ("pixel_enable", "u1"),
+        ("valid_tdc_L", "u1"),
+        ("id_0", "u1"),
+    ]
+    for word in range(7):
+        names.append((f"event_{3 * word}", "<u4"))
+        names += [(f"t_{3 * word + k}", "u1") for k in (2, 1, 0)]
+        names.append((f"useless_{word}", "u1"))
+        names += [(f"valid_tdc_{3 * word + k}", "u1") for k in (2, 1, 0)]
+        names.append((f"id_{word + 1}", "u1"))
+    stream = np.zeros(rows, dtype=names)
+    stream["event"] = np.arange(rows)
+    for name in (
+        "step",
+        "t_L",
+        "scan_enable",
+        "line_enable",
+        "pixel_enable",
+        "valid_tdc_L",
+    ):
+        stream[name] = frame[name]
+    for channel in range(21):
+        stream[f"t_{channel}"] = times[:, channel]
+        stream[f"valid_tdc_{channel}"] = valid[:, channel]
+    return stream.tobytes()
+
+
+def ttm_calibration_h5_file(path: Path) -> Path:
+    """Write a pandas HDF5 file with `main`, `ch_0`, `ch_3` (no `ch_1`) and `metadata` tables, as the converters lay them out, and return `path`."""
+    rng = np.random.default_rng(0)
+    rows = 2000
+    main = pd.DataFrame(
+        {
+            "cumulative_step": np.cumsum(rng.integers(1, 200, size=rows)),
+            "t_L": rng.integers(0, 150, size=rows).astype(np.uint8),
+            "total_photon": rng.integers(0, 3, size=rows).astype(np.uint8),
+        }
+    )
+    main.to_hdf(path, mode="w", key="main", format="table")
+    for channel, spread in ((0, 120), (3, 90)):
+        index = np.sort(rng.choice(rows, size=600, replace=False))
+        pd.DataFrame(
+            {
+                f"t_{channel}": rng.integers(0, spread, size=600).astype(np.int16),
+                f"dS_{channel}": rng.integers(0, 4, size=600).astype(np.uint16),
+            },
+            index=pd.Index(index, name=f"index_{channel}"),
+        ).to_hdf(path, key=f"ch_{channel}", format="table")
+    pd.DataFrame(
+        {
+            "sysclk_MHz": np.asarray(240.0),
+            "laser_MHz": np.asarray(40.0),
+            "sysclk_ps": np.asarray(1e6 / 240.0),
+            "laser_ps": np.asarray(1e6 / 40.0),
+        },
+        index=[0],
+    ).to_hdf(path, key="metadata")
+    return path

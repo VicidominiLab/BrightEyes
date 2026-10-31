@@ -12,6 +12,7 @@ from . import (
     mcs_reader,
     spectroscopy_fcs,
     spectroscopy_other,
+    ttm,
     ttm_kernels,
 )
 
@@ -25,6 +26,7 @@ _MODULES: tuple[ModuleType, ...] = (
     mcs_reader,
     spectroscopy_fcs,
     spectroscopy_other,
+    ttm,
     ttm_kernels,
 )
 
