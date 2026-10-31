@@ -95,3 +95,20 @@ def time_channel_array() -> np.ndarray:
     rng = np.random.default_rng(0)
     times = np.sort(rng.choice(20_000, size=1500, replace=False)).astype(np.float64)
     return np.column_stack((times, rng.poisson(0.4, size=(1500, 5)).astype(np.float64)))
+
+
+def pch_psf() -> np.ndarray:
+    """Return a cubic Gaussian focal volume of 12 voxels per side with its maximum at 1."""
+    axis = np.arange(12) - 6
+    z, y, x = np.meshgrid(axis, axis, axis, indexing="ij")
+    return np.exp(-2 * (x**2 + y**2) / 3.0**2 - 2 * z**2 / 5.0**2)
+
+
+def bead_image() -> np.ndarray:
+    """Return a `(x, y, channels)` array holding five Gaussian beads on a dark background."""
+    axis = np.arange(64)
+    x, y = np.meshgrid(axis, axis, indexing="ij")
+    beads = np.array([[16, 16], [16, 44], [32, 30], [46, 14], [48, 48]])
+    spot = sum(np.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 2.5**2)) for cx, cy in beads)
+    weights = np.random.default_rng(0).uniform(0.5, 1.0, size=4)
+    return np.round(200 * spot[:, :, None] * weights[None, None, :])

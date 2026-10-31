@@ -2,9 +2,15 @@ from types import ModuleType
 
 from _registry import Case
 
-from . import imaging_analysis, imaging_flism, imaging_simulation, spectroscopy_fcs
+from . import imaging_analysis, imaging_flism, imaging_simulation, spectroscopy_fcs, spectroscopy_other
 
-_MODULES: tuple[ModuleType, ...] = (imaging_analysis, imaging_flism, imaging_simulation, spectroscopy_fcs)
+_MODULES: tuple[ModuleType, ...] = (
+    imaging_analysis,
+    imaging_flism,
+    imaging_simulation,
+    spectroscopy_fcs,
+    spectroscopy_other,
+)
 
 ALL_CASES: list[Case] = [case for module in _MODULES for case in module.CASES]
 ALL_SKIPPED: dict[str, str] = {}
