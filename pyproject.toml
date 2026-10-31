@@ -9,11 +9,17 @@ description = "Toolbox for image scanning microscopy and fluorescence fluctuatio
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [
   { name = "Alessandro Zunino", email = "alessandro.zunino@iit.it" },
   { name = "Eli Slenders", email = "eli.slenders@iit.it" },
   { name = "Mattia Donato", email = "mattia.donato@iit.it" },
 ]
+
+[project.urls]
+Homepage = "https://github.com/VicidominiLab/brighteyes"
+Source = "https://github.com/VicidominiLab/brighteyes"
+Issues = "https://github.com/VicidominiLab/brighteyes/issues"
 
 [project.optional-dependencies]
 imaging = [
@@ -119,8 +125,8 @@ testpaths = ["tests"]
 directory = "changelog.d"
 filename = "CHANGELOG.md"
 start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}](https://github.com/VicidominiLab/BrightEyes/releases/tag/v{version}) - {project_date}"
-issue_format = "[#{issue}](https://github.com/VicidominiLab/BrightEyes/pull/{issue})"
+title_format = "## [{version}](https://github.com/VicidominiLab/brighteyes/releases/tag/v{version}) - {project_date}"
+issue_format = "[#{issue}](https://github.com/VicidominiLab/brighteyes/pull/{issue})"
 # set, even empty, so a misnamed entry fails the build instead of being skipped
 ignore = []
 
