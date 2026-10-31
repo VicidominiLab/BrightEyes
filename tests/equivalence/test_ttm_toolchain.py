@@ -1,5 +1,6 @@
 import contextlib
 import io
+from unittest import mock
 
 import libttp.ttpCython
 import numpy as np
@@ -17,6 +18,18 @@ def test_read_only_frame_matches_patched_old_module():
         new = _ttp.analysisForImg(frame, 10, frame["cumulativeStep"])
         old = libttp.ttpCython.analysisForImg(frame, 10, frame["cumulativeStep"])
     assert_same(old, new)
+
+
+def test_unpatched_old_module_refuses_read_only_columns():
+    """Raise ValueError from the old module without its writable-copy patch on a pandas 3 frame."""
+    frame = ttm_raw_frame()
+    assert not np.asarray(frame["scan_enable"]).flags.writeable
+    with (
+        mock.patch.object(libttp.ttpCython, "np", np),
+        contextlib.redirect_stdout(io.StringIO()),
+        pytest.raises(ValueError, match="read-only"),
+    ):
+        libttp.ttpCython.analysisForImg(frame, 10, frame["cumulativeStep"])
 
 
 def test_line_enable_on_first_row_starts_a_line():
