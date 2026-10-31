@@ -77,6 +77,12 @@ def _single_psf(module, **changes):
     return module.singlePSF(_settings(module, **changes), 40, NX, [-50, 50], 3)
 
 
+def _gaussian_psf(module):
+    settings = _settings(module, field="Gaussian")
+    settings.wo = 0.5
+    return module.singlePSF(settings, 40, NX, [-50, 50], 3)
+
+
 def _psf_3d(module, settings=None, **options):
     grid = options.pop("grid", None) or _grid(module)
     settings = settings or _settings(module)
@@ -193,6 +199,7 @@ CASES: list[Case] = [
         ),
         "vortex mask and aberration",
     ),
+    Case(f"{PSF}:singlePSF", lambda f: _gaussian_psf(_module(f)), "Gaussian field"),
     Case(f"{PSF}:SPAD_PSF_3D", lambda f: _psf_3d(_module(f)), "symmetrical"),
     Case(
         f"{PSF}:SPAD_PSF_3D",
