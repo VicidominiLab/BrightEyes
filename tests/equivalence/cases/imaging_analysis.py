@@ -1,5 +1,8 @@
 """Equivalence cases for `brighteyes_ism.analysis`."""
 
+import contextlib
+import io
+
 import numpy as np
 from _inputs import CHANNELS, SIZE, ism_dataset, ism_psf, ism_series
 from _registry import SKIP_GUI, SKIP_PLOT_ONLY, Case
@@ -56,6 +59,13 @@ def _cloud_input() -> np.ndarray:
 def _kl_inputs() -> tuple[np.ndarray, np.ndarray]:
     dset = ism_dataset()
     return dset[:, :, 0] + 1, np.moveaxis(dset[:, :, 1:4], -1, 0) + 1
+
+
+def _check_saturation(call):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        result = call(np.minimum(ism_dataset(), 15), np.full(CHANNELS, 15))
+    return result, output.getvalue()
 
 
 def _gauss_mult_var(call):
@@ -146,6 +156,7 @@ CASES: list[Case] = [
         ),
         "last, padded",
     ),
+    Case(f"{DECONV}:MultiImg_RL_FFT", lambda f: f(ism_psf(), ism_dataset(), max_iter=3, out="all"), "all"),
     Case(f"{DECONV}:MultiImg_RL_FFT_2", lambda f: f(ism_psf(), ism_dataset(), max_iter=3)),
     Case(f"{DECONV}:PSF_FRC", lambda f: f(*(ism_series()[:, :, k] for k in (0, 1)))),
     Case(f"{DECONV}:FRC_MultiImg_RL_FFT", lambda f: f(ism_series(), max_iter=3)),
@@ -293,10 +304,7 @@ CASES: list[Case] = [
         f"{TOOLS}:normalized_absolute_difference",
         lambda f: f(ism_dataset()[:, :, 0] + 1, ism_dataset()[:, :, 1] + 1),
     ),
-    Case(
-        f"{TOOLS}:check_saturation",
-        lambda f: f(np.minimum(ism_dataset(), 15), np.full(CHANNELS, 15)),
-    ),
+    Case(f"{TOOLS}:check_saturation", _check_saturation),
     Case(f"{TOOLS}:GaussMultVar", _gauss_mult_var),
     Case(
         f"{TOOLS}:fit_to_gaussian",
