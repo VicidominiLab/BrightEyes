@@ -6,10 +6,10 @@ brighteyes is a Python toolbox for image scanning microscopy (ISM), fluorescence
 pip install brighteyes[imaging]
 ```
 
-Each subpackage has its own extra:
+Install the extra of each subpackage you need:
 
 | Subpackage | Content | Extra |
 |---|---|---|
-| `brighteyes.core` | empty in phase 1 | none |
+| `brighteyes.core` | empty for now, reserved for code shared by the other subpackages | none |
 | `brighteyes.imaging` | ISM, with FLISM as `brighteyes.imaging.flism` | `imaging` |
 | `brighteyes.spectroscopy` | FFS | `spectroscopy` |
