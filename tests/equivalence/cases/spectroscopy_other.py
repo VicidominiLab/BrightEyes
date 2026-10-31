@@ -4,6 +4,7 @@ import contextlib
 import io
 from importlib import import_module
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 from _inputs import CHANNELS, bead_image, pch_psf, photon_arrival_times, time_trace
@@ -25,6 +26,13 @@ def _printed(call, *args, **kwargs):
     with contextlib.redirect_stdout(buffer):
         result = call(*args, **kwargs)
     return result, buffer.getvalue()
+
+
+def _clicked_fit_psf(function, image):
+    # bead_image is indexed (row, column), and ginput returns (column, row)
+    clicks = [(16, 16), (44, 16), (30, 32), (14, 46), (48, 48)]
+    with patch.object(plt, "ginput", return_value=clicks):
+        return _drawn(lambda: _printed(function, image))
 
 
 def _drawn(call):
@@ -1366,6 +1374,8 @@ CASES += [
 ]
 
 CASES += [
+    Case(f"{TOOLS}.fit_psf:fit_psf", lambda f: _clicked_fit_psf(f, bead_image().sum(axis=2)), "2D"),
+    Case(f"{TOOLS}.fit_psf:fit_psf", lambda f: _clicked_fit_psf(f, bead_image()), "3D"),
     Case(
         f"{TOOLS}.fit_psf:checkrange",
         lambda f: [f(50, 15, 0, 100), f(10, 15, 0, 100), f(95, 15, 0, 100)],
@@ -1530,7 +1540,6 @@ SKIPPED |= {
     f"{TOOLS}.closefile:closefile": SKIP_FILE_IO,
     f"{TOOLS}.csv2array:array2csv": SKIP_FILE_IO,
     f"{TOOLS}.csv2array:csv2array": SKIP_FILE_IO,
-    f"{TOOLS}.fit_psf:fit_psf": f"{SKIP_GUI}: waits for mouse clicks in plt.ginput",
     f"{TOOLS}.goto:goto": f"{SKIP_FILE_IO}: changes the working directory to a fixed lab path",
     f"{TOOLS}.h5data:h5data": SKIP_FILE_IO,
     f"{TOOLS}.h5data:printmetadata": SKIP_FILE_IO,
