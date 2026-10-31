@@ -10,7 +10,7 @@ Pathish = Union[str, PathLike]
 
 def _mcs_reader():
     try:
-        import brighteyes_mcs_reader as reader
+        import brighteyes.mcs.reader as reader
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "s2ism MCS loading requires 'brighteyes-mcs-reader'. "
@@ -33,7 +33,7 @@ def load_mcs(path: Pathish, key: str = "data", data_format: str = "numpy"):
     """Load BrightEyes-MCS data using the legacy-compatible reader.
 
     This is the drop-in replacement for the old
-    ``brighteyes_mcs_dataprep.reader_legacy.load`` call used by the original
+    ``brighteyes.mcs.dataprep.reader_legacy.load`` call used by the original
     examples. It returns ``(data, metadata)``.
     """
     return _mcs_reader().reader_legacy.load(path, key=key, data_format=data_format)

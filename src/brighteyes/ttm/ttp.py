@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 # import h5py
 import tqdm
-import libttp.ttpCython as ttpCython
+from brighteyes.ttm import _ttp as ttpCython
 from scipy.optimize import curve_fit
 
 

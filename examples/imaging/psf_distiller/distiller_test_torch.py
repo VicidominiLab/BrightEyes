@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import brighteyes_ism.simulation.PSF_sim as sim
-import brighteyes_ism.analysis.Graph_lib as gr
+import brighteyes.imaging.simulation.PSF_sim as sim
+import brighteyes.imaging.analysis.Graph_lib as gr
 
 import torch
 
@@ -10,8 +10,8 @@ import time
 
 #%%
 
-from psf_ism_distiller.distiller import FIXED_ZERNIKE
-import psf_ism_distiller.distiller as dis
+from brighteyes.imaging.psf_distiller.distiller import FIXED_ZERNIKE
+import brighteyes.imaging.psf_distiller.distiller as dis
 
 process = 'gpu'
 

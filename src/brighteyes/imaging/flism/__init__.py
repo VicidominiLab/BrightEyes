@@ -1,6 +1,6 @@
 """Public package API for BrightEyes FLISM utilities."""
 
-from brighteyes_mcs_dataprep import (
+from brighteyes.mcs.dataprep import (
     Alignment,
     H5DataCalibrator,
     H5OutputBuilder,
@@ -12,7 +12,7 @@ from brighteyes_mcs_dataprep import (
     show_h5_structure_html,
     write_h5_output_run,
 )
-from brighteyes_mcs_reader import (
+from brighteyes.mcs.reader import (
     load_default_irf,
     load_default_output_spad,
     load_default_ref,

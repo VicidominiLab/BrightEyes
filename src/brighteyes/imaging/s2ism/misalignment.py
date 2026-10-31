@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import least_squares
 
-from brighteyes_ism.analysis.APR_lib import ShiftVectors
+from brighteyes.imaging.analysis.APR_lib import ShiftVectors
 from .shift_vectors_minimizer import rotation_matrix, find_parameters
 
 def gaussian_2d(params, x, y):

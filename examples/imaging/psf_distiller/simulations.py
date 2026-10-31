@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import brighteyes_ism.simulation.PSF_sim as sim
-import brighteyes_ism.analysis.Graph_lib as gr
+import brighteyes.imaging.simulation.PSF_sim as sim
+import brighteyes.imaging.analysis.Graph_lib as gr
 
 import torch
 

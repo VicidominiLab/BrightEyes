@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 
-from brighteyes_ism.simulation.detector import det_coords, airy_to_hex
+from brighteyes.imaging.simulation.detector import det_coords, airy_to_hex
 
 
 def shift_matrix(geometry: str = 'rect') -> np.ndarray:

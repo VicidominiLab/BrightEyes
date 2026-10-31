@@ -3,8 +3,8 @@ import json
 import h5py
 import numpy as np
 
-from brighteyes_mcs_dataprep import H5OutputProduct, write_h5_output_run
-from brighteyes_mcs_dataprep.h5_file_hash import channel_fingerprint_file_hash
+from brighteyes.mcs.dataprep import H5OutputProduct, write_h5_output_run
+from brighteyes.mcs.dataprep.h5_file_hash import channel_fingerprint_file_hash
 
 
 def _source_file(path):

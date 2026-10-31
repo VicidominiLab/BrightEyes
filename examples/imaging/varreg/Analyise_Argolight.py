@@ -26,25 +26,25 @@ from PIL import Image
 from email.mime import image
 from matplotlib import path
 
-import brighteyes_ism.analysis.Tools_lib as tools
-import brighteyes_ism.simulation.simulator as sim
-import brighteyes_ism.simulation.PSF_sim as psf_sim
-import brighteyes_ism.simulation.Tubulin_sim as st
-import brighteyes_ism.analysis.Graph_lib as gra
-import brighteyes_ism.analysis.APR_lib as apr
-import brighteyes_ism.dataio.mcs as mcs
+import brighteyes.imaging.analysis.Tools_lib as tools
+import brighteyes.imaging.simulation.simulator as sim
+import brighteyes.imaging.simulation.PSF_sim as psf_sim
+import brighteyes.imaging.simulation.Tubulin_sim as st
+import brighteyes.imaging.analysis.Graph_lib as gra
+import brighteyes.imaging.analysis.APR_lib as apr
+import brighteyes.imaging.io.mcs as mcs
 from torch.fft import rfftn, irfftn, ifftshift, fftn, ifftn, fftshift
 
-from s2ism import s2ism as s2
-import s2ism.psf_estimator as est
+from brighteyes.imaging.s2ism import s2ism as s2
+import brighteyes.imaging.s2ism.psf_estimator as est
 
-from varreg import varreg, loss, utils
-from varreg import preprocessing as pp
-from varreg import phantom_simulator as ph
-from varreg import initializers as init
-from varreg import discrepancy_principle as dp
-from varreg import whiteness_principle as wp
-from varreg.utils import compute_otf_from_psf, autocorrelation2d
+from brighteyes.imaging.varreg import varreg, loss, utils
+from brighteyes.imaging.varreg import preprocessing as pp
+from brighteyes.imaging.varreg import phantom_simulator as ph
+from brighteyes.imaging.varreg import initializers as init
+from brighteyes.imaging.varreg import discrepancy_principle as dp
+from brighteyes.imaging.varreg import whiteness_principle as wp
+from brighteyes.imaging.varreg.utils import compute_otf_from_psf, autocorrelation2d
 
 from scipy.ndimage import gaussian_filter1d, binary_fill_holes, median_filter
 from skimage import filters, measure

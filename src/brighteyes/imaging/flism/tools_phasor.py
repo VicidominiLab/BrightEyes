@@ -111,7 +111,7 @@ def sum_adjacent_pixel(data, n=4):
 
 
 def _require_torch():
-    from brighteyes_mcs_dataprep import Alignment
+    from brighteyes.mcs.dataprep import Alignment
     Alignment._require_torch()
 
 
@@ -140,7 +140,7 @@ def pad_tensor(x, pad_left: int, pad_right: int, dim: int, mode: str = "reflect"
     """
     Pad a torch tensor along one dimension.
     """
-    from brighteyes_mcs_dataprep import Alignment
+    from brighteyes.mcs.dataprep import Alignment
     return Alignment.pad_tensor(x, pad_left, pad_right, dim, mode=mode)
 
 
@@ -148,7 +148,7 @@ def torch_median_filter(x, window_size=3, dims=None, mode="reflect"):
     """
     Apply a median filter to a torch tensor along selected dimensions.
     """
-    from brighteyes_mcs_dataprep import Alignment
+    from brighteyes.mcs.dataprep import Alignment
     return Alignment.median_filter(x, window_size=window_size, dims=dims, mode=mode)
 
 
@@ -157,7 +157,7 @@ def partial_convolution_fft(volume, kernel, dim1: str = "ijk", dim2: str = "jkl"
     """
     Convolution through FFT with einsum-based dimension bookkeeping.
     """
-    from brighteyes_mcs_dataprep import Alignment
+    from brighteyes.mcs.dataprep import Alignment
     return Alignment.partial_convolution_fft(
         volume,
         kernel,
@@ -256,7 +256,7 @@ def estimate_lifetime_from_birfi(
 ):
     """
     Estimate fluorescence lifetime from the centroid of a detected decay window.
-    (from birfi)
+    (from brighteyes.imaging.birfi)
 
     The function merges decay-window detection and centroid lifetime estimation
     into a NumPy-based utility. The start index ``t0`` is defined as the global

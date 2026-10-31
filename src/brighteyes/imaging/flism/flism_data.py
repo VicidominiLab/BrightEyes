@@ -5,7 +5,7 @@ import warnings
 import h5py
 import numpy as np
 
-from brighteyes_mcs_reader import reader_legacy
+from brighteyes.mcs.reader import reader_legacy
 
 from .tools_phasor import calculate_phasor
 

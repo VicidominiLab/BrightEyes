@@ -10,7 +10,7 @@ from ..tools.list_files import list_files
 from ..tools.array2tiff import array2tiff, array2rgbtiff
 from .get_fcs_info import get_file_info, get_metafile_from_file, get_file_info_czi
 import czifile
-#import libttp
+#import brighteyes.ttm
 
 """
 This set of functions allows reading a binary file containing SPAD measurements

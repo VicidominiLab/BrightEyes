@@ -4,8 +4,8 @@ import h5py
 import numpy as np
 import pytest
 
-from brighteyes_mcs_reader import load_default_output_spad, load_virtual_channel
-from brighteyes_mcs_dataprep.h5_data_calibrator import (
+from brighteyes.mcs.reader import load_default_output_spad, load_virtual_channel
+from brighteyes.mcs.dataprep.h5_data_calibrator import (
     DEFAULT_SUM_IRF_TRACE_ID,
     DEFAULT_SUM_CHANNELS_RUN_ID,
     DEFAULT_SUM_CHANNELS_WITH_SKEW_CORRECTION_RUN_ID,

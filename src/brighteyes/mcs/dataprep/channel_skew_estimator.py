@@ -13,7 +13,7 @@ Functions
 Usage example
 -------------
 >>> import numpy as np
->>> from brighteyes_mcs_dataprep import estimate_channel_skew
+>>> from brighteyes.mcs.dataprep import estimate_channel_skew
 >>> t = 256
 >>> ch = 8
 >>> # synthetic data: a reference pulse shifted progressively

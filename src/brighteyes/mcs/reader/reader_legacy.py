@@ -333,7 +333,7 @@ def _warn_dfd_metadata_fallback(filename, default_cycle_mhz):
         (
             "\n"
             "================ WARNING ==============\n"
-            "brighteyes_mcs_reader.reader_legacy failed to extract DFD metadata "
+            "brighteyes.mcs.reader.reader_legacy failed to extract DFD metadata "
             f"from the bitfile name ({filename!r}).\n\n"
             "Falling back to defaults:\n"
             f"  - Laser cycle frequency: {default_cycle_mhz} MHz\n"

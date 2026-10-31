@@ -6,11 +6,11 @@ import torch
 
 from scipy.stats import qmc
 
-import brighteyes_ism.simulation.PSF_sim as sim
+import brighteyes.imaging.simulation.PSF_sim as sim
 
-from brighteyes_ism.simulation.utils import partial_convolution
+from brighteyes.imaging.simulation.utils import partial_convolution
 
-from s2ism.psf_estimator import GridFinder
+from brighteyes.imaging.s2ism.psf_estimator import GridFinder
 
 from scipy.special import rel_entr
 

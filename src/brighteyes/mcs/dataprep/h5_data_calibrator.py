@@ -15,7 +15,7 @@ import h5py
 import numpy as np
 from tqdm.auto import tqdm
 
-from brighteyes_mcs_reader import reader_legacy
+from brighteyes.mcs.reader import reader_legacy
 
 from .alignment import Alignment
 from .channel_skew_estimator import estimate_channel_skew

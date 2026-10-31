@@ -4,20 +4,20 @@ import os
 
 import torch
 
-from brighteyes_ism.dataio import mcs
-import brighteyes_ism.simulation.PSF_sim as sim
-import brighteyes_ism.analysis.Graph_lib as gr
-import brighteyes_ism.analysis.Tools_lib as tool
-import brighteyes_ism.analysis.APR_lib as apr
+from brighteyes.imaging.io import mcs
+import brighteyes.imaging.simulation.PSF_sim as sim
+import brighteyes.imaging.analysis.Graph_lib as gr
+import brighteyes.imaging.analysis.Tools_lib as tool
+import brighteyes.imaging.analysis.APR_lib as apr
 
-from s2ism.psf_estimator import GridFinder
+from brighteyes.imaging.s2ism.psf_estimator import GridFinder
 
 import time
 
 #%%
 
-from psf_ism_distiller.distiller import FIXED_ZERNIKE
-import psf_ism_distiller.distiller as dis
+from brighteyes.imaging.psf_distiller.distiller import FIXED_ZERNIKE
+import brighteyes.imaging.psf_distiller.distiller as dis
 
 process = 'gpu'
 

@@ -5,9 +5,9 @@ from scipy.special import kl_div as kl
 from scipy.stats import pearsonr as pearson
 from scipy.signal import argrelmin, argrelmax
 
-import brighteyes_ism.simulation.PSF_sim as sim
-import brighteyes_ism.analysis.Tools_lib as tool
-from brighteyes_ism.analysis.APR_lib import ShiftVectors
+import brighteyes.imaging.simulation.PSF_sim as sim
+import brighteyes.imaging.analysis.Tools_lib as tool
+from brighteyes.imaging.analysis.APR_lib import ShiftVectors
 
 from . import shift_vectors_minimizer as svm
 from . import mag_finder as mag

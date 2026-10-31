@@ -6,14 +6,14 @@ import os
 
 from tqdm import trange
 
-import brighteyes_ism.simulation.PSF_sim as sim
-import brighteyes_ism.analysis.Graph_lib as gra
-import brighteyes_ism.analysis.APR_lib as apr
+import brighteyes.imaging.simulation.PSF_sim as sim
+import brighteyes.imaging.analysis.Graph_lib as gra
+import brighteyes.imaging.analysis.APR_lib as apr
 
 from skimage.filters import gaussian
-import brighteyes_ism.simulation.Tubulin_sim as simTub
+import brighteyes.imaging.simulation.Tubulin_sim as simTub
 
-import flus2ISM_lib as us2ism
+import brighteyes.imaging.flus2ism.flus2ISM_lib as us2ism
 from scipy.ndimage import fourier_shift, shift
 
 
