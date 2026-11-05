@@ -9,6 +9,7 @@ from typing import Any, Final
 import numpy as np
 import torch
 from _compare import assert_same
+from _relocations import paths, removed
 
 REFERENCE_DIR: Final[Path] = Path(__file__).parent / "reference"
 
@@ -44,8 +45,20 @@ class Case:
 
 
 def new_path(old: str) -> str:
-    """Return the location in `brighteyes` of the old `module:qualname` path."""
+    """Return the location in `brighteyes` of the old `module:qualname` path.
+
+    Raises
+    ------
+    ValueError
+        If the original name was removed or has no known package prefix.
+    """
     module, separator, qualname = old.partition(":")
+    name, member_separator, member = qualname.partition(".")
+    original = f"{module}:{name}"
+    if original in removed:
+        raise ValueError(f"removed name: {original}: {removed[original]}")
+    if original in paths:
+        return paths[original] + member_separator + member
     for old_prefix, new_prefix in PREFIXES:
         if module == old_prefix or module.startswith(old_prefix + "."):
             return new_prefix + module[len(old_prefix) :] + separator + qualname

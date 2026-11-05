@@ -1,4 +1,5 @@
 import random
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -6,7 +7,7 @@ import pytest
 import torch
 from _compare import assert_same
 from _inputs import mcs_h5_file, ttm_new_protocol_bytes, ttm_raw_frame
-from _registry import Case, new_path, run
+from _registry import Case, new_path, resolve, run
 
 from brighteyes.mcs.reader import load_raw, read_signal
 
@@ -91,6 +92,35 @@ def test_compare_names_the_path_of_a_difference():
     """Put the path of the differing element in the failure message."""
     with pytest.raises(AssertionError, match=r"result\[\"g\"\]\[1\]"):
         assert_same({"g": [1, 2]}, {"g": [1, 3]})
+
+
+def test_exact_relocations_preserve_class_members(monkeypatch):
+    """Resolve a class member after its containing class moves."""
+    monkeypatch.setattr(
+        "_registry.paths", {"sample.old:Counter": "collections:Counter"}
+    )
+    method = resolve(new_path("sample.old:Counter.most_common"))
+    assert method(Counter("aab"), 1) == [("a", 2)]
+
+
+def test_exact_relocations_distinguish_same_named_functions(monkeypatch):
+    """Resolve identical old names to their distinct destination functions."""
+    monkeypatch.setattr(
+        "_registry.paths",
+        {"sample.first:reduce": "builtins:sum", "sample.second:reduce": "builtins:max"},
+    )
+    assert resolve(new_path("sample.first:reduce"))([1, 2, 3]) == 6
+    assert resolve(new_path("sample.second:reduce"))([1, 2, 3]) == 3
+
+
+def test_declared_removal_has_no_new_path(monkeypatch):
+    """Refuse to resolve a definition intentionally removed from the package."""
+    monkeypatch.setattr(
+        "_registry.removed",
+        {"brighteyes_ism.analysis.Tools_lib:low_pass": "removed from imaging"},
+    )
+    with pytest.raises(ValueError, match="removed name"):
+        new_path("brighteyes_ism.analysis.Tools_lib:low_pass")
 
 
 def test_compare_rejects_unknown_type():
