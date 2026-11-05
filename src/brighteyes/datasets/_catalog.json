@@ -1,0 +1,49 @@
+{
+  "ism-cell-full": {
+    "url": "https://zenodo.org/records/7343112/files/Cell_ISM_dataset.h5",
+    "filename": "Cell_ISM_dataset.h5",
+    "size": 3187611072,
+    "checksum": "md5:24dd933c66316495bf48cb2cef3e237c"
+  },
+  "ism-psf-full": {
+    "url": "https://zenodo.org/records/7343112/files/PSF_ISM_dataset.h5",
+    "filename": "PSF_ISM_dataset.h5",
+    "size": 1682995376,
+    "checksum": "md5:acbc7e3210811c28b8896f7799105e50"
+  },
+  "s2ism-full": {
+    "url": "https://zenodo.org/records/11284051/files/h5_files_s2ism.zip",
+    "filename": "h5_files_s2ism.zip",
+    "size": 3922127512,
+    "checksum": "md5:6c09c31be8ff54833c6d6201dff21e01"
+  },
+  "rbn-histone-full": {
+    "url": "https://zenodo.org/records/23360909/files/04_H3K9_Atto647N-17-04-2026-16-41-54.h5",
+    "filename": "04_H3K9_Atto647N-17-04-2026-16-41-54.h5",
+    "size": 1372951664,
+    "checksum": "md5:45a54af5ddcd17ad59447e4dcb0822cc"
+  },
+  "rbn-phalloidin-full": {
+    "url": "https://zenodo.org/records/23360909/files/06_Phalloidin_AF647-23-06-2026-17-45-08.h5",
+    "filename": "06_Phalloidin_AF647-23-06-2026-17-45-08.h5",
+    "size": 1373299320,
+    "checksum": "md5:36dfa21e50d74ce84814cd9480a26bf8"
+  },
+  "ffs-alexa-full": {
+    "url": "https://zenodo.org/records/4161418/files/05_Alexa488AB_20ugmL_P60percP_SPAD.7z",
+    "filename": "05_Alexa488AB_20ugmL_P60percP_SPAD.7z",
+    "size": 218958801,
+    "checksum": "md5:6ebb50e581af870637b0f2c5af31c130"
+  },
+  "ffs-alexa-correlations-full": {
+    "url": "https://zenodo.org/records/4161418/files/05_Alexa488AB_20ugmL_P60percP_SPAD_xcorrs.7z",
+    "filename": "05_Alexa488AB_20ugmL_P60percP_SPAD_xcorrs.7z",
+    "size": 3120423,
+    "checksum": "md5:d226c08be3608346bd8e9fd07e3bb88e"
+  },
+  "flus2ism-psf-batch-small": {
+    "path": "PSFs_comp_batchtest.npy",
+    "size": 192328,
+    "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+  }
+}
