@@ -45,5 +45,30 @@
     "path": "PSFs_comp_batchtest.npy",
     "size": 192328,
     "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+  },
+  "ism-simulation-small": {
+    "path": "ism-simulation-small.npz",
+    "size": 199508,
+    "sha256": "35cb300ad06cd570f5e0b8e4d939ccd50915fab905e64ee6da44329643e6866a"
+  },
+  "birfi-small": {
+    "path": "birfi-small.npz",
+    "size": 10789,
+    "sha256": "82e1c73d14b370ad808ba6d6a992aafb9eab5c4e7c61c8f7049b2ec3f9757220"
+  },
+  "psf-distiller-small": {
+    "path": "psf-distiller-small.npz",
+    "size": 221,
+    "sha256": "24613395e30e05d623ce9675f419eb1b3b6f5f0dcc32f0241974b6c33452f696"
+  },
+  "flus2ism-small": {
+    "path": "flus2ism-small.npz",
+    "size": 113438,
+    "sha256": "237544e609c5e498cc01894276fa736622ba80cca263db31435cb7eb94020ea8"
+  },
+  "ism-cell-small": {
+    "path": "ism-cell-small.npz",
+    "size": 259061,
+    "sha256": "60fd428b6470b02590ff19a22d280e6af106cc4110162d5fe2c1e5d31937a2cb"
   }
 }

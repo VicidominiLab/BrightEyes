@@ -1,0 +1,158 @@
+{
+  "status": "captured",
+  "dataset": "ism-cell-small",
+  "parameters": {
+    "px": 0.04004004004004004,
+    "method": "fixed",
+    "smoothing": "fit",
+    "apr": {
+      "usf": 100,
+      "ref": 12,
+      "pxsize": 0.04004004004004004,
+      "apodize": true,
+      "filter_sigma": 1,
+      "mode": "interp"
+    }
+  },
+  "source_files": [
+    {
+      "source_url": "https://zenodo.org/records/7343112/files/Cell_ISM_dataset.h5",
+      "source_checksum": "md5:24dd933c66316495bf48cb2cef3e237c",
+      "full_checksum_verified": false,
+      "dataset": "/data",
+      "axis_order": "rzxytc"
+    }
+  ],
+  "selection": [
+    [
+      0,
+      1
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      472,
+      504
+    ],
+    [
+      472,
+      504
+    ],
+    [
+      0,
+      50
+    ],
+    [
+      0,
+      25
+    ]
+  ],
+  "coverage": "APR and even/odd FRC stages on the measured region at native sampling; full-image notebook preprocessing not validated",
+  "expected": "imaging/ism-frc.npz",
+  "capture": "imaging/ism-frc.json",
+  "example": "ism-frc",
+  "source_revision": "9d7f078",
+  "seeds": {
+    "numpy": 0,
+    "torch": 0,
+    "python": 0
+  },
+  "environment": {
+    "python": "3.11.18",
+    "system": "Windows",
+    "machine": "AMD64",
+    "device": "cpu",
+    "threads": 1,
+    "packages": {
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "torch": "2.15.0+cpu",
+      "h5py": "3.16.0"
+    }
+  },
+  "comparison": {
+    "exact": true
+  },
+  "inputs": {
+    "filename": "ism-cell-small.npz",
+    "size": 259061,
+    "sha256": "60fd428b6470b02590ff19a22d280e6af106cc4110162d5fe2c1e5d31937a2cb"
+  },
+  "outputs": {
+    "filename": "ism-frc.npz",
+    "size": 61855,
+    "sha256": "8034e92821c03ba158cf6fab869094b315544d1b3317ca7477c19732559a2b31",
+    "arrays": {
+      "result_0_0": {
+        "shape": [],
+        "dtype": "float64"
+      },
+      "result_0_1": {
+        "shape": [
+          23
+        ],
+        "dtype": "float64"
+      },
+      "result_0_2": {
+        "shape": [
+          23
+        ],
+        "dtype": "float64"
+      },
+      "result_0_3": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      },
+      "result_0_4": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      },
+      "result_0_5": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      },
+      "result_1_0": {
+        "shape": [],
+        "dtype": "float64"
+      },
+      "result_1_1": {
+        "shape": [
+          23
+        ],
+        "dtype": "float64"
+      },
+      "result_1_2": {
+        "shape": [
+          23
+        ],
+        "dtype": "float64"
+      },
+      "result_1_3": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      },
+      "result_1_4": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      },
+      "result_1_5": {
+        "shape": [
+          2300
+        ],
+        "dtype": "float64"
+      }
+    }
+  }
+}

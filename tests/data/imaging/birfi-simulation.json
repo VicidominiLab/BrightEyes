@@ -1,0 +1,66 @@
+{
+  "status": "captured",
+  "dataset": "birfi-small",
+  "parameters": {
+    "dt": 0.01,
+    "lr": 0.05,
+    "steps": 2000,
+    "rl_iterations": 100,
+    "regularization": 3
+  },
+  "source_files": [
+    {
+      "path": "examples/imaging/birfi/demo_simulation.ipynb",
+      "revision": "9d7f078"
+    }
+  ],
+  "selection": {
+    "time_bins": 200,
+    "channels": 9
+  },
+  "coverage": "CPU fitting and IRF retrieval with the example simulation dimensions and parameters",
+  "expected": "imaging/birfi-simulation.npz",
+  "capture": "imaging/birfi-simulation.json",
+  "example": "birfi-simulation",
+  "source_revision": "9d7f078",
+  "seeds": {
+    "numpy": 0,
+    "torch": 0,
+    "python": 0
+  },
+  "environment": {
+    "python": "3.11.18",
+    "system": "Windows",
+    "machine": "AMD64",
+    "device": "cpu",
+    "threads": 1,
+    "packages": {
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "torch": "2.15.0+cpu",
+      "h5py": "3.16.0"
+    }
+  },
+  "comparison": {
+    "exact": true
+  },
+  "inputs": {
+    "filename": "birfi-small.npz",
+    "size": 10789,
+    "sha256": "82e1c73d14b370ad808ba6d6a992aafb9eab5c4e7c61c8f7049b2ec3f9757220"
+  },
+  "outputs": {
+    "filename": "birfi-simulation.npz",
+    "size": 6401,
+    "sha256": "db9bc0d2753edd4d2f7616fe210ee8f04c508fefa29e8b33f659fd5d2d71ff7e",
+    "arrays": {
+      "result": {
+        "shape": [
+          200,
+          9
+        ],
+        "dtype": "float32"
+      }
+    }
+  }
+}

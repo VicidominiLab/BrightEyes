@@ -1,0 +1,449 @@
+{
+  "ism-simulation": {
+    "status": "captured",
+    "dataset": "ism-simulation-small",
+    "parameters": {
+      "signal": 100
+    },
+    "source_files": [
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "simulated_tubulin_pi_batchtest.npz",
+        "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+      },
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "PSFs_comp_batchtest.npy",
+        "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+      }
+    ],
+    "selection": {
+      "phantom": [
+        [
+          0,
+          2
+        ],
+        [
+          85,
+          116
+        ],
+        [
+          85,
+          116
+        ]
+      ],
+      "psf": "full spatial support; singleton z/excitation/emission axes selected"
+    },
+    "coverage": "Forward simulation and seeded photon noise for a compact source phantom",
+    "expected": "imaging/ism-simulation.npz",
+    "capture": "imaging/ism-simulation.json"
+  },
+  "s2ism": {
+    "status": "captured",
+    "dataset": "ism-simulation-small",
+    "parameters": {
+      "max_iter": 100,
+      "rep_to_save": "last"
+    },
+    "source_files": [
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "simulated_tubulin_pi_batchtest.npz",
+        "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+      },
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "PSFs_comp_batchtest.npy",
+        "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+      }
+    ],
+    "selection": {
+      "phantom": [
+        [
+          0,
+          2
+        ],
+        [
+          85,
+          116
+        ],
+        [
+          85,
+          116
+        ]
+      ],
+      "psf": "full spatial support; singleton z/excitation/emission axes selected"
+    },
+    "coverage": "Maximum-likelihood reconstruction on a compact simulated image; experimental notebook datasets not validated",
+    "expected": "imaging/s2ism.npz",
+    "capture": "imaging/s2ism.json"
+  },
+  "rbn": {
+    "status": "captured",
+    "dataset": "ism-simulation-small",
+    "parameters": {
+      "lambda_value": 5,
+      "max_iter": 2000,
+      "stop_tol": 1e-06,
+      "stop_criteria": "step_size",
+      "method": "sgp",
+      "regularizer_norm": "l2",
+      "initialization": "flat",
+      "normalize": true,
+      "idx_in_focus": 0,
+      "rec_to_save": "last",
+      "step_size_search": "line_search",
+      "line_search_params": [
+        1e+18,
+        2
+      ],
+      "verbose": false
+    },
+    "source_files": [
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "simulated_tubulin_pi_batchtest.npz",
+        "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+      },
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "PSFs_comp_batchtest.npy",
+        "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+      }
+    ],
+    "selection": {
+      "phantom": [
+        [
+          0,
+          2
+        ],
+        [
+          85,
+          116
+        ],
+        [
+          85,
+          116
+        ]
+      ],
+      "psf": "full spatial support; singleton z/excitation/emission axes selected"
+    },
+    "coverage": "Fixed-lambda reconstruction on the saved simulated noise realizations; Argolight and PRWP selection not validated",
+    "expected": "imaging/rbn.npz",
+    "capture": "imaging/rbn.json"
+  },
+  "birfi-simulation": {
+    "status": "captured",
+    "dataset": "birfi-small",
+    "parameters": {
+      "dt": 0.01,
+      "lr": 0.05,
+      "steps": 2000,
+      "rl_iterations": 100,
+      "regularization": 3
+    },
+    "source_files": [
+      {
+        "path": "examples/imaging/birfi/demo_simulation.ipynb",
+        "revision": "9d7f078"
+      }
+    ],
+    "selection": {
+      "time_bins": 200,
+      "channels": 9
+    },
+    "coverage": "CPU fitting and IRF retrieval with the example simulation dimensions and parameters",
+    "expected": "imaging/birfi-simulation.npz",
+    "capture": "imaging/birfi-simulation.json"
+  },
+  "psf-distiller-simulation": {
+    "status": "captured",
+    "dataset": "psf-distiller-small",
+    "parameters": {
+      "excitation": {
+        "wl": 488,
+        "na": 1.4,
+        "mask_sampl": 31
+      },
+      "emission_wavelength": 510,
+      "grid": {
+        "Nx": 31,
+        "Nz": 1,
+        "N": 5,
+        "pxsizex": 40,
+        "pxpitch": 75000,
+        "pxdim": 50000
+      }
+    },
+    "source_files": [
+      {
+        "path": "examples/imaging/psf_distiller/distiller_test.py",
+        "revision": "9d7f078"
+      }
+    ],
+    "selection": {
+      "spatial_pixels": 31,
+      "zernike_coefficients": 6
+    },
+    "coverage": "Compact forward PSF model only; iterative fit and experimental measurements not validated",
+    "expected": "imaging/psf-distiller-simulation.npz",
+    "capture": "imaging/psf-distiller-simulation.json"
+  },
+  "ism-apr": {
+    "status": "captured",
+    "dataset": "ism-cell-small",
+    "parameters": {
+      "usf": 100,
+      "ref": 12,
+      "pxsize": 0.04004004004004004,
+      "apodize": true,
+      "filter_sigma": 1,
+      "mode": "interp"
+    },
+    "source_files": [
+      {
+        "source_url": "https://zenodo.org/records/7343112/files/Cell_ISM_dataset.h5",
+        "source_checksum": "md5:24dd933c66316495bf48cb2cef3e237c",
+        "full_checksum_verified": false,
+        "dataset": "/data",
+        "axis_order": "rzxytc"
+      }
+    ],
+    "selection": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        472,
+        504
+      ],
+      [
+        472,
+        504
+      ],
+      [
+        0,
+        50
+      ],
+      [
+        0,
+        25
+      ]
+    ],
+    "coverage": "APR and even/odd FRC stages on the measured region at native sampling; full-image notebook preprocessing not validated",
+    "expected": "imaging/ism-apr.npz",
+    "capture": "imaging/ism-apr.json"
+  },
+  "ism-frc": {
+    "status": "captured",
+    "dataset": "ism-cell-small",
+    "parameters": {
+      "px": 0.04004004004004004,
+      "method": "fixed",
+      "smoothing": "fit",
+      "apr": {
+        "usf": 100,
+        "ref": 12,
+        "pxsize": 0.04004004004004004,
+        "apodize": true,
+        "filter_sigma": 1,
+        "mode": "interp"
+      }
+    },
+    "source_files": [
+      {
+        "source_url": "https://zenodo.org/records/7343112/files/Cell_ISM_dataset.h5",
+        "source_checksum": "md5:24dd933c66316495bf48cb2cef3e237c",
+        "full_checksum_verified": false,
+        "dataset": "/data",
+        "axis_order": "rzxytc"
+      }
+    ],
+    "selection": [
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        472,
+        504
+      ],
+      [
+        472,
+        504
+      ],
+      [
+        0,
+        50
+      ],
+      [
+        0,
+        25
+      ]
+    ],
+    "coverage": "APR and even/odd FRC stages on the measured region at native sampling; full-image notebook preprocessing not validated",
+    "expected": "imaging/ism-frc.npz",
+    "capture": "imaging/ism-frc.json"
+  },
+  "s2ism-experimental": {
+    "status": "unavailable",
+    "reason": "The published archive has not been downloaded and validated"
+  },
+  "rbn-argolight": {
+    "status": "unavailable",
+    "reason": "The example Argolight input and saved results have not been located"
+  },
+  "psf-distiller-experimental": {
+    "status": "unavailable",
+    "reason": "The example bead measurement has not been located"
+  },
+  "flism-examples": {
+    "status": "unavailable",
+    "reason": "FLISM source and data workflows are deferred for maintainer review"
+  },
+  "flus2ism": {
+    "status": "captured",
+    "dataset": "flus2ism-small",
+    "parameters": {
+      "bins": 81,
+      "max_iter": 20,
+      "rep_to_save": "last"
+    },
+    "source_files": [
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "simulated_tubulin_pi_batchtest.npz",
+        "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+      },
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "PSFs_comp_batchtest.npy",
+        "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+      }
+    ],
+    "selection": {
+      "phantom": [
+        [
+          0,
+          2
+        ],
+        [
+          85,
+          116
+        ],
+        [
+          85,
+          116
+        ]
+      ],
+      "temporal_bins": [
+        81,
+        162
+      ],
+      "detector_channels": [
+        0,
+        25
+      ]
+    },
+    "preparation": {
+      "recipe": "flus2ISM_pulseinterl_batchrec_example.py",
+      "revision": "164a45b",
+      "dt": 0.297619,
+      "irf_sigma": 0.3,
+      "irf_width": 2,
+      "irf_peak_index": 101,
+      "lifetimes": [
+        3,
+        6
+      ],
+      "flux": 100,
+      "numpy_seed": 0
+    },
+    "coverage": "Non-pulse reconstruction for the compact single-excitation simulation; the separate pulse-interleaved case records the original full-2D failure",
+    "expected": "imaging/flus2ism.npz",
+    "capture": "imaging/flus2ism.json"
+  },
+  "flus2ism-pulseinterl": {
+    "status": "known_failure",
+    "dataset": "flus2ism-small",
+    "parameters": {
+      "bins": 81,
+      "max_iter": 20,
+      "rep_to_save": "last"
+    },
+    "source_files": [
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "simulated_tubulin_pi_batchtest.npz",
+        "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+      },
+      {
+        "repository": "VicidominiLab/flus2ISM",
+        "revision": "164a45b",
+        "path": "PSFs_comp_batchtest.npy",
+        "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+      }
+    ],
+    "selection": {
+      "phantom": [
+        [
+          0,
+          2
+        ],
+        [
+          85,
+          116
+        ],
+        [
+          85,
+          116
+        ]
+      ],
+      "temporal_bins": [
+        81,
+        162
+      ],
+      "detector_channels": [
+        0,
+        25
+      ]
+    },
+    "preparation": {
+      "recipe": "flus2ISM_pulseinterl_batchrec_example.py",
+      "revision": "164a45b",
+      "dt": 0.297619,
+      "irf_sigma": 0.3,
+      "irf_width": 2,
+      "irf_peak_index": 101,
+      "lifetimes": [
+        3,
+        6
+      ],
+      "flux": 100,
+      "numpy_seed": 0
+    },
+    "coverage": "Original full-2D pulse-interleaved call fails because its full FFT kernel is combined with a real FFT operand; recorded without changing the implementation",
+    "error": {
+      "type": "RuntimeError",
+      "match": "einsum.*size 16.*size 31"
+    }
+  }
+}

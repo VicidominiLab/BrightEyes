@@ -1,0 +1,92 @@
+{
+  "status": "captured",
+  "dataset": "ism-simulation-small",
+  "parameters": {
+    "signal": 100
+  },
+  "source_files": [
+    {
+      "repository": "VicidominiLab/flus2ISM",
+      "revision": "164a45b",
+      "path": "simulated_tubulin_pi_batchtest.npz",
+      "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+    },
+    {
+      "repository": "VicidominiLab/flus2ISM",
+      "revision": "164a45b",
+      "path": "PSFs_comp_batchtest.npy",
+      "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+    }
+  ],
+  "selection": {
+    "phantom": [
+      [
+        0,
+        2
+      ],
+      [
+        85,
+        116
+      ],
+      [
+        85,
+        116
+      ]
+    ],
+    "psf": "full spatial support; singleton z/excitation/emission axes selected"
+  },
+  "coverage": "Forward simulation and seeded photon noise for a compact source phantom",
+  "expected": "imaging/ism-simulation.npz",
+  "capture": "imaging/ism-simulation.json",
+  "example": "ism-simulation",
+  "source_revision": "9d7f078",
+  "seeds": {
+    "numpy": 0,
+    "torch": 0,
+    "python": 0
+  },
+  "environment": {
+    "python": "3.11.18",
+    "system": "Windows",
+    "machine": "AMD64",
+    "device": "cpu",
+    "threads": 1,
+    "packages": {
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "torch": "2.15.0+cpu",
+      "h5py": "3.16.0"
+    }
+  },
+  "comparison": {
+    "exact": true
+  },
+  "inputs": {
+    "filename": "ism-simulation-small.npz",
+    "size": 199508,
+    "sha256": "35cb300ad06cd570f5e0b8e4d939ccd50915fab905e64ee6da44329643e6866a"
+  },
+  "outputs": {
+    "filename": "ism-simulation.npz",
+    "size": 183704,
+    "sha256": "24ff9d04ad317e568ac0e1e08e262c6e65d1d2e89f894c44d994a4c545c7dcb5",
+    "arrays": {
+      "clean_image": {
+        "shape": [
+          31,
+          31,
+          25
+        ],
+        "dtype": "float64"
+      },
+      "image": {
+        "shape": [
+          31,
+          31,
+          25
+        ],
+        "dtype": "int32"
+      }
+    }
+  }
+}

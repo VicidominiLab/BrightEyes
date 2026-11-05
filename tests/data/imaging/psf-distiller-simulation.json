@@ -1,0 +1,76 @@
+{
+  "status": "captured",
+  "dataset": "psf-distiller-small",
+  "parameters": {
+    "excitation": {
+      "wl": 488,
+      "na": 1.4,
+      "mask_sampl": 31
+    },
+    "emission_wavelength": 510,
+    "grid": {
+      "Nx": 31,
+      "Nz": 1,
+      "N": 5,
+      "pxsizex": 40,
+      "pxpitch": 75000,
+      "pxdim": 50000
+    }
+  },
+  "source_files": [
+    {
+      "path": "examples/imaging/psf_distiller/distiller_test.py",
+      "revision": "9d7f078"
+    }
+  ],
+  "selection": {
+    "spatial_pixels": 31,
+    "zernike_coefficients": 6
+  },
+  "coverage": "Compact forward PSF model only; iterative fit and experimental measurements not validated",
+  "expected": "imaging/psf-distiller-simulation.npz",
+  "capture": "imaging/psf-distiller-simulation.json",
+  "example": "psf-distiller-simulation",
+  "source_revision": "9d7f078",
+  "seeds": {
+    "numpy": 0,
+    "torch": 0,
+    "python": 0
+  },
+  "environment": {
+    "python": "3.11.18",
+    "system": "Windows",
+    "machine": "AMD64",
+    "device": "cpu",
+    "threads": 1,
+    "packages": {
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "torch": "2.15.0+cpu",
+      "h5py": "3.16.0"
+    }
+  },
+  "comparison": {
+    "exact": true
+  },
+  "inputs": {
+    "filename": "psf-distiller-small.npz",
+    "size": 221,
+    "sha256": "24613395e30e05d623ce9675f419eb1b3b6f5f0dcc32f0241974b6c33452f696"
+  },
+  "outputs": {
+    "filename": "psf-distiller-simulation.npz",
+    "size": 77493,
+    "sha256": "9454251f39fb095b437151ca38aa31a78984e85d50ca49894cd29e31fc53f60e",
+    "arrays": {
+      "result": {
+        "shape": [
+          31,
+          31,
+          25
+        ],
+        "dtype": "float32"
+      }
+    }
+  }
+}

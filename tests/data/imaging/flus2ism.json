@@ -1,0 +1,126 @@
+{
+  "status": "captured",
+  "dataset": "flus2ism-small",
+  "parameters": {
+    "bins": 81,
+    "max_iter": 20,
+    "rep_to_save": "last"
+  },
+  "source_files": [
+    {
+      "repository": "VicidominiLab/flus2ISM",
+      "revision": "164a45b",
+      "path": "simulated_tubulin_pi_batchtest.npz",
+      "sha256": "30e6384fc234a09db701de736cbc3077b98ea72c948da32b5fb35756467b7bcd"
+    },
+    {
+      "repository": "VicidominiLab/flus2ISM",
+      "revision": "164a45b",
+      "path": "PSFs_comp_batchtest.npy",
+      "sha256": "ce9533d605c52a95a6679b4e60ce0845587207549f015bff89571445ed9f758d"
+    }
+  ],
+  "selection": {
+    "phantom": [
+      [
+        0,
+        2
+      ],
+      [
+        85,
+        116
+      ],
+      [
+        85,
+        116
+      ]
+    ],
+    "temporal_bins": [
+      81,
+      162
+    ],
+    "detector_channels": [
+      0,
+      25
+    ]
+  },
+  "preparation": {
+    "recipe": "flus2ISM_pulseinterl_batchrec_example.py",
+    "revision": "164a45b",
+    "dt": 0.297619,
+    "irf_sigma": 0.3,
+    "irf_width": 2,
+    "irf_peak_index": 101,
+    "lifetimes": [
+      3,
+      6
+    ],
+    "flux": 100,
+    "numpy_seed": 0
+  },
+  "coverage": "Non-pulse reconstruction for the compact single-excitation simulation; the separate pulse-interleaved case records the original full-2D failure",
+  "expected": "imaging/flus2ism.npz",
+  "capture": "imaging/flus2ism.json",
+  "example": "flus2ism",
+  "source_revision": "9d7f078",
+  "seeds": {
+    "numpy": 0,
+    "torch": 0,
+    "python": 0
+  },
+  "environment": {
+    "python": "3.11.18",
+    "system": "Windows",
+    "machine": "AMD64",
+    "device": "cpu",
+    "threads": 1,
+    "packages": {
+      "numpy": "2.4.6",
+      "scipy": "1.17.1",
+      "torch": "2.15.0+cpu",
+      "h5py": "3.16.0"
+    }
+  },
+  "comparison": {
+    "exact": true
+  },
+  "inputs": {
+    "filename": "flus2ism-small.npz",
+    "size": 113438,
+    "sha256": "237544e609c5e498cc01894276fa736622ba80cca263db31435cb7eb94020ea8"
+  },
+  "outputs": {
+    "filename": "flus2ism.npz",
+    "size": 15735,
+    "sha256": "717eb7aae5d6ff96400a46fff3485a6aca737de5834e5e400a3e23af6f00ed5a",
+    "arrays": {
+      "result_0": {
+        "shape": [
+          1,
+          2,
+          31,
+          31
+        ],
+        "dtype": "float64"
+      },
+      "result_1": {
+        "shape": [
+          2,
+          21
+        ],
+        "dtype": "float32"
+      },
+      "result_2": {
+        "shape": [
+          2,
+          21
+        ],
+        "dtype": "float32"
+      },
+      "result_3": {
+        "shape": [],
+        "dtype": "int64"
+      }
+    }
+  }
+}
