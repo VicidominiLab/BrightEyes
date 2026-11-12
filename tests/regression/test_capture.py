@@ -1,5 +1,6 @@
 """Check preservation of numerical reference data."""
 
+import json
 import os
 import runpy
 import subprocess
@@ -53,6 +54,10 @@ def test_capture_preserves_output_values(capture, tmp_path):
     )
     with np.load(tmp_path / "baseline" / "outputs.npz", allow_pickle=False) as data:
         np.testing.assert_array_equal(data["image"], expected + 1, strict=True)
+    metadata = json.loads((tmp_path / "baseline/metadata.json").read_text("utf-8"))
+    assert metadata["outputs"]["arrays"] == {
+        "image": {"shape": [2, 3], "dtype": "float32"}
+    }
 
 
 def test_capture_uses_reference_source_with_relative_cache(tmp_path):

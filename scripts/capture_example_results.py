@@ -68,7 +68,13 @@ def write_capture(
     metadata = {
         **metadata,
         "inputs": file_info(directory / "inputs.npz"),
-        "outputs": file_info(directory / "outputs.npz"),
+        "outputs": {
+            **file_info(directory / "outputs.npz"),
+            "arrays": {
+                key: {"shape": list(value.shape), "dtype": str(value.dtype)}
+                for key, value in outputs.items()
+            },
+        },
     }
     (directory / "metadata.json").write_text(
         json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8"
